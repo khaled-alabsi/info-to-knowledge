@@ -24,6 +24,30 @@ Everything runs on your own computer against a local model host such as LM Studi
   with `mvs run --document`, and ask in its request for the video you want: denser, more entertaining, or with more
   diagrams.
 
+## What it looks like
+
+The clips show the web page with invented recordings and a made-up document.
+
+**Queue a recording.** Start a run from the inbox, find it in the queue, and move it ahead of the job waiting
+there.
+
+![Queueing a recording in the web page](docs/demos/queue.webp)
+
+**Follow a run.** Each phase card fills in as the run goes, the frames bar counts the frames written and skipped,
+and the log scrolls beside it.
+
+![A run moving through its phases](docs/demos/phases.webp)
+
+**Pause and continue.** The Control menu holds a run at its next check, and Continue lets it go on from the same
+place.
+
+![Pausing and continuing a run](docs/demos/pause.webp)
+
+**Read the document.** A finished run opens its Markdown document in the page, with tables, diagrams and the
+minute each statement comes from.
+
+![A finished document in the web page](docs/demos/document.webp)
+
 ## What it does with a recording
 
 - **Finds the frames that matter.** For a video, the program takes a frame whenever the shared screen changes and
