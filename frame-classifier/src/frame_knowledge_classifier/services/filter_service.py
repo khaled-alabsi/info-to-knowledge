@@ -1,6 +1,6 @@
 """Judges every frame of a folder with a saved classifier: its task's decision, and the score behind it.
 
-The folder is any folder of frame images, such as a `video-to-knowledge` run's `frames/`. The decisions are written as
+The folder is any folder of frame images, such as an `info-to-knowledge` run's `frames/`. The decisions are written as
 JSON: the classifier's name, task and threshold (or the ink rule's cuts), then one entry per frame with its file name,
 its score under the task's name for it (`dropScore` for the knowledge task, `textOnlyScore` for the text-only task),
 its decision (one of the task's two labels) and the milliseconds it took. A tags classifier (`method: tags`) gives
@@ -47,7 +47,7 @@ def tag_folder(folder: Path,
                vectors_path: Path | None = None) -> list[dict]:
     """Every frame of `folder` tagged by the saved tags classifier, written to `out_path`; returns the frames' entries.
     With `vectors_path`, each frame's SigLIP vectors (the whole frame and its quarters) are saved there too, as
-    `frames` and `vectors` in a .npz, for video-to-knowledge's similarity recheck, which then loads no model of its own."""
+    `frames` and `vectors` in a .npz, for info-to-knowledge's similarity recheck, which then loads no model of its own."""
 
     classifier = tags_service.load_tags_classifier(classifier_name)
     entries, rows = [], []

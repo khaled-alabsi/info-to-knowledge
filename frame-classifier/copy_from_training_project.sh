@@ -4,7 +4,7 @@
 # code changed, beside copying the weights into ../weights/frame-classifier/. The copies stay byte for byte the same.
 # Usage: ./copy_from_training_project.sh [path to frame-knowledge-classifier]
 here=$(cd "$(dirname "$0")" && pwd)
-source_dir=${1:-"$here/../../../frame-knowledge-classifier"}
+source_dir=${1:-"$here/../../frame-knowledge-classifier"}
 package="$source_dir/src/frame_knowledge_classifier"
 [ -d "$package" ] || { echo "no classifier package at $package" >&2; exit 1; }
 target="$here/src/frame_knowledge_classifier"

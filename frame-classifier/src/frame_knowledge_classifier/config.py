@@ -13,11 +13,11 @@ from pathlib import Path
 PROJECT_DIR = Path(os.environ.get("FRAME_CLASSIFIER_HOME", Path(__file__).resolve().parents[2]))
 DATA_DIR = PROJECT_DIR / "data"                 # one folder per dataset: frames/, a labels file per task, dataset.json
 # trained classifiers: <name>.npz (weights) and <name>.json (what it was trained on). `FRAME_CLASSIFIER_WEIGHTS_DIR`
-# reads them from another folder: video-to-knowledge keeps the copy it runs with in its own weights/frame-classifier/
+# reads them from another folder: info-to-knowledge keeps the copy it runs with in its own weights/frame-classifier/
 CLASSIFIERS_DIR = Path(os.environ.get("FRAME_CLASSIFIER_WEIGHTS_DIR", PROJECT_DIR / "classifiers"))
 REPORTS_DIR = PROJECT_DIR / "reports"           # evaluation reports and the label page
 CACHE_DIR = PROJECT_DIR / ".cache"              # frame embeddings, rebuilt from the frames when missing
-# what a person corrected in a Refine proposal on a video-to-knowledge run page, one folder per run: frames/,
+# what a person corrected in a Refine proposal on an info-to-knowledge run page, one folder per run: frames/,
 # labels.csv and corrections.json. `classifier add-corrections` turns them into datasets
 CORRECTIONS_DIR = PROJECT_DIR / "corrections"
 SCENES_DIR = PROJECT_DIR / "scenes"             # the made-up meeting scenes: their HTML pages and the faces they use

@@ -16,7 +16,7 @@ PEOPLE = "people"   # nothing a reader can learn: people, a gallery, a call wind
 TEXT = "text"       # knowledge that is all text an OCR reads, with things of no value beside it
 OTHER = "other"     # knowledge an OCR of the text would lose: a diagram, a table, a photo, a UI, meaningful colour
 BOARD = "board"     # a task board or a ticket tracker's view (Jira and alike): cards in status columns, a backlog,
-                    # a ticket open with its fields; knowledge that video-to-knowledge hands on as changes
+                    # a ticket open with its fields; knowledge that info-to-knowledge hands on as changes
 TAGS = (PEOPLE, TEXT, OTHER, BOARD)
 
 # A decision against the label, the label the program acts on counted as positive: TP acted on and labelled so, FN
