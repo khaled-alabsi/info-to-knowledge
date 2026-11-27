@@ -7,9 +7,10 @@ on:
 
 jobs:
   offline:
-    # The case files that need no model host and no downloaded model. The cases that need Apple's text recognizer or
-    # MLX skip themselves on Linux. The integration suite and the browser tests run on a contributor's machine.
-    runs-on: ubuntu-24.04
+    # The case files that need no model host and no downloaded model. The integration suite and the browser tests run
+    # on a contributor's machine. A Mac with an Apple chip, as the program is built on: Tesseract reads the tests'
+    # rendered slides a few words differently on an Intel processor, with the same version and language data.
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -22,21 +23,10 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
       - name: System tools
-        # Tesseract 5.5 from its packager's PPA, the version a Mac's Homebrew installs: Ubuntu's own 5.3 reads the
-        # tests' rendered slides differently
+        # Homebrew's Tesseract comes with English only; German is in tesseract-lang
         run: |
-          sudo add-apt-repository -y ppa:alex-p/tesseract-ocr5
-          sudo apt-get update && sudo apt-get install -y ffmpeg tesseract-ocr pandoc
+          brew install ffmpeg tesseract tesseract-lang pandoc
           tesseract --version
-      - name: The text reader's fast language data, as Homebrew ships it
-        # Ubuntu's language packages are the larger standard data, which read the tests' rendered slides differently
-        run: |
-          mkdir -p "$RUNNER_TEMP/tessdata"
-          for language in eng deu osd; do
-            curl -sSfL -o "$RUNNER_TEMP/tessdata/$language.traineddata" \
-              "https://github.com/tesseract-ocr/tessdata_fast/raw/4.1.0/$language.traineddata"
-          done
-          echo "TESSDATA_PREFIX=$RUNNER_TEMP/tessdata" >> "$GITHUB_ENV"
       - name: Python packages and the i2k command
         # In .venv at the root, as on a contributor's machine: the frame classifier's launcher runs that environment.
         run: |
