@@ -1810,8 +1810,8 @@ def test_several_files_a_folder_or_a_zip_go_into_the_inbox_each_as_its_own_and_t
         packed.writestr("Gateway review part 1.mp4", b"g1")
         packed.writestr("Gateway review part 2.mp4", b"g2")
         packed.writestr("Gateway review.vtt", b"WEBVTT")
-        # A file of a kind no workflow reads (a PDF is one now)
-        packed.writestr("notes.docx", b"docx")
+        # A file of a kind no workflow reads (a PDF and a Word file are read now)
+        packed.writestr("notes.txt", b"notes")
         packed.writestr("__MACOSX/._Gateway review part 1.mp4", b"x")
     previous_inbox = config.INBOX_DIR
     config.INBOX_DIR = inbox_root
@@ -1838,7 +1838,7 @@ def test_several_files_a_folder_or_a_zip_go_into_the_inbox_each_as_its_own_and_t
                   saved["added"] == ["part 1.mp4", "part 2.mp4", "Jonas.mp4", "Gateway review part 1.mp4",
                                      "Gateway review part 2.mp4"] and [entry["name"] for entry in saved["refused"]]
                   == ["Gateway review.vtt"], str(saved))
-    harness.check("the inbox lists each of them, nothing of the docx or the mac folder",
+    harness.check("the inbox lists each of them, nothing of the text file or the mac folder",
                   listed == ["Gateway review part 1.mp4", "Gateway review part 2.mp4", "Jonas.mp4", "part 1.mp4",
                              "part 2.mp4"], str(listed))
     folder = inbox_root / "Weekly AcmeSync"
