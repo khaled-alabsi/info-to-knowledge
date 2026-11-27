@@ -1,27 +1,48 @@
 # info-to-knowledge
 
-info-to-knowledge turns one recording into a reference document that a person who did not attend can read. The
-recording can be a video, an audio file or a PDF. The document opens with an executive summary and an agenda, its
-chapters follow the recording's own parts, and every statement names the part of the recording it rests on.
+info-to-knowledge turns a video, an audio recording, a PDF, a Word file or a slide deck into a Markdown document
+that holds its knowledge.
 
-It runs against a local model host such as LM Studio or Ollama. Nothing is sent to a hosted service. A run is seven
-numbered phases, and each one writes its own files, so any phase can run again on its own against results made
-hours earlier.
+The document is made to be read and reused: put it in an AI wiki or a notes vault, search it, or hand it to a model
+as a short and exact source in place of hours of recording. It opens with an executive summary and an agenda, its
+chapters follow the recording's own parts, and every statement names the minute or the page it comes from.
+Everything runs on your own computer against a local model host such as LM Studio or Ollama.
 
-## Features
+## Use cases
 
-- **Video, audio or PDF in, document out.** A folder of parts (the files of one meeting) is read as one recording.
-- **Frames that carry knowledge.** For a video, the program keeps the frames that show something new and drops people
-  galleries, blank screens and repeats. A model describes each kept frame.
-- **Checks on every answer.** A validator reads the files on disk and rejects a bad answer with the reason. The model
-  tries again. A step that spends all its attempts stops the run with a clear message, and `--resume` continues it.
-- **Review.** A second worker reads the finished document as a critic and fixes what the recording can answer.
-- **A web page and a terminal UI.** Both queue recordings, show each run's phases, frames and log, and pause, resume
-  or reset a run.
-- **Document shapes.** Reference document (the default), presentation, conversation, meeting, language lesson and
-  sprint notes.
-- **Many model hosts.** LM Studio, Ollama, llama.cpp and any OpenAI-style URL. Named settings profiles and worker
-  sets send jobs to other machines on your network.
+- **A long video you have no time for.** Download a talk or a lesson from YouTube and read its knowledge in a
+  fraction of the time. The chit-chat and the off-topic parts stay out, and the screens that teach something come
+  back as cut screenshots, code blocks, tables and diagrams.
+- **A team meeting nobody wrote down.** The decisions, the action items and the open questions get their own
+  sections. The video gallery of the people in the call is cut away from every screenshot, and a password, a token
+  or a customer number shown on a shared screen is blacked out.
+- **A pile of PDFs, Word files and slide decks.** Each one becomes Markdown in the same shape, ready for a wiki, a
+  search index or a model's context.
+- **Knowledge compacted for a model.** The document keeps every point the recording makes in a fraction of its
+  words, so an agent reads the document instead of a transcript.
+- **The same knowledge as a new video, in your style.** Give the document to the sister project Media Vibe Studio
+  with `mvs run --document`, and ask in its request for the video you want: denser, more entertaining, or with more
+  diagrams.
+
+## What it does with a recording
+
+- **Finds the frames that matter.** For a video, the program takes a frame whenever the shared screen changes and
+  holds still, crops it to the shared screen, and drops people galleries, blank screens and repeats. A vision model
+  then writes each kept frame's notes.
+- **Writes the screen as text.** Code, terminal output, tables and lists become Markdown, and a frame is kept as a
+  picture only where text cannot carry it.
+- **Hides what should not be published.** The people beside a shared screen are cropped out, and a secret, a
+  credential or personal data on a screenshot is blacked out before the document is published.
+- **Checks every answer.** A validator reads what the model wrote and rejects a bad answer with the reason, and the
+  model tries again. A step that spends all its attempts stops the run with a clear message, and `--resume`
+  continues it.
+- **Reviews the result.** A second worker reads the finished document as a critic and fixes what the recording can
+  answer.
+- **Fits the recording.** A meeting, a conversation, a presentation, a language lesson and sprint notes each get
+  their own document shape.
+
+A web page and a terminal UI queue recordings, show each run's phases, frames and log, and pause, resume or reset a
+run.
 
 ## Requirements
 
@@ -55,19 +76,17 @@ of the model on huggingface.co with the account of your token.
 ## First run
 
 ```bash
-i2k run --video ~/Downloads/meeting.mp4 --output output/meeting
+i2k run --video ~/Downloads/talk.mp4 --output output/talk
 ```
 
-`--output` is the run folder itself. It receives the phase files (`01_transcript.json`, `02_frames.json`, ...), the
-cut `frames/`, and the finished document in a folder named after the meeting. A stopped run continues with
-`--resume`. Other ways to start:
+`--output` is the run folder itself. The finished document lands there in a folder named after the recording, with
+its screenshots beside it. Pass `--resume` to continue a stopped run. Other ways to start:
 
 ```bash
-i2k inbox --list                          # recordings in inbox/ that have no document yet
-i2k inbox                                 # run every new one
+i2k run --video report.pdf --output output/report                # a PDF, a Word file or a slide deck the same way
 i2k run --video notes.mp3 --output output/notes --ingesting-profile meeting
-i2k run --video meeting.mp4 --output output/meeting --from 4      # write the document again from the frames' notes
-i2k reset-to 4 --output output/meeting --yes                      # take a run back to phase 4
+i2k inbox                                 # run every new recording in inbox/
+i2k run --video talk.mp4 --output output/talk --from 4           # write the document again from the frames' notes
 i2k serve                                 # the web page at http://127.0.0.1:8765
 ```
 
@@ -83,6 +102,8 @@ or a password never goes in a settings file: the settings name an environment va
 - [Architecture](docs/ARCHITECTURE.md): the phases, the run folder and the code layers.
 - [Flow](docs/FLOW.md): what each phase reads and writes, file by file.
 - [Command line](docs/cli-usage.md) and [web page](docs/ui-usage.md).
+- [Full guide](docs/GUIDE.md): install, every run option, the settings and troubleshooting.
+- [Workflow](docs/WORKFLOW.md), and how the [command line](docs/cli-context.md) and the [web page](docs/ui-context.md) are built.
 - [Running in a container](docs/container.md).
 - [Third-party models and data](NOTICE).
 
