@@ -1,0 +1,28 @@
+{
+  "python.analysis.exclude": [
+    "**/.venv",
+    "**/.venv-*",
+    "**/node_modules",
+    "**/__pycache__",
+    "inbox",
+    "models",
+    "output",
+    "knowledge",
+    "temp",
+    "ui",
+    "internal",
+    "tests/real_media",
+    "tools/*/.venv",
+    "frame-classifier/.venv",
+    "web"
+  ],
+  "files.watcherExclude": {
+    "**/.venv/**": true,
+    "**/.venv-*/**": true,
+    "**/node_modules/**": true,
+    "inbox/**": true,
+    "models/**": true,
+    "output/**": true,
+    "temp/**": true
+  }
+}

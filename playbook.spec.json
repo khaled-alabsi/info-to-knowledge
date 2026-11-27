@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "language": "python",
+  "profile": "chain-pipeline",
+  "name": "video-to-knowledge",
+  "target": {
+    "dest": "video"
+  },
+  "models": {
+    "roles": [
+      "frame",
+      "document"
+    ],
+    "default": {
+      "spec": "ollama:qwen3-vl:8b",
+      "num_ctx": 32768,
+      "temperature": 0
+    }
+  },
+  "loops": [
+    {
+      "unit": "frame",
+      "enumerator": "plain code: transcribe the audio, cut the frames, slice the transcript per frame",
+      "stopsAt": "02_frames.json is written, one entry per frame carrying its two transcript slices",
+      "itemFields": [
+        "slug",
+        "index",
+        "timestamp",
+        "path",
+        "score",
+        "transcriptBefore",
+        "transcriptCurrent"
+      ],
+      "slugRule": "frame-NNN, zero padded, in chronological order",
+      "sequential": true,
+      "sequentialBecause": "each frame's prompt carries the accepted records of the frames before it",
+      "artifacts": [
+        "03_frames/<slug>.json"
+      ],
+      "contentChecks": [
+        "FRAME_RECORD_MISSING",
+        "FRAME_RECORD_UNPARSEABLE",
+        "FRAME_INDEX_MISMATCH",
+        "FRAME_RECORD_EMPTY",
+        "MODEL_CALL_FAILED",
+        "RESPONSE_CUT_AT_LIMIT",
+        "RESPONSE_THINKING_ONLY",
+        "MODEL_NO_STRUCTURED_OUTPUT"
+      ],
+      "parent": null
+    }
+  ],
+  "finalize": {
+    "deterministic": [
+      "merge_frame_records"
+    ],
+    "workerArtifacts": [
+      "05_knowledge.md"
+    ]
+  },
+  "ignoreDimensions": [],
+  "controlPlane": false,
+  "budgets": {
+    "maxAttempts": 3,
+    "attemptTimeoutS": 900
+  }
+}

@@ -1,0 +1,33 @@
+# what a run makes: run folders, recordings, the queue and the downloaded models
+/inbox/*
+!/inbox/README.md
+/output/
+/ui/
+/models/
+/knowledge/
+/temp/
+# environments and caches
+.venv
+.venv-*
+node_modules
+__pycache__/
+*.pyc
+.cache/
+.playwright-mcp/
+.DS_Store
+web/dist/
+web/test-results/
+web/playwright-report/
+web/e2e-real/
+tools/*/.venv/
+# the Apple text reader, built from tools/apple-text-reader/apple_text_reader.swift on first use
+tools/apple-text-reader/apple-text-reader
+# this machine's own settings: its model hosts, keys and machines
+.env
+playbook.local.json
+playbook.*.local.json
+!playbook.local.example.json
+tag-rules.local.json
+agent-context/instructions/_shared/known-terms.local.md
+# a person's own recordings and frames
+tests/real_media/

@@ -1,0 +1,6 @@
+#!/bin/sh
+# The frame classifier phase 2 runs, in the program's own environment: ./classifier filter DIR --out FILE --task tags
+here=$(cd "$(dirname "$0")" && pwd)
+python="$here/../.venv/bin/python"
+[ -x "$python" ] || { echo "the program's environment is missing: build $here/../.venv from requirements.txt" >&2; exit 1; }
+PYTHONPATH="$here/src" exec "$python" "$here/run_filter.py" "$@"

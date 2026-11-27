@@ -1,0 +1,26 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+html, body { margin: 0; width: 1338px; height: 864px; overflow: hidden; background: #1e1e1e; font-family: Menlo, monospace; color: #d4d4d4; }
+.bar { height: 28px; background: #333; font-size: 11px; line-height: 28px; padding-left: 12px; }
+h1 { font-family: Helvetica, sans-serif; font-size: 22px; margin: 18px 20px; color: #fff; }
+p { font-family: Helvetica, sans-serif; font-size: 14px; margin: 0 20px 14px; }
+table { margin: 0 20px; border-collapse: collapse; font-size: 9px; }
+td, th { border: 1px solid #555; padding: 2px 8px; text-align: left; }
+th { color: #9cdcfe; }
+</style></head><body>
+<!-- A schema view whose field table is set in a small code font, as a shared screen shrunk to the stored frame width
+     shows it (DEFECTS 41, 69). Every name is invented. -->
+<div class="bar">AcmeSync admin · Gateway schema · clients</div>
+<h1>Client record fields</h1>
+<p>Every client the gateway knows is stored with these fields; refunds wait for an approval.</p>
+<table><tr><th>field</th><th>type</th><th>meaning</th></tr>
+<tr><td>clientId</td><td>uuid</td><td>the client's own id</td></tr>
+<tr><td>displayName</td><td>string</td><td>name shown on the board</td></tr>
+<tr><td>refundLimit</td><td>decimal</td><td>largest refund without approval</td></tr>
+<tr><td>approvalGroup</td><td>string</td><td>who approves larger refunds</td></tr>
+<tr><td>tokenProvider</td><td>string</td><td>where the gateway sends the token</td></tr>
+<tr><td>createdAt</td><td>timestamp</td><td>when the record was made</td></tr>
+<tr><td>updatedAt</td><td>timestamp</td><td>when it last changed</td></tr>
+<tr><td>billingRegion</td><td>string</td><td>the region invoices go to</td></tr>
+<tr><td>retryBudget</td><td>integer</td><td>calls retried before a block</td></tr>
+<tr><td>auditTrailRef</td><td>string</td><td>pointer to the audit log</td></tr>
+</table></body></html>

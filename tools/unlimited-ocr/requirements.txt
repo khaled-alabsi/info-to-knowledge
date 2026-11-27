@@ -1,0 +1,6 @@
+# Unlimited-OCR-2, in its own environment (tools/unlimited-ocr/.venv): the MLX build of the model runs on mlx-vlm,
+# whose support for it is on a branch until it is released; pinned to the commit that was measured.
+mlx==0.32.4
+mlx-vlm @ git+https://github.com/shuuul/mlx-vlm.git@223c2980fe4b48bd73faeb9e5bb1f1eacafffb49
+huggingface_hub==2.4.0
+pillow==13.0.0

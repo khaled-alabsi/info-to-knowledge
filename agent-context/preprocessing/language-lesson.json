@@ -1,0 +1,25 @@
+{
+  "_note": "Phase 3's preparation steps for an audio recording of this ingesting profile. Each step's job is taught by base/preprocessing-language-lesson-<step id>.md, which context_map.json's preprocessing rules give it.",
+  "minParagraphs": 0,
+  "steps": [
+    {
+      "id": "units",
+      "title": "The lesson units",
+      "input": "speech",
+      "sections": [
+        "What it practises"
+      ]
+    },
+    {
+      "id": "unit_details",
+      "title": "Each unit in detail",
+      "input": "each:units",
+      "sections": [
+        "Vocabulary",
+        "Grammar",
+        "Corrections",
+        "Exercises"
+      ]
+    }
+  ]
+}

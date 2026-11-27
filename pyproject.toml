@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "info-to-knowledge"
+version = "0.1.0"
+description = "Turns a video, an audio file or a PDF into a reference document, with local models."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.12,<3.13"
+# The pinned packages are in requirements.txt: `pip install -r requirements.txt` first, then `pip install -e .`.
+dynamic = ["dependencies"]
+
+[tool.setuptools.dynamic]
+dependencies = { file = ["requirements.txt"] }
+
+[project.optional-dependencies]
+# Speaker recognition (who spoke when): `pip install -e ".[diarization]"`
+diarization = ["pyannote.audio"]
+
+[project.scripts]
+# The command name is set here only. `cli:main` runs the commands; it does not take the `mcp` shortcut that main.py takes
+# before it loads the pipeline, so `i2k mcp` starts slower than `python main.py mcp`.
+i2k = "cli:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]

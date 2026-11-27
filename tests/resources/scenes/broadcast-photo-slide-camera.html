@@ -1,0 +1,22 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+html, body { margin: 0; width: 1728px; height: 1117px; overflow: hidden; background: #111111; font-family: Helvetica, Arial, sans-serif; }
+.logo { position: absolute; left: 20px; top: 150px; color: #f4f4f4; font-size: 56px; font-weight: bold; }
+.slide { position: absolute; left: 420px; top: 8px; width: 1300px; height: 840px; overflow: hidden;
+  background: radial-gradient(circle at 75% 45%, #f2d84a 0 9%, #3e8f6a 10% 18%, #1c3d6e 30%, #0b1a3a 60%),
+              linear-gradient(120deg, #22335a, #3a7fa0 55%, #2c9a6b); }
+.slide h1 { position: absolute; left: 60px; top: 90px; font-size: 52px; margin: 0; color: #f2c230; }
+.slide ul { position: absolute; left: 60px; top: 190px; margin: 0; padding: 0 0 0 40px; color: #f0f0f0; font-size: 36px; line-height: 70px; }
+.footer { position: absolute; left: 0; right: 0; bottom: 0; height: 80px; background: #ffffff; color: #1c2a5a; font-size: 28px;
+  padding: 24px 60px; box-sizing: border-box; }
+.camera { position: absolute; left: 24px; top: 470px; width: 360px; height: 600px; background: #0d0d14; overflow: hidden; }
+.camera img { width: 100%; height: 100%; object-fit: cover; }
+</style></head><body>
+<!-- A conference broadcast: a slide whose background is a photo of many tones, on a flat black backdrop with the
+     stream's banner and the speaker's camera beside it. Names and text invented; the portrait is public domain
+     (../public_domain_faces/SOURCES.md). -->
+<div class="logo">ACME DAYS</div>
+<div class="slide"><h1>Why retries at AcmeSync are hard</h1><ul><li>Each client keeps a budget of three</li>
+<li>Jonas sets the budget per client</li><li>The gateway counts every failed call</li></ul>
+<div class="footer">AcmeSync Gateway</div></div>
+<div class="camera"><img src="../public_domain_faces/Neil_Armstrong_pose.jpg"></div>
+</body></html>

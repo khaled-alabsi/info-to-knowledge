@@ -1,0 +1,5 @@
+.venv/
+.cache/
+__pycache__/
+# Refine's corrections hold a run's frames, of real meetings too
+corrections/

@@ -1,0 +1,16 @@
+# What the image build leaves out: your data, downloaded models, local environments and build output.
+.venv/
+**/__pycache__/
+**/*.pyc
+inbox/
+output/
+ui/
+models/
+temp/
+web/node_modules/
+web/dist/
+web/test-results/
+web/e2e-real/
+tools/*/.venv/
+playbook.local.json
+.git/

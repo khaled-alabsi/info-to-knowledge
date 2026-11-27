@@ -1,0 +1,24 @@
+{
+  "_comment": [
+    "Copy this file to playbook.local.json and set your own values. playbook.local.json is never committed.",
+    "It is read on top of playbook.default.json; leave out any key you do not need. A key or a password never goes here:",
+    "give the Hugging Face token through the HF_TOKEN environment variable."
+  ],
+  "lmstudioBaseUrl": "http://localhost:1234/v1",
+  "ollamaBaseUrl": "http://localhost:11434",
+  "workerSets": {
+    "_note": "Other machines that run a model for this one. A job picks a set by name; jobs on different sets run at the same time, jobs on one set one after another. Remove the sets you do not use.",
+    "gpu-box": {
+      "_comment": "A llama.cpp server on another computer of your network: the frame and document models call it.",
+      "models": {
+        "frame": {"spec": "openai-compatible:your-model-name", "baseUrl": "http://gpu-box.example:8090/v1"},
+        "document": {"spec": "openai-compatible:your-model-name", "baseUrl": "http://gpu-box.example:8090/v1"}
+      }
+    }
+  },
+  "defaultWorkerSet": "default",
+  "workerSetMachines": {
+    "default": "this computer",
+    "gpu-box": "the GPU box"
+  }
+}

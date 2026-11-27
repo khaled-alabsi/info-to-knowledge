@@ -1,0 +1,26 @@
+# Runs info-to-knowledge with every big or private file outside the image. Works with `podman compose` and
+# `docker compose`. The folders below are created next to this file on the first start; change the left side of each
+# line to move them. Copy playbook.local.example.json to playbook.local.json before the first start.
+services:
+  i2k:
+    build:
+      context: .
+      dockerfile: Containerfile
+    image: info-to-knowledge
+    ports:
+      # this machine only; write "8765:8765" to open the page to your network, after you create an account
+      - "127.0.0.1:8765:8765"
+    environment:
+      # where downloaded models go: the mounted models folder below
+      I2K_MODELS_DIR: /models
+      HF_HOME: /models/huggingface
+      # the Hugging Face token comes from your shell, never from a file
+      HF_TOKEN: ${HF_TOKEN:-}
+    volumes:
+      - ./playbook.local.json:/app/playbook.local.json:ro   # your settings: model host addresses, worker sets
+      - ./inbox:/data/inbox                                  # recordings to process
+      - ./output:/data/output                                # run folders and finished documents
+      - ./ui:/data/ui                                        # the queue and each job's console
+      - ./models:/models                                     # downloaded models
+    extra_hosts:
+      - "host.containers.internal:host-gateway"

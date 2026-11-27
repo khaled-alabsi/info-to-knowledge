@@ -1,0 +1,40 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+html, body { margin: 0; width: 1280px; height: 720px; overflow: hidden; background: #1a1a1a; font-family: Menlo, monospace;
+  font-size: 14px; line-height: 17px; color: #d0d0d0; }
+.pane { position: absolute; left: 0; width: 845px; white-space: pre; padding-left: 8px; box-sizing: border-box; }
+.top { top: 0; height: 320px; } .bottom { top: 337px; height: 300px; }
+.status { position: absolute; left: 0; width: 845px; height: 17px; white-space: pre; box-sizing: border-box; padding-left: 8px; }
+.s1 { top: 320px; background: #2e2e2e; color: #8a8a8a; } .s2 { top: 637px; background: #2e2e2e; color: #d0d0d0; }
+.mode { background: #8fbf6f; color: #111; } .file { background: #5a5a5a; color: #fff; }
+.term { position: absolute; left: 852px; top: 0; width: 428px; height: 654px; white-space: pre; padding-left: 6px; border-left: 1px solid #4a4a4a; }
+.cmd { position: absolute; left: 0; top: 655px; width: 845px; padding-left: 8px; color: #aaa; }
+</style></head><body>
+<!-- A terminal editor split one pane above the other, each ending on its own status line, beside a test runner
+     (DEFECTS 129). Every name is invented. -->
+<div class="pane top">import gateway
+
+def fetch_clients(client: gateway.Client) -> list[str]:
+    """Every client the gateway knows."""
+    return [row["name"] for row in client.get("/clients")]
+
+def refund_limit(amount: float) -> bool:
+    """Whether a refund needs an approval."""
+    return amount > 500.0</div>
+<div class="status s1">acmesync.py                                                       12%     4:22</div>
+<div class="pane bottom">from acmesync import refund_limit
+
+def test_small_refund_needs_no_approval():
+    assert not refund_limit(20.0)
+
+def test_large_refund_needs_an_approval():
+    assert refund_limit(900.0)</div>
+<div class="status s2"><span class="mode"> NORMAL </span><span class="file"> test_refunds.py </span>              unix | utf-8 | python    100%   11:23</div>
+<div class="cmd">"test_refunds.py" 11L, 324B written</div>
+<div class="term">&gt; hatch test
+platform darwin -- Python 3.12
+collected 2 items
+
+tests/test_refunds.py ..   [100%]
+
+======= 2 passed in 0.08s =======</div>
+</body></html>

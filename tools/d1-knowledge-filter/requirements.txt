@@ -1,0 +1,4 @@
+transformers>=5.19  # d1-2B is a decision model with its own model code (trust_remote_code)
+torch
+torchvision
+pillow

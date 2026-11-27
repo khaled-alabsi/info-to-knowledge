@@ -1,0 +1,48 @@
+# The engine pins, as the generator wrote them. Installed here on Python 3.12, which the media
+# packages below need: CTranslate2, under faster-whisper, ships no wheel for 3.14.
+langgraph==1.2.11
+langchain==1.3.15
+langchain-core==1.5.4
+langchain-ollama==1.1.0
+langchain-openai==1.4.3
+langchain-anthropic==1.5.5
+pydantic==2.13.4
+pydantic-settings==2.15.0
+
+# Phase 1, plain code. The versions that ran on this machine against the test video.
+opencv-python==5.0.0.93
+faster-whisper==1.2.1
+pydub==0.25.1
+numpy==2.5.3
+
+# The web page and the terminal UI (`i2k serve`, `i2k tui`). httpx comes with the LangChain packages above.
+fastapi==0.142.2
+uvicorn==0.54.0
+python-multipart==0.0.32
+textual==8.2.8
+
+# `i2k setup-mlx` reads which Python versions mlx-vlm accepts (`requires_python` from PyPI).
+packaging==26.3
+mcp==2.3.0
+# The PDF workflow: a page's text, OCR of a scanned page, links and image rectangles, rendering
+pymupdf==1.28.2
+pymupdf4llm==1.28.2
+
+# The frame classifier phase 2 runs (frame-classifier/): SigLIP 2 through open_clip; torch, torchvision,
+# transformers and sentencepiece come with the lines below and with mlx-audio
+open_clip_torch==3.3.0
+sentencepiece==0.2.2
+
+# Optional models: Cactus Compute's Mirage vision model (its engine and weights downloaded on first use)
+cactus-compute==4.1.0
+
+# Optional models: WeVisOne-VL through transformers (its own vLLM, triton and pinned torch are left out: no Mac build)
+accelerate
+qwen-vl-utils
+pycocotools
+supervision
+torchvision
+# Board OCR readers, also used by the models above. ocrmac reads through Apple's Vision framework, so it installs on
+# macOS only; the container image reads with Tesseract.
+ocrmac==1.0.0; sys_platform == "darwin"
+pytesseract

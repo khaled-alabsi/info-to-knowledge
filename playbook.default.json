@@ -1,0 +1,282 @@
+{
+  "_comment": [
+    "This machine is an Apple M1 Pro with 32 GB. faster-whisper runs on CTranslate2, which has no",
+    "Metal backend, so it can only use the CPU cores. MLX runs the same model on the GPU.",
+    "",
+    "The shipped default stays faster-whisper: this file is where the machine-specific choice lives.",
+    "MLX has NO VAD filter, so silence is decoded rather than skipped, and it reports no language",
+    "probability. Both facts are recorded in 01_transcript.json under engine and model.",
+    "",
+    "frames.mode is change on this machine since 2026-09-26: crop to the shared screen, take a frame when it changed.",
+    "",
+    "prompt.previousFramesLimit 12 and transcriptBeforeSeconds 240: with both unlimited, a late frame of an 87-minute",
+    "meeting is sent more than the 32768-token context holds, and the host drops the start of the prompt.",
+    "",
+    "models.*.temperature is 0.6 since 2026-09-26: qwen3-vl:8b thinks, and at temperature 0 (greedy) its thinking looped",
+    "(frame-002: the same lines up to 9 times, cut at 8192 tokens). Qwen's README for thinking models: temperature 0.6,",
+    "top_p 0.95, top_k 20, never greedy. (Until 2026-09-27 top_p and top_k were not sent at all; see below.)",
+    "models.document.numPredict 8192: the outline and section calls think first too.",
+    "models.frame.numPredict is 16384 since 2026-09-26: at 8192 an architecture diagram with seven numbered steps",
+    "(frame-002) was cut twice with a correct answer half written; its reasoning drafts the whole record before answering.",
+    "Qwen's README allows 40960 output tokens for thinking models; 4096 and 8192 were both cut on real frames.",
+    "work.framesPerCall 4 since 2026-09-26 (the owner's request): four consecutive frames per call, each in its own",
+    "message. models.frame numCtx 40960 and numPredict 24576 hold four pictures, four records and the thinking before them.",
+    "",
+    "Since 2026-09-27 01:30 both roles run qwen3.6-35b-a3b-mtp on LM Studio (loaded at 183040 tokens of context since 2026-10-02, 163840 before; document.conversationSizeLimitTokens 134000 keeps the conversation the same share of it as 120000 did of 163840), chosen from",
+    "a test of frames per call: read against the same answer key it understands as well as qwen3-vl or better (it corrects",
+    "misheard product names itself) at 14 to 25 s a frame against qwen3-vl's 128 s with notes. work.framesPerCall 24 (the",
+    "playbook's ceiling): up to 24 per call its records hold, from 32 they slide onto the wrong frames; and in this meeting",
+    "repeats cut every group to about 5 frames anyway. maxTokens replaces numPredict/numCtx, which only Ollama reads; the",
+    "request timeout is an hour, since a long group call can outlast the default 900 s. To go back: spec ollama:qwen3-vl:8b",
+    "and framesPerCall 4, and `lms unload --all` before Ollama loads a model.",
+    "models.document.maxTokens 32768 since 2026-09-27 04:50: an outline of 60 entries was cut at 16384 on the real",
+    "meeting (outline-08), its thinking included.",
+    "models.frame.sampling.presence_penalty 1.0 since 2026-09-28 23:50 (was 0.0): 3 of about 13 follow-up calls (second pass, answers) were",
+    "cut at the output limit after 18 minutes in a repetition loop, one repeating 56 different lines 3,041 times. Qwen's own",
+    "guidance for thinking models is a presence penalty above 0 against endless repetition. NOT MEASURED: judge it by the loop",
+    "rate and the first-pass notes of the batches after the restart; to go back, set it to 0.0.",
+    "models.document.sampling.presence_penalty 0.0 since 2026-11-11 20:59 (was 1.5; the owner: \"fix it\"): a speed test",
+    "gave the same knowledge task twice to this model; with 1.5 one try looped and every answer was unusable (no punctuation,",
+    "words cut short, the rules' numbers dropped), with 0 both answers were the best of the POC and none looped. NOT MEASURED in",
+    "phases 2, 4 and 5; judge it by the loop rate and the documents of the runs after it; to go back, set it to 1.5.",
+    "",
+    "models.frame topP and sampling since 2026-09-27 16:20: the Qwen3.6 card's thinking set for precise coding tasks",
+    "(temperature 0.6, top_p 0.95, top_k 20, min_p 0, no presence or repeat penalty), now sent by the client (it sent only",
+    "the temperature before, and LM Studio filled the rest with its defaults). On the 24-frame test the host's defaults",
+    "scored 47-81% over seven runs, this set 72-84% over five; the card's general-task set (temperature 1.0, presence",
+    "1.5) 71-74% over two (measured offline). One loop in about twelve runs with this set: a presence",
+    "penalty against it is not measured yet. models.document has no sampling set: not measured for phase 5."
+  ],
+  "audio": {
+    "engine": "mlx",
+    "whisperModel": "large-v3-turbo",
+    "diarization": {
+      "isOn": true
+    },
+    "takeaway": {
+      "_comment": "the `takeaway` ingesting profile: phase 1 skips diarization and phase 4's one call does not think, unless switched on here",
+      "isDiarizationOn": false,
+      "isThinkingOn": false
+    }
+  },
+  "video": {
+    "_comment": "The video workflow: quality runs phases 3 to 6 as they always ran; fast-processing has phase 3 describe each frame from its image alone with frameModel, frameFollowUps frames to a session, no check, and phase 4 write the document in one call of documentModel; phases 5 and 6 off. A run line's --workflow, or the run form's Workflow, chooses one per run.",
+    "workflow": "quality",
+    "fastProcessing": {
+      "frameModel": "qwen3.5-4b",
+      "frameFollowUps": 5,
+      "frameWidth": 1280,
+      "isFrameThinkingOn": false,
+      "frameMaxTokens": 4096,
+      "documentModel": "document",
+      "isDocumentThinkingOn": true
+    }
+  },
+  "frames": {
+    "maxCount": 1000,
+    "mode": "change",
+    "isKnowledgeFilterOn": true,
+    "knowledgeFilterModel": "google-SigLIP-2",
+    "decisionFilterCut": 0.2,
+    "isTextOnlyMarkOn": true,
+    "isBoardStageOn": true,
+    "boardHandler": "text-diff-integration",
+    "boardTextReader": "auto",
+    "isRedundancyFilterOn": true,
+    "redundancyModel": "lfm-vl-3b",
+    "redundancyFramesPerCall": 4,
+    "redundancyFrameWidth": 1280,
+    "redundancyMaxMissingWords": 2,
+    "redundancyMinWords": 5,
+    "isSimilarityRecheckOn": true,
+    "similarityThreshold": 0.97,
+    "similarityFramesPerCall": 4,
+    "similarityModel": ""
+  },
+  "models": {
+    "frame": {
+      "_comment": "LM Studio on this machine (lmstudioBaseUrl). A model served by another machine is a worker set (see workerSets and playbook.local.example.json).",
+      "spec": "lmstudio:qwen3.6-35b-a3b-mtp",
+      "numCtx": 183040,
+      "temperature": 1.0,
+      "maxTokens": 40960,
+      "requestTimeoutS": 3600,
+      "topP": 0.95,
+      "sampling": {
+        "top_k": 20,
+        "min_p": 0.0,
+        "repeat_penalty": 1.0,
+        "presence_penalty": 1.0
+      }
+    },
+    "document": {
+      "_comment": "This machine, as frame above.",
+      "spec": "lmstudio:qwen3.6-35b-a3b-mtp",
+      "numCtx": 183040,
+      "temperature": 1.0,
+      "maxTokens": 32768,
+      "requestTimeoutS": 3600,
+      "topP": 0.95,
+      "sampling": {
+        "top_k": 20,
+        "min_p": 0.0,
+        "repeat_penalty": 1.0,
+        "presence_penalty": 0.0
+      }
+    },
+    "lfm-vl-3b": {
+      "_comment": "LiquidAI/LFM2.5-VL-3B-GGUF, Q8_0 with its F16 vision projector, on LM Studio. 32,768 tokens is its most context. Sampling from Liquid AI's model card. It has no thinking mode. Not measured in any phase of a run yet; a phase uses it only when phaseModels or the run form names it.",
+      "spec": "lmstudio:lfm2.5-vl-3b",
+      "numCtx": 32768,
+      "temperature": 0.1,
+      "maxTokens": 8192,
+      "requestTimeoutS": 3600,
+      "sampling": {
+        "min_p": 0.15,
+        "repeat_penalty": 1.05
+      }
+    },
+    "qwen3.5-4b-filter": {
+      "_comment": "Qwen3.5-4B as phase 2's redundancy and similarity model: asked with no thinking (phase 2 sends reasoning_effort none), so Qwen's sampling for answers without thinking, as a test measured it. On Lecture 9 at 7 frames a call and 1280 px, with the word check, 7 right removals and none lost (lfm2.5-vl-3b: 2 to 4).",
+      "spec": "lmstudio:qwen3.5-4b",
+      "numCtx": 32768,
+      "temperature": 0.7,
+      "topP": 0.8,
+      "maxTokens": 8192,
+      "requestTimeoutS": 3600,
+      "sampling": {
+        "top_k": 20,
+        "min_p": 0.0,
+        "presence_penalty": 1.5,
+        "repeat_penalty": 1.0
+      }
+    },
+    "qwen3.5-4b": {
+      "_comment": "unsloth/Qwen3.5-4B-GGUF, Q8_0 with its F16 vision projector, on LM Studio. The best describer in a test of the small models: at 3 frames a call, 1280 px wide, with thinking off, it described 45 of 60 test frames whole and missed 1. Set here for phase 3, which thinks: 131,072 tokens of context (LM Studio loads it with whatever context it is given at load time: load it with lms load qwen3.5-4b --context-length 131072), the frame model's output limit, and Qwen's thinking-mode sampling for general tasks. Used by no phase unless phaseModels or the run form names it.",
+      "spec": "lmstudio:qwen3.5-4b",
+      "framesPerCall": 5,
+      "numCtx": 131072,
+      "temperature": 1.0,
+      "topP": 0.95,
+      "maxTokens": 40960,
+      "requestTimeoutS": 3600,
+      "sampling": {
+        "top_k": 20,
+        "min_p": 0.0,
+        "presence_penalty": 1.5,
+        "repeat_penalty": 1.0
+      }
+    }
+  },
+  "phaseModels": {},
+  "prompt": {
+    "previousFramesLimit": 12,
+    "transcriptBeforeSeconds": 240
+  },
+  "document": {
+    "conversationWindowTokens": 183040,
+    "conversationSizeLimitTokens": 134000,
+    "headingEntries": 70
+  },
+  "review": {
+    "_comment": "phase 5: a second worker reviews the published document against the sources; off, the run ends at phase 4's document",
+    "isOn": true
+  },
+  "critiqueCollection": {
+    "_comment": "phase 6, the critique collection: every batch's critique of this run, collected into one rule set",
+    "isOn": true
+  },
+  "documentReshaping": {
+    "_comment": "phase 7, document reshaping, off unless the run asked for it: one worker cleans up, rewrites or reshapes into knowledge the published document, at least batchTokens estimated tokens a part",
+    "batchTokens": 30000,
+    "batchCalls": 80,
+    "conversationSizeLimitTokens": 134000,
+    "firstWarningPercent": 70,
+    "secondWarningPercent": 85,
+    "charsPerToken": 3.5
+  },
+  "pdf": {
+    "_comment": "how a PDF is read: its pages turned into text by pymupdf4llm, its scanned pages by ocrEngine",
+    "_defaultMode": "how a PDF is read when its run chooses none: by-size (at most imagesPageLimit pages: pages as images; more than modelWritingPageLimit: markdown conversion; else text only), or one of text-only, pages-as-images, markdown-conversion for every PDF",
+    "defaultMode": "by-size",
+    "imagesPageLimit": 20,
+    "modelWritingPageLimit": 300,
+    "_ocrEngine": "what reads a scanned page: unlimited-ocr (99% of a scan's words kept in a test, about 8 to 20 s a page; tools/unlimited-ocr/setup.sh --download) or tesseract (about 1.7 s a page, the fast profile's)",
+    "ocrEngine": "unlimited-ocr",
+    "unlimitedOcrPython": "tools/unlimited-ocr/.venv/bin/python",
+    "unlimitedOcrModel": "mlx-community/Unlimited-OCR-2-8bit",
+    "_figureReading": "which figures of a PDF read as text only phase 3 reads; the others are placed in the document where they stood, unread: read-all, place-above-limit (more than figureReadLimit figures: all placed unread; the owner's default) or read-drawings-only (charts and diagrams drawn as lines read, pictures placed)",
+    "figureReading": "place-above-limit",
+    "figureReadLimit": 35,
+    "_cleanupWishes": "the extra wishes phase 7's LLM clean up of a PDF's document is given, as the run form last sent them",
+    "cleanupWishes": "",
+    "_rewriteWishes": "the extra wishes phase 7's LLM rewrite of a PDF's document is given, as the run form last sent them",
+    "rewriteWishes": "",
+    "_knowledgeWishes": "the extra wishes phase 7's LLM knowledge pass over a PDF's document is given, as the run form last sent them",
+    "knowledgeWishes": ""
+  },
+  "budgets": {
+    "_attempts": "maxAttempts: answers a step of phases 3 to 6 may give before a rejection blocks it; writeChapterAttempts: the same for a chapter's text",
+    "maxAttempts": 3,
+    "writeChapterAttempts": 3,
+    "_writeChapterCalls": "tool calls one chapter part may make before it blocks; 80, the program's 40 spent by a part cutting and undoing its frames (DEFECTS 705)",
+    "writeChapterCalls": 80,
+    "chapterDryRuns": true,
+    "cutsPerFrame": 5,
+    "failOnFrameCutFail": false,
+    "undosPerFrame": 20,
+    "gridLinesMax": 40
+  },
+  "framesProcessing": {
+    "isCritiqueOn": true,
+    "isCritiqueRepairOn": true,
+    "isPdfCritiqueOn": false,
+    "isPdfFigureCritiqueOn": true,
+    "isOpenQuestionsOn": true,
+    "isPdfOpenQuestionsOn": false,
+    "framesPerCall": 4,
+    "repairCalls": 4,
+    "singleFrameAttempts": 3,
+    "minSentFrameWidth": 1280,
+    "isTextOnlyFrameSentAsText": true
+  },
+  "tags": {
+    "_note": "tags a run gets by its recording's name, and the worker's. Bildschirmaufnahme (9 recordings), 38c3 (5) and 39c3 (2, one congress series with 38c3), Lecture (3) and 6100l-lecture (3): found by the monitoring agent. Every run also gets the format of the file it was made from (from-video, from-audio, from-pdf), from the program. A rule naming a client lives in playbook.local.json alone: a client's name stays out of git",
+    "nameRules": [
+      {
+        "prefix": "Bildschirmaufnahme",
+        "tag": "screen-recording"
+      },
+      {
+        "prefix": "38c3",
+        "tag": "ccc-congress"
+      },
+      {
+        "prefix": "39c3",
+        "tag": "ccc-congress"
+      },
+      {
+        "prefix": "Lecture",
+        "tag": "lecture"
+      },
+      {
+        "prefix": "6100l-lecture",
+        "tag": "lecture"
+      }
+    ],
+    "workerTags": 3
+  },
+  "queue": {
+    "_note": "a failed job runs again with --resume before any other job; after its last try the queue goes on, or holds when onFailure (or the job's own choice) is block",
+    "retries": 2,
+    "retryPauseSeconds": 60,
+    "onFailure": "continue"
+  },
+  "workerSets": {
+    "_note": "named worker sets: each overrides only the settings it names, nested as in a profile file, e.g. \"gpu-box\": {\"models\": {\"frame\": {\"spec\": \"openai-compatible:your-model-name\", \"baseUrl\": \"http://gpu-box.example:8090/v1\"}}}. Jobs on different sets run at the same time, jobs on one set one after another. The default set is these files as they are and has no entry. The shipped file holds no set: yours go in playbook.local.json (see playbook.local.example.json)."
+  },
+  "defaultWorkerSet": "default",
+  "workerSetMachines": {
+    "default": "this machine"
+  }
+}

@@ -1,0 +1,22 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+html, body { margin: 0; width: 1728px; height: 1117px; overflow: hidden; background: #140b22; font-family: Helvetica, Arial, sans-serif; }
+.backdrop { position: absolute; inset: 0; background:
+  radial-gradient(circle at 80% 20%, #3b1a5c 0 6%, transparent 7%), radial-gradient(circle at 70% 75%, #2a1446 0 9%, transparent 10%),
+  repeating-linear-gradient(0deg, transparent 0 58px, #2b1d45 58px 60px), repeating-linear-gradient(90deg, transparent 0 58px, #2b1d45 58px 60px); }
+.slide { position: absolute; left: 0; top: 0; width: 1296px; height: 838px; background: #fdfdfd; display: flex; flex-direction: column;
+  justify-content: center; padding: 0 90px; box-sizing: border-box; }
+.slide h1 { font-size: 64px; margin: 0 0 28px; color: #111; }
+.slide p { font-size: 34px; max-width: 900px; margin: 10px 0; color: #222; }
+.camera { position: absolute; right: 24px; bottom: 24px; width: 340px; height: 560px; background: #0d0d14; overflow: hidden; }
+.code { position: absolute; right: 12px; top: 150px; width: 120px; height: 600px; font-size: 14px; background: #23262e; color: #c9d1d9; font-family: Menlo, monospace; font-size: 22px; padding: 20px; box-sizing: border-box; }
+.camera img { width: 100%; height: 100%; object-fit: cover; }
+</style></head><body>
+<!-- A conference broadcast: the projected slide fills the top left, a dark code block on its right edge (round 1 of the
+     phase 2 audit: the slide was cut at the block, which another grey left out of the panel), the speaker's camera stands beside it on the
+     congress backdrop. Names and text invented; the portrait is public domain (../public_domain_faces/SOURCES.md). -->
+<div class="backdrop"></div>
+<div class="slide"><h1>Retry budgets at AcmeSync</h1><p>The gateway retries a failed call three times</p>
+<p>Jonas sets each client's budget</p><p>Clients cannot change it themselves</p>
+<div class="code">struct budget {<br>&nbsp; byte retries;<br>&nbsp; ushort timeout_s;<br>&nbsp; ushort window_s;<br>};</div></div>
+<div class="camera"><img src="../public_domain_faces/Neil_Armstrong_pose.jpg"></div>
+</body></html>

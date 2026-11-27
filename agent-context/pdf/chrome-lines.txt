@@ -1,0 +1,17 @@
+# The lines a PDF export prints around its content and no reader needs: one regular expression a line, matched against
+# a whole line of a page's text, case ignored, bold and underline marks and digits as they stand. Read by
+# services/pdf_source_service.py; every line a pattern removes is written to 01_cleanup.json with the pattern.
+# A wiki export's chrome
+^(#+\s*)?page tree\b.*
+^(\S{1,3}\s+)?created by .*
+^last updated by .*
+^.*\b\d+ views?$
+^jump to .*
+^.*\bback to top$
+^like\b.*people like this$
+^\S{0,8}\s*[-·|]?\s*\d+ (people|person) likes? this$
+^labels:.*
+^attachments\s*(\(\d+\))?$
+^(edit|like|share|watch|save for later)(\s*[·|]\s*(edit|like|share|watch|save for later))*$
+^printed from .*
+^page \d+ of \d+$

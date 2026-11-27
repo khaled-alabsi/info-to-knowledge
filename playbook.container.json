@@ -1,0 +1,22 @@
+{
+  "_comment": [
+    "The container profile, switched on by the image (I2K_PROFILE=container) and never on a Mac. Read on top of",
+    "playbook.default.json and playbook.local.json, and it wins over both.",
+    "",
+    "A Linux container has no Metal graphics, so every Apple-only part is replaced by the one the program already",
+    "offers on other systems: faster-whisper on the CPU for the transcript, Tesseract for board text and scanned PDF",
+    "pages. The model hosts are reached by URL: host.containers.internal is the machine that runs the container (its",
+    "LM Studio or Ollama); a worker set or a model's baseUrl can name any other host, as on the Mac."
+  ],
+  "audio": {
+    "engine": "faster-whisper"
+  },
+  "frames": {
+    "boardTextReader": "tesseract"
+  },
+  "pdf": {
+    "ocrEngine": "tesseract"
+  },
+  "lmstudioBaseUrl": "http://host.containers.internal:1234/v1",
+  "ollamaBaseUrl": "http://host.containers.internal:11434"
+}

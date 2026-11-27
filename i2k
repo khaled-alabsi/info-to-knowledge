@@ -1,0 +1,22 @@
+#!/bin/sh
+# i2k: runs main.py with this project's own virtual environment, so it needs no install and works from any
+# directory, also through a symlink (ln -s "$PWD/i2k" ~/.local/bin/i2k). A Hugging Face token kept in .env
+# (git-ignored) is exported, for the speaker model's first download.
+
+script="$0"
+while [ -h "$script" ]; do
+  link="$(readlink "$script")"
+  case "$link" in
+    /*) script="$link" ;;
+    *) script="$(dirname "$script")/$link" ;;
+  esac
+done
+root="$(cd "$(dirname "$script")" && pwd)"
+
+if [ -f "$root/.env" ]; then
+  set -a
+  . "$root/.env"
+  set +a
+fi
+
+exec "$root/.venv/bin/python" "$root/main.py" "$@"

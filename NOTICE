@@ -1,0 +1,48 @@
+info-to-knowledge
+Copyright the info-to-knowledge contributors.
+
+The program's code is licensed under the GNU Affero General Public License v3.0 (see LICENSE).
+
+The model files, word list, test pictures and helper tools below are not covered by that licence. Each keeps its own
+licence. Keep these credits when you copy or publish them.
+
+Shipped in this repository
+
+File or folder                                   What it is, and its licence
+weights/face_detection_yunet_2023mar.onnx        YuNet face detector, from the OpenCV Zoo (github.com/opencv/opencv_zoo).
+                                                 MIT License.
+weights/object_detection_nanodet_2022nov.onnx    NanoDet-Plus person detector, from the OpenCV Zoo. Apache License 2.0.
+frame-classifier/weights/face_detection_yunet_2023mar.onnx
+                                                 A second copy of the YuNet model above. MIT License.
+weights/frame-classifier/tags.json, tags.npz     Numbers trained in this project (cluster centres and thresholds) on
+                                                 frames embedded with Google's SigLIP 2 model. They hold no image and
+                                                 no text of a recording. The code license applies.
+word-lists/deu.txt                               German word list taken from the Tesseract language data
+                                                 `deu.traineddata` (github.com/tesseract-ocr/tessdata). Apache
+                                                 License 2.0. See word-lists/README.md.
+tools/apple-text-reader/apple_text_reader.swift  Reads the words of one image with Apple's Vision framework. Code of
+                                                 this project; it runs on macOS only and needs Apple's frameworks.
+tools/pandoc/merged_tables_as_html.lua           Pandoc filter written for this project. The code license applies.
+tests/resources/public_domain_faces/             Five NASA photographs, works of the United States government and in
+                                                 the public domain, fetched from Wikimedia Commons. Sources are
+                                                 listed in tests/resources/public_domain_faces/SOURCES.md.
+tests/resources/                                 Other rendered boards, PDFs and pictures were made for the tests and
+                                                 hold invented text and names.
+
+Downloaded when you use them (not part of this repository)
+
+`i2k setup-models`, the first run of a step, and the helper tools' `setup.sh` download these models. Each comes under
+the licence on its own model card or project page; read it before you use a document commercially.
+
+- Speech recognition: Whisper models through faster-whisper and mlx-whisper.
+- Speaker recognition: pyannote `speaker-diarization-community-1` (gated: accept its terms on huggingface.co).
+- Frame classifier: Google SigLIP 2, through open_clip.
+- Language and vision models you choose, for example the Qwen3.6 model that the default settings name, Liquid AI's
+  LFM2.5-VL and d1 models, and the Unlimited-OCR-2 scanned-page reader.
+- Hugging Face downloads go to the folder `HF_HOME` names, by default the user's Hugging Face cache.
+
+Tools the program calls as separate programs
+
+FFmpeg, Tesseract (Apache License 2.0), Pandoc, LM Studio, Ollama and llama.cpp are installed separately, each under
+its own licence. The Python and Node packages are listed in `requirements.txt`, `requirements-diarization.txt` and
+`web/package.json`; each keeps its own licence.

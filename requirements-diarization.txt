@@ -1,0 +1,5 @@
+# Speaker diarization in phase 1 (`audio.diarization.isOn`), optional: without it a run writes the transcript with no
+# speakers. Installed on Python 3.12 beside the torch 2.14 that mlx-audio already brought; these versions ran here.
+pyannote.audio==4.0.7
+torchaudio==2.11.0
+torchcodec==0.17.0

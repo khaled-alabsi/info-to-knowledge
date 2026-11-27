@@ -1,0 +1,32 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+html, body { margin: 0; width: 1728px; height: 1117px; overflow: hidden; background: #1b1b1b; font-family: Menlo, monospace; }
+.term { position: absolute; left: 24px; top: 20px; color: #d8d8d8; font-size: 22px; line-height: 34px; white-space: pre; }
+.term .add { background: #1f6b2a; } .term .del { background: #7a1f2e; }
+.inset { position: absolute; right: 24px; top: 380px; width: 432px; height: 243px; overflow: hidden; background: #1e2a24; }
+.inset .board { position: absolute; left: 0; right: 0; top: 0; height: 120px; background: #223029; }
+.inset .rail { position: absolute; left: 0; right: 0; top: 120px; height: 10px; background: #5d6660; }
+.inset .wood { position: absolute; left: 0; right: 0; top: 130px; bottom: 0; background: #9a7446; }
+.inset .person { position: absolute; left: 110px; top: 30px; width: 210px; height: 213px; overflow: hidden; -webkit-mask-image: radial-gradient(ellipse 50% 55% at 50% 60%, black 55%, transparent 100%); }
+.inset .person img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 10%; }
+</style></head><body>
+<!-- A lecture recorded as the screen with the room camera inset at the middle of its right edge, as MIT's lectures
+     draw it (DEFECTS 91, 103). Text invented; the portrait is public domain (../public_domain_faces/SOURCES.md). -->
+<div class="term">def fetch_clients(gateway: Gateway) -> list[Client]:
+    """Read every client the gateway knows."""
+<span class="del">-    return gateway.get("/clients")                                   </span>
+<span class="add">+    return [Client(**row) for row in gateway.get("/clients")]          </span>
+
+def refund(order: Order) -> None:
+    """Keep a refund waiting for an approval."""
+    order.status = "waiting"
+
+$ mypy acmesync.py
+Success: no issues found in 1 source file
+$ pytest -q tests/test_gateway.py
+....                                                         [100%]
+4 passed in 0.31s
+
+-- INSERT -- accept edits on (shift+tab to cycle)</div>
+<div class="inset"><div class="board"></div><div class="rail"></div><div class="wood"></div>
+<div class="person"><img src="../public_domain_faces/Neil_Armstrong_pose.jpg"></div></div>
+</body></html>

@@ -1,0 +1,38 @@
+{
+  "_note": "Phase 3's preparation steps for an audio recording of this ingesting profile. Each step's job is taught by base/preprocessing-sprint-planning-<step id>.md, which context_map.json's preprocessing rules give it.",
+  "minParagraphs": 0,
+  "steps": [
+    {
+      "id": "items",
+      "title": "The items discussed",
+      "input": "speech",
+      "sections": [
+        "What it is"
+      ]
+    },
+    {
+      "id": "item_details",
+      "title": "Each item in detail",
+      "input": "each:items",
+      "sections": [
+        "Goal",
+        "Estimate",
+        "Owner",
+        "Dependencies and risks",
+        "Decision",
+        "Open points"
+      ]
+    },
+    {
+      "id": "sprint",
+      "title": "The sprint as committed",
+      "input": "speech",
+      "sections": [
+        "Sprint goal",
+        "Committed items",
+        "Capacity",
+        "Left out"
+      ]
+    }
+  ]
+}

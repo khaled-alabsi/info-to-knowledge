@@ -1,0 +1,628 @@
+{
+  "schemaVersion": 1,
+  "note": [
+    "THE single answer to 'what is this phase's model told?'. Read by the system-prompt builder.",
+    "",
+    "Keys match the PHASE constant each message builder names. `instruction` is one file in",
+    "instructions/. A declared file that is not on disk RAISES, and a file on disk that no phase",
+    "declares fails the suite.",
+    "",
+    "This pipeline has nine model steps. `write` and `review` have tools: `frames_processing` looks at one frame,",
+    "`parts` divides the meeting into its own parts, `outline` sorts one batch's entries into topics, `contents` writes the title, `section` writes one topic part's section, `summary` writes the executive summary and the agenda, `write` is phase 4 as one conversation with reading tools (R12), `review` is phase 5, a critic that resolves its own todos from the sources with reading tools (R16). Each is",
+    "sent everything it needs in its message, so nothing is injected beside the instruction."
+  ],
+  "phases": {
+    "speech_structuring": {
+      "why": "Phase 2 for an audio recording: the whole transcript turned into paragraphs of clean speech in one call. Without the every-line-once rule and the keep-every-statement rule the model summarises the speech or drops lines, and without the speaker rules it merges two voices into one.",
+      "instruction": "audio/speech_structuring.md",
+      "identity": {
+        "number": "2",
+        "label": "speech",
+        "doing": "turning the transcript of an audio recording into paragraphs of clean speech, one speaker's turn on one point each"
+      },
+      "base": [],
+      "contracts": [],
+      "templates": []
+    },
+    "takeaway": {
+      "why": "Phase 4 of a takeaway run: one call from the whole transcript to the facts the recording settled and the points it left open. Without the write-the-result rule the model retells the discussion, and without the cite-your-lines rule a fact cannot be traced back to what was said.",
+      "instruction": "audio/takeaway.md",
+      "identity": {
+        "number": "4",
+        "label": "takeaway",
+        "doing": "writing the takeaway of a recording: the facts its people agreed on and the points they left open"
+      },
+      "base": [],
+      "contracts": [],
+      "templates": []
+    },
+    "document_cleanup": {
+      "why": "Phase 7 when a run asks for it: one conversation per batch of the published document's numbered blocks cleans the document up or rewrites it. Without the keep-the-knowledge rules a rewrite drops facts and figures, without the export noise list a clean up leaves a wiki's page tree and likes in, and without the read-only-your-batch rule the worker reads the whole document into its window.",
+      "instruction": "_shared/document-cleanup.md",
+      "workflows": {"video": "video/document_cleanup.md", "audio": "audio/document_cleanup.md", "pdf": "pdf/document_cleanup.md"},
+      "identity": {
+        "number": "7",
+        "label": "cleanup",
+        "doing": "cleaning up or rewriting one batch of a finished document converted from a PDF"
+      },
+      "base": [],
+      "contracts": [],
+      "templates": []
+    },
+    "document_knowledge": {
+      "why": "Phase 7's knowledge pass when a run asks for it: one conversation per part of the published document writes its business facts into one knowledge document of one section per subject, read part by part in one pass. Without the goal and the drop-the-ticket-numbers test the worker copies ticket numbers, sprints and authors, without the read-the-section-first rule a subject spread over several parts gets two sections or a fact twice, and without the figure rule figures are lost or kept as decoration.",
+      "instruction": "_shared/document-knowledge.md",
+      "workflows": {"pdf": "pdf/document_knowledge.md"},
+      "identity": {
+        "number": "7",
+        "label": "knowledge",
+        "doing": "writing the business facts of one part of a finished document into a knowledge document of one section per subject"
+      },
+      "base": [],
+      "contracts": [],
+      "templates": []
+    },
+    "document_chat": {
+      "why": "The chat on a run's final document, in every workflow: the person asks from the Artifacts tab and one worker finds what it needs in the published document and edits it. Without the read-only-what-you-need rule the worker reads a large document whole, and without the keep-the-rest rule it rewrites what nobody asked it to change.",
+      "instruction": "_shared/document-chat.md",
+      "workflows": {"video": "video/document_chat.md", "audio": "audio/document_chat.md", "pdf": "pdf/document_chat.md"},
+      "identity": {
+        "number": "7",
+        "label": "chat",
+        "doing": "changing a finished document as the person asks in a chat"
+      },
+      "base": [],
+      "contracts": [],
+      "templates": []
+    },
+    "frame_redundancy": {
+      "why": "Phase 2 of a video run, after the knowledge filter: one call per batch of consecutive frames asks a small vision model which frames another frame already holds whole. Without the every-piece rule a merely similar frame is removed, and without the keep and remove rules a scrolled page or a join screen is judged by its look instead of its knowledge.",
+      "instruction": "video/frame_redundancy.md",
+      "identity": {
+        "number": "2",
+        "label": "redundancy filter",
+        "doing": "deciding which frames of a screen recording another frame already holds whole"
+      },
+      "base": [],
+      "contracts": [],
+      "templates": []
+    },
+    "preprocessing": {
+      "why": "Phase 3 for an audio recording whose ingesting profile declares preparation steps (agent-context/preprocessing/<profile>.json): one call per step, or per item of an earlier step. Without the every-section rule, the cite-your-paragraphs rule and the no-number-of-your-own rule the notes lose what was said or add what was not, and phase 4 writes from them.",
+      "instruction": "audio/preprocessing.md",
+      "identity": {
+        "number": "3",
+        "label": "prepare",
+        "doing": "preparing the notes of an audio recording in steps, the items first and then each item in detail"
+      },
+      "base": [],
+      "contracts": [],
+      "templates": [],
+      "when": [
+        {
+          "field": "preprocessing_step",
+          "in": [
+            "sprint-planning/items"
+          ],
+          "base": [
+            "preprocessing-sprint-planning-items.md"
+          ]
+        },
+        {
+          "field": "preprocessing_step",
+          "in": [
+            "sprint-planning/item_details"
+          ],
+          "base": [
+            "preprocessing-sprint-planning-item-details.md"
+          ]
+        },
+        {
+          "field": "preprocessing_step",
+          "in": [
+            "sprint-planning/sprint"
+          ],
+          "base": [
+            "preprocessing-sprint-planning-sprint.md"
+          ]
+        },
+        {
+          "field": "preprocessing_step",
+          "in": [
+            "sprint-change/changes"
+          ],
+          "base": [
+            "preprocessing-sprint-change-changes.md"
+          ]
+        },
+        {
+          "field": "preprocessing_step",
+          "in": [
+            "sprint-change/change_details"
+          ],
+          "base": [
+            "preprocessing-sprint-change-change-details.md"
+          ]
+        },
+        {
+          "field": "preprocessing_step",
+          "in": [
+            "meeting/items"
+          ],
+          "base": [
+            "preprocessing-meeting-items.md"
+          ]
+        },
+        {
+          "field": "preprocessing_step",
+          "in": [
+            "meeting/item_details"
+          ],
+          "base": [
+            "preprocessing-meeting-item-details.md"
+          ]
+        },
+        {
+          "field": "preprocessing_step",
+          "in": [
+            "language-lesson/units"
+          ],
+          "base": [
+            "preprocessing-language-lesson-units.md"
+          ]
+        },
+        {
+          "field": "preprocessing_step",
+          "in": [
+            "language-lesson/unit_details"
+          ],
+          "base": [
+            "preprocessing-language-lesson-unit-details.md"
+          ]
+        },
+        {
+          "field": "preprocessing_step",
+          "in": [
+            "presentation/topics"
+          ],
+          "base": [
+            "preprocessing-presentation-topics.md"
+          ]
+        },
+        {
+          "field": "preprocessing_step",
+          "in": [
+            "presentation/topic_details"
+          ],
+          "base": [
+            "preprocessing-presentation-topic-details.md"
+          ]
+        }
+      ]
+    },
+    "frames_processing": {
+      "why": "One frame. Without the field-by-field instruction the model narrates the frame in prose, and the record fails to parse.",
+      "instruction": "_shared/frames-processing.md",
+      "workflows": {"video": "video/frames_processing.md", "pdf": "pdf/frames_processing.md"},
+      "identity": {
+        "number": "3",
+        "label": "frame",
+        "doing": "documenting ONE frame of a video for a reader who cannot see it"
+      },
+      "base": [],
+      "contracts": [],
+      "templates": [],
+      "when": [
+        {
+          "field": "medium",
+          "in": [
+            "pdf"
+          ],
+          "base": [
+            "medium-pdf.md"
+          ]
+        },
+        {
+          "field": "medium",
+          "in": [
+            "pdf-figure"
+          ],
+          "base": [
+            "medium-pdf-figure.md"
+          ]
+        }
+      ]
+    },
+    "parts": {
+      "why": "The meeting's own parts, which become the chapters. Without the order and first-moment rules the model regroups the meeting by subject, and the document no longer reads as that meeting.",
+      "instruction": "parts.md",
+      "identity": {
+        "number": "5",
+        "label": "parts",
+        "doing": "dividing a meeting into its own parts, in the order they happened"
+      },
+      "base": [],
+      "contracts": [],
+      "templates": []
+    },
+    "outline": {
+      "why": "The knowledge document's outline. Without the every-entry-exactly-once rule the model drops what it judges unimportant and hides that it did.",
+      "instruction": "outline.md",
+      "identity": {
+        "number": "5",
+        "label": "outline",
+        "doing": "sorting everything the video established into topics, dropping nothing"
+      },
+      "base": [],
+      "contracts": [],
+      "templates": []
+    },
+    "contents": {
+      "why": "The knowledge document's title. Without the claim-not-label rule the model titles the meeting instead of stating what it establishes.",
+      "instruction": "contents.md",
+      "identity": {
+        "number": "5",
+        "label": "contents",
+        "doing": "writing the title of a document about a meeting"
+      },
+      "base": [],
+      "contracts": [],
+      "templates": []
+    },
+    "section": {
+      "why": "One section of the knowledge document. Without the rules against meta-narration the model describes the recording where it should state the subject.",
+      "instruction": "section.md",
+      "identity": {
+        "number": "5",
+        "label": "section",
+        "doing": "writing ONE section about the subject, from the entries of one topic"
+      },
+      "base": [],
+      "contracts": [],
+      "templates": []
+    },
+    "summary": {
+      "why": "The executive summary and the agenda at the top of the document. Without the conclusion-first and claims-not-narration rules the model writes minutes of who said what.",
+      "instruction": "summary.md",
+      "identity": {
+        "number": "5",
+        "label": "summary",
+        "doing": "writing the executive summary and the agenda of a document about a meeting"
+      },
+      "base": [],
+      "contracts": [],
+      "templates": []
+    },
+    "review": {
+      "why": "Phase 5, the review of the finished document (REQUIREMENTS.md R16). Without the four todo kinds, the rule to find the answer in the sources before writing it, and the honest open question, the worker lists style points, answers from general knowledge, or guesses where the sources are silent.",
+      "instruction": "_shared/review.md",
+      "workflows": {"video": "video/review.md", "pdf": "pdf/review.md"},
+      "identity": {
+        "number": "5",
+        "label": "review",
+        "doing": "reviewing a finished document as a critic, then resolving each gap from the recording's sources"
+      },
+      "base": [],
+      "contracts": [],
+      "templates": [],
+      "when": [
+        {
+          "field": "ingesting_profile",
+          "in": [
+            "presentation"
+          ],
+          "base": [
+            "ingesting-profile-presentation.md"
+          ]
+        },
+        {
+          "field": "ingesting_profile",
+          "in": [
+            "conversation"
+          ],
+          "base": [
+            "ingesting-profile-conversation.md"
+          ]
+        },
+        {
+          "field": "ingesting_profile",
+          "in": [
+            "meeting"
+          ],
+          "base": [
+            "ingesting-profile-meeting.md"
+          ]
+        },
+        {
+          "field": "ingesting_profile",
+          "in": [
+            "language-lesson"
+          ],
+          "base": [
+            "ingesting-profile-language-lesson.md"
+          ]
+        },
+        {
+          "field": "ingesting_profile",
+          "in": [
+            "sprint-change"
+          ],
+          "base": [
+            "ingesting-profile-sprint-change.md"
+          ]
+        },
+        {
+          "field": "ingesting_profile",
+          "in": [
+            "sprint-planning"
+          ],
+          "base": [
+            "ingesting-profile-sprint-planning.md"
+          ]
+        }
+      ]
+    },
+    "write": {
+      "why": "Phase 4 as one conversation (REQUIREMENTS.md R12). Without the follow-up order, the submit-per-follow-up rule and the link-never-restate rule, the agent answers in prose, restates what another section holds, or reads the whole meeting for every section.",
+      "instruction": "_shared/write.md",
+      "workflows": {"video": "video/write.md", "audio": "audio/write.md", "pdf": "pdf/write.md"},
+      "identity": {
+        "number": "5",
+        "label": "write",
+        "doing": "writing the document of a recorded meeting in one conversation, one follow-up at a time"
+      },
+      "base": [],
+      "contracts": [],
+      "templates": [],
+      "when": [
+        {
+          "field": "ingesting_profile",
+          "in": [
+            "presentation"
+          ],
+          "base": [
+            "ingesting-profile-presentation.md"
+          ]
+        },
+        {
+          "field": "ingesting_profile",
+          "in": [
+            "conversation"
+          ],
+          "base": [
+            "ingesting-profile-conversation.md"
+          ]
+        },
+        {
+          "field": "ingesting_profile",
+          "in": [
+            "meeting"
+          ],
+          "base": [
+            "ingesting-profile-meeting.md"
+          ]
+        },
+        {
+          "field": "ingesting_profile",
+          "in": [
+            "language-lesson"
+          ],
+          "base": [
+            "ingesting-profile-language-lesson.md"
+          ]
+        },
+        {
+          "field": "ingesting_profile",
+          "in": [
+            "sprint-change"
+          ],
+          "base": [
+            "ingesting-profile-sprint-change.md"
+          ]
+        },
+        {
+          "field": "ingesting_profile",
+          "in": [
+            "sprint-planning"
+          ],
+          "base": [
+            "ingesting-profile-sprint-planning.md"
+          ]
+        }
+      ]
+    },
+    "draft_headings": {
+      "why": "Reading one agenda point in the notes file before the table of contents, so the headings rest on the whole meeting and reading cannot be skipped (the owner, 2026-09-28).",
+      "instruction": "draft_headings.md",
+      "identity": {
+        "number": "4",
+        "label": "point reading",
+        "doing": "reading one agenda point of the meeting and naming its subjects"
+      },
+      "base": [],
+      "contracts": [],
+      "templates": []
+    },
+    "table_of_contents": {
+      "why": "The document's whole table of contents in one answer, chapters and headings, so a heading can never land under the wrong chapter (the owner, 2026-09-28).",
+      "instruction": "table_of_contents.md",
+      "identity": {
+        "number": "4",
+        "label": "table of contents",
+        "doing": "scaffolding the document: its chapters and the headings under them"
+      },
+      "base": [],
+      "contracts": [],
+      "templates": []
+    },
+    "critique": {
+      "why": "A batch's critique of its own notes (R19), which REPORTS and changes nothing: each mistake as a rule for any meeting, kept as an artifact the monitor validates and phase 6 collects. Without the generic-rule rules a model writes notes about this meeting, which no later run can learn from.",
+      "instruction": "_shared/critique.md",
+      "workflows": {"video": "video/critique.md", "pdf": "pdf/critique.md"},
+      "identity": {
+        "number": "3",
+        "label": "critique",
+        "doing": "criticising your own notes of a batch of frames, and naming each mistake as a rule"
+      },
+      "base": [],
+      "contracts": [],
+      "templates": [],
+      "when": [
+        {
+          "field": "medium",
+          "in": [
+            "pdf"
+          ],
+          "base": [
+            "medium-pdf.md"
+          ]
+        },
+        {
+          "field": "medium",
+          "in": [
+            "pdf-figure"
+          ],
+          "base": [
+            "medium-pdf-figure.md"
+          ]
+        }
+      ]
+    },
+    "second_pass": {
+      "why": "A batch's second look at its own notes (R19). Without the add-never-remove and never-shorter rules a model re-reading its answer rewrites what it already had right.",
+      "instruction": "_shared/second-pass.md",
+      "workflows": {"video": "video/second_pass.md", "pdf": "pdf/second_pass.md"},
+      "identity": {
+        "number": "3",
+        "label": "second pass",
+        "doing": "reading your own notes of a batch of frames again, critically, and saying what they miss"
+      },
+      "base": [],
+      "contracts": [],
+      "templates": [],
+      "when": [
+        {
+          "field": "medium",
+          "in": [
+            "pdf"
+          ],
+          "base": [
+            "medium-pdf.md"
+          ]
+        },
+        {
+          "field": "medium",
+          "in": [
+            "pdf-figure"
+          ],
+          "base": [
+            "medium-pdf-figure.md"
+          ]
+        }
+      ]
+    },
+    "open_questions": {
+      "why": "A batch's first follow-up: the questions its own notes leave open. Without the never-invent rule a model writes questions the meeting never raised.",
+      "instruction": "_shared/open-questions.md",
+      "workflows": {"video": "video/open_questions.md", "pdf": "pdf/open_questions.md"},
+      "identity": {
+        "number": "3",
+        "label": "open questions",
+        "doing": "reading your own notes of a batch of frames as someone who did not attend, and listing what stays unclear"
+      },
+      "base": [],
+      "contracts": [],
+      "templates": [],
+      "when": [
+        {
+          "field": "medium",
+          "in": [
+            "pdf"
+          ],
+          "base": [
+            "medium-pdf.md"
+          ]
+        },
+        {
+          "field": "medium",
+          "in": [
+            "pdf-figure"
+          ],
+          "base": [
+            "medium-pdf-figure.md"
+          ]
+        }
+      ]
+    },
+    "answer_questions": {
+      "why": "A batch's second follow-up: the answers to its open questions, found only in what the worker was shown. Without the leave-it-open rule a model invents an answer.",
+      "instruction": "_shared/answer-questions.md",
+      "workflows": {"video": "video/answer_questions.md", "pdf": "pdf/answer_questions.md"},
+      "identity": {
+        "number": "3",
+        "label": "answer questions",
+        "doing": "looking in the notes, the words and the frames of a batch of frames for the answers to its open questions"
+      },
+      "base": [],
+      "contracts": [],
+      "templates": [],
+      "when": [
+        {
+          "field": "medium",
+          "in": [
+            "pdf"
+          ],
+          "base": [
+            "medium-pdf.md"
+          ]
+        },
+        {
+          "field": "medium",
+          "in": [
+            "pdf-figure"
+          ],
+          "base": [
+            "medium-pdf-figure.md"
+          ]
+        }
+      ]
+    },
+    "critique_collection": {
+      "why": "Phase 6, the critique collection: every batch's critique of one run, worded as one rule each. The grouping and the counts are the program's; without the no-frame-number and no-meeting-word rules the file cannot be read into the worker's instructions, which is the only reason it exists.",
+      "instruction": "_shared/critique-collection.md",
+      "workflows": {"video": "video/critique_collection.md", "pdf": "pdf/critique_collection.md"},
+      "identity": {
+        "number": "6",
+        "label": "critique collection",
+        "doing": "wording this run's anti-patterns as rules for the workers of every later run"
+      },
+      "base": [],
+      "contracts": [],
+      "templates": []
+    },
+    "fast_frame_note": {
+      "why": "Phase 3 of a fast-processing video run: one frame at a time, a few frames to a session, each described from its image alone and submitted with submit_note, no check. Without the this-frame-only rule a small model writes 'same as before' or carries an earlier frame's parts into this one.",
+      "instruction": "video/fast_frame_note.md",
+      "identity": {
+        "number": "3",
+        "label": "frame notes",
+        "doing": "describing each frame of a screen recording from its image"
+      },
+      "base": [],
+      "contracts": [],
+      "templates": []
+    },
+    "fast_document": {
+      "why": "Phase 4 of a fast-processing video run: one call from every frame's description and the speech over it to the reference document. Without the knowledge-not-retelling rule the model narrates the recording, and without the keep-every-number rule the descriptions' values are summed up away.",
+      "instruction": "video/fast_document.md",
+      "identity": {
+        "number": "4",
+        "label": "fast document",
+        "doing": "writing a meeting's reference document from its frame descriptions and speech"
+      },
+      "base": [],
+      "contracts": [],
+      "templates": []
+    }
+  }
+}

@@ -1,0 +1,19 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+html, body { margin: 0; width: 1728px; height: 1117px; overflow: hidden; background: #cfc8bc; font-family: "Comic Sans MS", "Chalkboard", cursive; }
+.board { position: absolute; left: 120px; top: 90px; width: 1488px; height: 640px; background: #263329; border: 14px solid #6b4f32; box-sizing: border-box; padding: 40px 60px; }
+.board p { color: #e8ece4; font-size: 40px; margin: 0 0 26px; }
+.floor { position: absolute; left: 0; right: 0; top: 820px; bottom: 0; background: #9c7b55; }
+.person { position: absolute; z-index: 3; top: 380px; width: 300px; height: 700px; overflow: hidden; }
+.behind { position: absolute; z-index: 2; left: 272px; top: 470px; width: 290px; height: 250px; color: #e8ece4; font-size: 30px; line-height: 44px; border: 4px solid #e8ece4; box-sizing: border-box; padding: 6px 14px; }
+.middle { position: absolute; z-index: 2; left: 640px; top: 450px; width: 560px; height: 260px; color: #e8ece4; font-size: 36px; line-height: 60px; }
+.person img { width: 100%; height: 100%; object-fit: cover; }
+</style></head><body>
+<!-- A lecture filmed by a room camera: the lecturer stands where he then writes a small table, and steps away from it
+     (DEFECTS 113). Text invented; the portrait is public domain (../public_domain_faces/SOURCES.md). -->
+<div class="floor"></div>
+<div class="middle">Retry budget: 3 a step<br>Strict profile: 1 attempt<br>Window: 183,040 tokens<br>Limit: 134,000 tokens</div>
+<div class="board"><p>Agent loop: read, plan, act, check</p><p>Context window holds the plan and the tool results</p>
+<p>Compaction keeps the starting messages</p></div>
+<div class="behind">limit 120k<br>window 183k<br>tail 10k<br>retries 3<br>attempts 1</div>
+<div class="person" style="left: 1240px"><img src="../public_domain_faces/Neil_Armstrong_pose.jpg"></div>
+</body></html>

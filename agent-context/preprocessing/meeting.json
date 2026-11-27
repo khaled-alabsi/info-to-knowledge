@@ -1,0 +1,24 @@
+{
+  "_note": "Phase 3's preparation steps for an audio recording of this ingesting profile. Each step's job is taught by base/preprocessing-meeting-<step id>.md, which context_map.json's preprocessing rules give it.",
+  "minParagraphs": 60,
+  "steps": [
+    {
+      "id": "items",
+      "title": "The agenda items",
+      "input": "speech",
+      "sections": [
+        "What it is about"
+      ]
+    },
+    {
+      "id": "item_details",
+      "title": "Each agenda item in detail",
+      "input": "each:items",
+      "sections": [
+        "Decisions",
+        "Actions",
+        "Open points"
+      ]
+    }
+  ]
+}
