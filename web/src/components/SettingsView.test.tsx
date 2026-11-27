@@ -13,18 +13,18 @@ const ROWS = [
   { key: "frames.boardHandler", value: "text-diff-integration", kind: "text", source: "code", comment: "How phase 3 is shown a board step",
     choices: ["image-diff-only", "text-diff-integration"] },
   { key: "models.small.v2.spec", path: ["models", "small.v2", "spec"], value: "lmstudio:small-model", kind: "text", source: "local",
-    comment: "", choices: [], is_open_choice: true, chosen_address: "http://localhost:1234/v1",
-    default_address: "http://localhost:1234/v1", choice_options: [
-      { value: "lmstudio:big-model", label: "big-model", hint: "", group: "LM Studio at http://other-mac:1234/v1",
-        address: "http://other-mac:1234/v1" },
-      { value: "lmstudio:big-model", label: "big-model", hint: "", group: "LM Studio at http://localhost:1234/v1",
-        address: "http://localhost:1234/v1" },
-      { value: "lmstudio:small-model", label: "small-model", hint: "", group: "LM Studio at http://localhost:1234/v1",
-        address: "http://localhost:1234/v1" }] },
-  { key: "models.small.v2.baseUrl", path: ["models", "small.v2", "baseUrl"], value: null, kind: "text", source: "code",
+    comment: "", choices: [], is_open_choice: true, chosen_host: "lmstudio", default_host: "lmstudio", choice_options: [
+      { value: "openai-compatible:big-model", label: "big-model", hint: "", group: "other-mac at http://other-mac:1234/v1",
+        host: "other-mac" },
+      { value: "lmstudio:big-model", label: "big-model", hint: "", group: "lmstudio at http://localhost:1234/v1",
+        host: "lmstudio" },
+      { value: "lmstudio:small-model", label: "small-model", hint: "", group: "lmstudio at http://localhost:1234/v1",
+        host: "lmstudio" }] },
+  { key: "models.small.v2.host", path: ["models", "small.v2", "host"], value: "", kind: "text", source: "code",
     comment: "", choices: [], is_open_choice: true, choice_options: [
       { value: "", label: "(empty)", hint: "its default", group: "" },
-      { value: "http://other-mac:1234/v1", label: "http://other-mac:1234/v1", hint: "profile other", group: "" }] },
+      { value: "lmstudio", label: "lmstudio", hint: "http://localhost:1234/v1", group: "" },
+      { value: "other-mac", label: "other-mac", hint: "http://other-mac:1234/v1", group: "" }] },
   { key: "models.small.v2.temperature", path: ["models", "small.v2", "temperature"], value: 0.7, kind: "number",
     source: "local", comment: "" },
 ];
@@ -46,6 +46,204 @@ async function openSettings() {
 }
 
 describe("Settings", () => {
+  const SET_ROWS = [...ROWS,
+    { key: "workerSets", value: { PC: { machine: "the desktop", phaseModels: { review: "small.v2" }, budgets: { maxAttempts: 5 } } },
+      kind: "json", source: "local", comment: "" },
+    { key: "defaultWorkerSet", value: "default", kind: "text", source: "code", comment: "" },
+    { key: "machine", value: "the laptop", kind: "text", source: "local", comment: "" },
+    { key: "hosts", value: { lmstudio: { url: "http://localhost:1234/v1" }, "other-mac": { url: "http://other-mac:1234/v1" } },
+      kind: "json", source: "local", comment: "" },
+    { key: "models.frame.spec", path: ["models", "frame", "spec"], value: "lmstudio:big-model", kind: "text", source: "code", comment: "" },
+    { key: "phaseModels.review", path: ["phaseModels", "review"], value: "", kind: "text", source: "code", comment: "",
+      resolved: "frame", resolved_note: "the phase's own model" }];
+
+  function serveSets(save: (body: { key: string }) => unknown = () => ({ exit_code: 0, output: "saved" })) {
+    return installServer({
+      "GET /api/phases": PHASES, "GET /api/inbox": [], "GET /api/runs": [], "GET /api/jobs": [], "GET /api/inbox/trash": [],
+      "GET /api/profiles": { profiles: [], server_profile: "" },
+      "GET /api/settings": SET_ROWS,
+      "PUT /api/settings": (body) => save(body as { key: string }),
+    });
+  }
+
+  it("lists the model servers, then the worker sets, before every other section, each header a title and a count of its cards defect", async () => {
+    // The owner: "I still see the model section" and "where 1 from?": the page has two model sections, the servers (each card
+    // holding its models) and the worker sets, and the number beside a title counts the cards the section shows
+    serveSets();
+    await openSettings();
+    const titles = screen.getAllByRole("heading", { level: 3 }).map((heading) => heading.textContent);
+    expect(titles.slice(0, 2)).toEqual(["Model servers", "Worker sets"]);
+    for (const hidden of ["General", "Machines", "Models", "Model providers", "Model providers and models"]) expect(titles).not.toContain(hidden);
+    // a header is its title and its card count, nothing else: two servers, and the default set with the second set
+    const header = (title: string) => screen.getByRole("heading", { name: title }).closest("summary") as HTMLElement;
+    expect(header("Model servers").textContent).toBe("Model servers2");
+    expect(header("Worker sets").textContent).toBe("Worker sets2");
+    expect(document.body.textContent).not.toMatch(/\d+ changed|· \d/);
+  });
+
+  it("shows no group heading that repeats its section's title, and no second help paragraph under the servers defect", async () => {
+    // The owner: "frames frames?": a section's first group heading said its own title again
+    serveSets();
+    await openSettings();
+    await userEvent.click(screen.getByRole("heading", { name: "Model servers" }));
+    const servers = screen.getByRole("group", { name: "Model servers" }) as HTMLElement;
+    expect(within(servers).queryByRole("heading", { name: "Providers" })).not.toBeInTheDocument();
+    expect(servers.querySelector(".settings-section-intro")).toBeNull();
+    expect(servers.firstElementChild?.nextElementSibling?.className).toBe("server-cards");
+    for (const section of screen.getAllByRole("group").filter((each) => each.classList.contains("settings-section"))) {
+      const title = section.querySelector("summary h3")?.textContent ?? "";
+      const inner = Array.from(section.querySelectorAll(".settings-prefix")).map((each) => each.textContent);
+      expect(inner).not.toContain(title);
+    }
+  });
+
+  it("splits the Frames section into Frame capturing, Frame preparing and Frame processing cards, never one lump defect", async () => {
+    // The owner: "frames frames?": 52 settings stood under a heading named like the section
+    const row = (key: string) => ({ key, path: key.split("."), value: 1, kind: "number", source: "code", comment: "" });
+    installServer({
+      "GET /api/phases": PHASES, "GET /api/inbox": [], "GET /api/runs": [], "GET /api/jobs": [], "GET /api/inbox/trash": [],
+      "GET /api/profiles": { profiles: [], server_profile: "" },
+      "GET /api/settings": [...SET_ROWS, row("frames.perMinute"), row("frames.isKnowledgeFilterOn"), row("framesProcessing.repairCalls"),
+        row("prompt.previousFramesLimit"), row("frames.stillSeconds"), row("framesProcessing.framesPerCall"),
+        row("frames.isBoardStageOn")],
+    });
+    await openSettings();
+    await userEvent.click(screen.getByRole("heading", { name: "Frames" }));
+    const section = screen.getByRole("group", { name: "Frames" }) as HTMLElement;
+    const cards = Array.from(section.querySelectorAll(".settings-prefix")).map((each) => each.textContent);
+    expect(cards).toEqual(["Frame capturing", "Screen watching", "Frame preparing", "Text and boards", "What the model is told",
+      "Frame processing"]);
+    // an opened section shows its card titles alone: every card is closed until it is opened, and no setting is on the page
+    const details = Array.from(section.querySelectorAll("details.settings-prefix-group")) as HTMLDetailsElement[];
+    expect(details.map((each) => each.open)).toEqual(details.map(() => false));
+    // the section's header counts the cards it shows
+    expect(within(section).getAllByText("6").length).toBeGreaterThan(0);
+    const last = details.length - 1;
+    await userEvent.click(within(section).getByText("Frame processing"));
+    expect(details.map((each) => each.open)).toEqual(details.map((_, index) => index === last));
+    expect(within(details[last]).getAllByRole("spinbutton")).toHaveLength(2);
+  });
+
+  it("has two model sections: servers holding their models, and sets mapping each job to a model, in plain words defect", async () => {
+    // The owner, third time: "models section is wrong, I see no logic for it". The providers section held 20 loose rows (a
+    // speech server, its model, its wait, a library model, ...); a card showed backticked keys. The servers section is now
+    // one card a server with its models inside, every job is a menu in a worker set, and no help shows a code key
+    const comment = "The `libraryModel` of `providers.speech` over `host` and `timeoutS` below. \"\" keeps `host`";
+    const providerRows = ["chat", "speech", "diarization", "embeddings", "decision"].flatMap((kind) => [
+      { key: `providers.${kind}.libraryModel`, path: ["providers", kind, "libraryModel"], value: "", kind: "text", source: "code", comment },
+      { key: `providers.${kind}.host`, path: ["providers", kind, "host"], value: "", kind: "text", source: "code", comment },
+      { key: `providers.${kind}.timeoutS`, path: ["providers", kind, "timeoutS"], value: 0, kind: "number", source: "code", comment },
+      ...(kind === "chat" ? [] : [{ key: `providers.${kind}.model`, path: ["providers", kind, "model"], value: "", kind: "text",
+        source: "code", comment }])]);
+    installServer({
+      "GET /api/phases": PHASES, "GET /api/inbox": [], "GET /api/runs": [], "GET /api/jobs": [], "GET /api/inbox/trash": [],
+      "GET /api/profiles": { profiles: [], server_profile: "" },
+      "GET /api/settings": [...SET_ROWS, ...providerRows,
+        { key: "models.frame.suits", path: ["models", "frame", "suits"], value: ["frames"], kind: "json", source: "default", comment },
+        { key: "video.fastProcessing.frameModel", path: ["video", "fastProcessing", "frameModel"], value: "", kind: "text",
+          source: "default", comment },
+        { key: "video.fastProcessing.documentModel", path: ["video", "fastProcessing", "documentModel"], value: "", kind: "text",
+          source: "default", comment },
+        { key: "video.fastProcessing.frameFollowUps", path: ["video", "fastProcessing", "frameFollowUps"], value: 4, kind: "number",
+          source: "default", comment }],
+    });
+    await openSettings();
+    const titles = screen.getAllByRole("heading", { level: 3 }).map((heading) => heading.textContent);
+    expect(titles.slice(0, 2)).toEqual(["Model servers", "Worker sets"]);
+    for (const title of ["Model servers", "Worker sets", "Video"]) await userEvent.click(screen.getByRole("heading", { name: title }));
+    const servers = screen.getByRole("group", { name: "Model servers" }) as HTMLElement;
+    // the servers section holds each server's card with its models inside, and nothing about a job
+    expect(within(servers).getAllByRole("group", { name: /^server / })).toHaveLength(2);
+    const lmstudio = within(servers).getByRole("group", { name: "server lmstudio" });
+    expect(within(lmstudio).getByRole("group", { name: "model frame" })).toBeInTheDocument();
+    expect(within(lmstudio).getByRole("textbox", { name: "address of lmstudio" })).toHaveValue("http://localhost:1234/v1");
+    // a job is chosen in a worker set, never in a server's card
+    expect(within(servers).queryByRole("button", { name: /^default: / })).not.toBeInTheDocument();
+    // every job is one menu in each set
+    const fallback = screen.getByRole("group", { name: "worker set default" });
+    for (const job of ["Speech to text", "Scanned page reader", "Speaker detection", "Frame vectors", "Decision filter", "Review"]) {
+      expect(within(fallback).getByRole("button", { name: new RegExp(`^default: ${job}`) })).toBeInTheDocument();
+    }
+    // the fast workflow keeps its flow settings and has no model menus
+    await userEvent.click(screen.getByText("Describing frames"));
+    expect(document.body.textContent).toMatch(/Frames per session/);
+    expect(document.body.textContent).not.toMatch(/Frame describer|Document writer/);
+    const fast = screen.getByRole("group", { name: "Describing frames" });
+    expect(within(fast).getByText("Frames per session")).toBeInTheDocument();
+    expect(within(fast).queryByRole("button")).not.toBeInTheDocument();
+    // no code key, backtick or pair of quotes reaches the page, and no "Library model"
+    // each piece of text on its own: textContent glues neighbouring elements together into words that are no one's
+    const pieces: string[] = [];
+    const walker = document.createTreeWalker(document.querySelector(".settings-view") as Node, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) pieces.push(node.textContent ?? "");
+    const text = pieces.join(" ");
+    expect(text).not.toContain("`");
+    expect(text.match(/\b[a-z]+[A-Z][A-Za-z0-9]*\b/g) ?? []).toEqual([]);
+    expect(text).not.toContain('""');
+    expect(text).not.toMatch(/Library model/);
+  });
+
+  it("shows each worker set as a card linking each job to a library model, and a change is a draft saved with the rest", async () => {
+    // The worker sets stood as a box of values to type per set; each set now links each job to a model picked by its name
+    const calls = serveSets();
+    await openSettings();
+    await userEvent.click(screen.getByRole("heading", { name: "Worker sets" }));
+    const pc = screen.getByRole("group", { name: "worker set PC" });
+    // the older machine key is read and kept in the file, never shown or chosen
+    expect(screen.queryByRole("button", { name: /^Machine of/ })).not.toBeInTheDocument();
+    expect(within(pc).getByRole("button", { name: "PC: Review: lmstudio: small.v2" })).toBeInTheDocument();
+    await userEvent.click(within(pc).getByRole("button", { name: "PC: Review: lmstudio: small.v2" }));
+    await userEvent.click(screen.getByRole("menuitemradio", { name: /^same as default set/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Save settings (1)" }));
+    const body = calls.find((call) => call.method === "PUT")?.body as { key: string; new_value: { PC: Record<string, unknown> } };
+    expect(body.key).toBe("workerSets");
+    expect(body.new_value.PC.phaseModels).toBeUndefined();
+    expect(body.new_value.PC.machine).toBe("the desktop");
+  });
+
+  it("lists a provider's job in each set, and offers it only the models whose provider does that job", async () => {
+    // Speech to text, speaker detection and the other provider jobs are linked to a library model like a phase is; a provider
+    // lists the jobs it can do, so a phase is never offered a speech-only provider's model, nor speech a chat-only one's
+    const hosts = { lmstudio: { url: "http://localhost:1234/v1", kinds: ["chat"] },
+      voice: { url: "http://voice:8090/v1", kinds: ["speech"] } };
+    installServer({
+      "GET /api/phases": PHASES, "GET /api/inbox": [], "GET /api/runs": [], "GET /api/jobs": [], "GET /api/inbox/trash": [],
+      "GET /api/profiles": { profiles: [], server_profile: "" },
+      "GET /api/settings": [...SET_ROWS.filter((row) => row.key !== "hosts"),
+        { key: "hosts", value: hosts, kind: "json", source: "local", comment: "" },
+        { key: "models.whisper.spec", path: ["models", "whisper", "spec"], value: "openai-compatible:whisper-large", kind: "text",
+          source: "local", comment: "" },
+        { key: "models.whisper.host", path: ["models", "whisper", "host"], value: "voice", kind: "text", source: "local", comment: "" },
+        { key: "providers.speech.libraryModel", path: ["providers", "speech", "libraryModel"], value: "", kind: "text", source: "code",
+          comment: "" }],
+    });
+    await openSettings();
+    await userEvent.click(screen.getByRole("heading", { name: "Worker sets" }));
+    const pc = screen.getByRole("group", { name: "worker set PC" });
+    await userEvent.click(within(pc).getByRole("button", { name: /^PC: Speech to text/ }));
+    const offered = screen.getAllByRole("menuitemradio").map((item) => item.textContent ?? "");
+    expect(offered).toHaveLength(2);
+    expect(offered[0]).toMatch(/^same as default set: none/);
+    expect(offered[1]).toMatch(/^voice: whisper/);
+    await userEvent.keyboard("{Escape}");
+    await userEvent.click(within(pc).getByRole("button", { name: "PC: Review: lmstudio: small.v2" }));
+    expect(screen.queryByRole("menuitemradio", { name: /whisper/ })).not.toBeInTheDocument();
+  });
+
+  it("copies a worker set from its card, a draft named by the person", async () => {
+    const calls = serveSets();
+    await openSettings();
+    await userEvent.click(screen.getByRole("heading", { name: "Worker sets" }));
+    const pc = screen.getByRole("group", { name: "worker set PC" });
+    await userEvent.click(within(pc).getByRole("button", { name: "copy worker set PC" }));
+    await userEvent.type(within(pc).getByRole("textbox", { name: "name of the copy of PC" }), "PC strict");
+    await userEvent.click(within(pc).getByRole("button", { name: "Create copy" }));
+    expect(screen.getByRole("group", { name: "worker set PC strict" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Save settings (1)" }));
+    const body = calls.find((call) => call.method === "PUT")?.body as { new_value: Record<string, unknown> };
+    expect(body.new_value["PC strict"]).toEqual(body.new_value.PC);
+  });
+
   it("calls the first entry the default settings and marks the server's own profile by its name defect", async () => {
     // The first entry read "the server's settings (profile strict)" while it showed the default settings without the
     // profile, so switching to the profile seemed to change nothing. It now reads "default settings"
@@ -57,80 +255,79 @@ describe("Settings", () => {
     expect(screen.queryByText(/the server's settings/)).not.toBeInTheDocument();
   });
 
-  it("offers a model's spec as a menu of each host's models under the host's heading, the chosen one ticked", async () => {
+  it("shows a model's provider and model name as two fields, and saves the spec joined from them", async () => {
+    // A model's spec stood as one joined text ("lmstudio:small-model"); a person now reads and types the model's name alone
+    // and picks its provider from the providers' own list
     const calls = serveSettings();
     await openSettings();
-    await userEvent.click(screen.getByRole("button", { name: "models.small.v2.spec: small-model" }));
-    const menu = screen.getByRole("menu", { name: "models.small.v2.spec" });
-    expect(within(menu).getAllByRole("none").map((item) => item.textContent)).toEqual([
-      "LM Studio at http://other-mac:1234/v1", "big-model", "LM Studio at http://localhost:1234/v1", "big-model",
-      "small-model", "Other…type a value of your own"]);
-    expect(within(menu).getByRole("menuitemradio", { name: "small-model" })).toHaveAttribute("aria-checked", "true");
-    await userEvent.click(within(menu).getAllByRole("menuitemradio", { name: "big-model" })[1]);
-    expect(screen.getByRole("button", { name: "models.small.v2.spec: big-model" })).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Save settings (1)" }));
-    expect(calls.filter((call) => call.method === "PUT").map((call) => call.body)).toEqual([
-      { key: "models.small.v2.spec", new_value: "lmstudio:big-model", profile: "", key_parts: ["models", "small.v2", "spec"] }]);
-  });
-
-  it("ticks a model only under the host it is called at, and choosing it under another host moves its address defect", async () => {
-    // A model two hosts serve was ticked under both hosts, so the menu did not say which host the model is called at.
-    // Only the entry under the model's address is ticked now, and choosing one under another host sets that address
-    const calls = serveSettings();
-    await openSettings();
-    await userEvent.click(screen.getByRole("button", { name: "models.small.v2.spec: small-model" }));
-    await userEvent.click(within(screen.getByRole("menu")).getAllByRole("menuitemradio", { name: "big-model" })[0]);
-    await userEvent.click(screen.getByRole("button", { name: "models.small.v2.spec: big-model" }));
-    const ticks = within(screen.getByRole("menu")).getAllByRole("menuitemradio", { name: "big-model" })
-      .map((item) => item.getAttribute("aria-checked"));
-    expect(ticks).toEqual(["true", "false"]);
-    expect(screen.getByRole("button", { name: "models.small.v2.baseUrl: http://other-mac:1234/v1" })).toBeInTheDocument();
+    const card = screen.getByRole("group", { name: "model small.v2" });
+    const name = within(card).getByRole("textbox", { name: "Model name of small.v2" });
+    expect(name).toHaveValue("small-model");
+    expect(within(card).getByText("Server")).toBeInTheDocument();
+    expect(within(card).queryByText("lmstudio:small-model")).not.toBeInTheDocument();
+    await userEvent.clear(name);
+    await userEvent.type(name, "big-model");
+    await userEvent.click(within(card).getByRole("button", { name: /^models\.small\.v2\.host/ }));
+    await userEvent.click(screen.getByRole("menuitemradio", { name: /other-mac/ }));
     await userEvent.click(screen.getByRole("button", { name: "Save settings (2)" }));
     expect(calls.filter((call) => call.method === "PUT").map((call) => call.body)).toEqual([
       { key: "models.small.v2.spec", new_value: "lmstudio:big-model", profile: "", key_parts: ["models", "small.v2", "spec"] },
-      { key: "models.small.v2.baseUrl", new_value: "http://other-mac:1234/v1", profile: "",
-        key_parts: ["models", "small.v2", "baseUrl"] }]);
+      { key: "models.small.v2.host", new_value: "other-mac", profile: "", key_parts: ["models", "small.v2", "host"] }]);
   });
 
-  it("takes a value of one's own from Other…, saved by its path", async () => {
+  it("adds a model as a copy of another's set fields, a card marked unsaved until Save settings writes it", async () => {
     const calls = serveSettings();
     await openSettings();
-    expect(screen.queryByRole("textbox", { name: /your own value/ })).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "models.small.v2.spec: small-model" }));
-    await userEvent.click(screen.getByRole("menuitem", { name: /Other…/ }));
-    const typed = screen.getByRole("textbox", { name: "models.small.v2.spec, your own value" });
-    await userEvent.clear(typed);
-    await userEvent.type(typed, "lmstudio:not-yet-downloaded");
-    await userEvent.click(screen.getByRole("button", { name: "Save settings (1)" }));
-    expect(calls.filter((call) => call.method === "PUT").map((call) => call.body)).toEqual([
-      { key: "models.small.v2.spec", new_value: "lmstudio:not-yet-downloaded", profile: "",
-        key_parts: ["models", "small.v2", "spec"] }]);
-  });
-
-  it("adds a model as a copy of another's set fields, a draft until Save settings writes it", async () => {
-    const calls = serveSettings();
-    await openSettings();
-    await userEvent.click(screen.getByRole("heading", { name: "Models" }));
-    await userEvent.click(screen.getByRole("button", { name: "+ Add model" }));
-    await userEvent.type(screen.getByRole("textbox", { name: "New model's name" }), "small.v2");
+    await userEvent.click(screen.getByRole("heading", { name: "Model servers" }));
+    await userEvent.click(screen.getByRole("button", { name: "add model to no server" }));
+    await userEvent.type(screen.getByRole("textbox", { name: "New model's name on no server" }), "small.v2");
     expect(screen.getByText("a model has this name")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Add" })).toBeDisabled();
-    await userEvent.clear(screen.getByRole("textbox", { name: "New model's name" }));
-    await userEvent.type(screen.getByRole("textbox", { name: "New model's name" }), "other-mac");
+    await userEvent.clear(screen.getByRole("textbox", { name: "New model's name on no server" }));
+    await userEvent.type(screen.getByRole("textbox", { name: "New model's name on no server" }), "other-mac");
+    await userEvent.click(screen.getByRole("button", { name: "Copy of, for no server: frame" }));
+    await userEvent.click(screen.getByRole("menuitemradio", { name: /^small\.v2/ }));
     await userEvent.click(screen.getByRole("button", { name: "Add" }));
-    expect(JSON.parse((screen.getByRole("textbox", { name: "models.other-mac" }) as HTMLTextAreaElement).value))
-      .toEqual({ spec: "lmstudio:small-model", temperature: 0.7 });
+    const card = screen.getByRole("group", { name: "model other-mac" });
+    expect(within(card).getByText("unsaved")).toBeInTheDocument();
+    expect(within(card).getByRole("textbox", { name: "Model name of other-mac" })).toHaveValue("small-model");
     await userEvent.click(screen.getByRole("button", { name: "Save settings (1)" }));
     expect(calls.filter((call) => call.method === "PUT").map((call) => call.body)).toEqual([
       { key: "models.other-mac", new_value: { spec: "lmstudio:small-model", temperature: 0.7 }, profile: "",
         key_parts: ["models", "other-mac"] }]);
   });
 
+  it("removes a model of the owner's file after asking, and a shipped model offers no Remove", async () => {
+    const calls = installServer({
+      "GET /api/phases": PHASES, "GET /api/inbox": [], "GET /api/runs": [], "GET /api/jobs": [], "GET /api/inbox/trash": [],
+      "GET /api/profiles": { profiles: [], server_profile: "" },
+      "GET /api/settings": [...ROWS, { key: "models.frame.spec", path: ["models", "frame", "spec"], value: "x", kind: "text",
+        source: "default", comment: "" }],
+      "POST /api/settings/remove": () => ({ exit_code: 0, output: "removed models.small.v2" }),
+    });
+    await openSettings();
+    await userEvent.click(screen.getByRole("heading", { name: "Model servers" }));
+    const shipped = screen.getByRole("group", { name: "model frame" });
+    expect(within(shipped).queryByRole("button", { name: "remove model frame" })).not.toBeInTheDocument();
+    expect(within(shipped).getByText(/it can be changed, not removed/)).toBeInTheDocument();
+    const own = screen.getByRole("group", { name: "model small.v2" });
+    await userEvent.click(within(own).getByRole("button", { name: "remove model small.v2" }));
+    await userEvent.click(within(own).getByRole("button", { name: "yes, remove model small.v2" }));
+    expect(await screen.findByText("removed models.small.v2")).toBeInTheDocument();
+    expect(calls.filter((call) => call.method === "POST").map((call) => call.body)).toEqual([
+      { key_parts: ["models", "small.v2"], profile: "" }]);
+  });
+
   it("keeps each change as a marked draft, and Save settings in the top bar writes them all", async () => {
     const calls = serveSettings();
     const field = await openSettings();
-    expect(screen.getByText("Answers a step may give")).toBeInTheDocument();
-    expect(within(field.closest(".setting-row") as HTMLElement).getByText("local")).toBeInTheDocument();
+    // the help comes from the page's own words, never the program's comment
+    expect(screen.getByText("How many times a step may be tried before a rejection blocks it.")).toBeInTheDocument();
+    expect(screen.queryByText("Answers a step may give")).not.toBeInTheDocument();
+    expect(within(field.closest(".setting-row") as HTMLElement).getByText("changed")).toBeInTheDocument();
+    // a value the program's own code or the shipped default settings give shows no mark at all
+    expect(within(screen.getByRole("checkbox", { name: "review.isOn" }).closest(".setting-row") as HTMLElement)
+      .queryByText("changed")).not.toBeInTheDocument();
     await userEvent.clear(field);
     await userEvent.type(field, "4");
     await userEvent.click(screen.getByRole("checkbox", { name: "review.isOn" }));
@@ -149,10 +346,12 @@ describe("Settings", () => {
   it("offers a setting whose type names its values as a list, and saves the one chosen", async () => {
     const calls = serveSettings();
     await openSettings();
-    await userEvent.click(screen.getByRole("button", { name: "frames.boardHandler: text-diff-integration" }));
+    // the menu shows plain words for each stored value, never the stored code word
+    await userEvent.click(screen.getByRole("button", { name: "frames.boardHandler: The frame with its text changes" }));
     const list = screen.getByRole("menu", { name: "frames.boardHandler" });
-    expect(within(list).getAllByRole("menuitemradio").map((option) => option.textContent)).toEqual(["image-diff-only", "text-diff-integration"]);
-    await userEvent.click(within(list).getByRole("menuitemradio", { name: "image-diff-only" }));
+    expect(within(list).getAllByRole("menuitemradio").map((option) => option.textContent)).toEqual(
+      ["The changed area enlarged", "The frame with its text changes"]);
+    await userEvent.click(within(list).getByRole("menuitemradio", { name: "The changed area enlarged" }));
     await userEvent.click(screen.getByRole("button", { name: "Save settings (1)" }));
     expect(calls.filter((call) => call.method === "PUT").map((call) => call.body)).toEqual([
       { key: "frames.boardHandler", new_value: "image-diff-only", profile: "", key_parts: null }]);
@@ -166,12 +365,16 @@ describe("Settings", () => {
     expect(screen.queryByRole("button", { name: /Save settings/ })).not.toBeInTheDocument();
     await userEvent.clear(field);
     await userEvent.type(field, "-1");
-    const sampling = screen.getByRole("textbox", { name: "models.frame.sampling" });
-    await userEvent.clear(sampling);
-    await userEvent.type(sampling, "not json");
+    // a table of values, never a box of JSON: a value is added to it with its own Add button
+    const newName = screen.getByRole("textbox", { name: "models.frame.sampling: new name" });
+    await userEvent.type(newName, "min_p");
+    await userEvent.click(within(newName.closest(".setting-row") as HTMLElement).getByRole("button", { name: "Add row" }));
     await userEvent.click(screen.getByRole("button", { name: "Save settings (2)" }));
-    expect(await screen.findByText(/is refused: too small · models.frame.sampling: not valid JSON/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Save settings (2)" })).toBeInTheDocument();
+    expect(await screen.findByText(/is refused: too small/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Save settings \(\d\)/ })).toBeInTheDocument();
+    // a draft that is no JSON (typed in an older page) is named, not sent
+    const broken = await saveDrafts({ "models.frame.sampling": { row: ROWS[2] as SettingRow, raw: "not json" } }, "");
+    expect(broken.message).toBe("models.frame.sampling: not valid JSON");
   });
 
   it("names the setting a failed save belongs to, and calls only a value typed as JSON not valid JSON", async () => {
@@ -186,13 +389,13 @@ describe("Settings", () => {
   it("shows every group closed, opens the groups a search matches, and a profile's files drop the drafts", async () => {
     serveSettings();
     await openSettings();
-    const budgets = screen.getByRole("heading", { name: "Budgets" }).closest("details")!;
+    const budgets = screen.getByRole("heading", { name: "Advanced limits" }).closest("details")!;
     expect(budgets.open).toBe(false);
-    await userEvent.click(screen.getByRole("heading", { name: "Budgets" }));
+    await userEvent.click(screen.getByRole("heading", { name: "Advanced limits" }));
     expect(budgets.open).toBe(true);
     await userEvent.type(screen.getByRole("searchbox"), "phase 5");
-    expect(screen.getByRole("heading", { name: "Review" }).closest("details")!.open).toBe(true);
-    expect(screen.queryByRole("heading", { name: "Budgets" })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Review and quality" }).closest("details")!.open).toBe(true);
+    expect(screen.queryByRole("heading", { name: "Advanced limits" })).not.toBeInTheDocument();
     await userEvent.clear(screen.getByRole("searchbox"));
     const field = screen.getByRole("spinbutton", { name: "budgets.maxAttempts" });
     await userEvent.clear(field);
@@ -201,20 +404,20 @@ describe("Settings", () => {
     await userEvent.click(screen.getByRole("button", { name: "Edit: default settings" }));
     await userEvent.click(screen.getByRole("menuitemradio", { name: "profile: strict" }));
     await userEvent.click(screen.getByRole("button", { name: "Discard the changes and switch" }));
-    expect(await screen.findByText("profile strict")).toBeInTheDocument();
+    expect(await screen.findByTitle("set by profile strict")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Save settings/ })).not.toBeInTheDocument();
   });
 
   it("names what a chosen profile sets, so a switch that changes only those rows is seen defect", async () => {
     // Choosing a profile that sets two model addresses left every row in view as it was, and the owner read it as the
-    // switch changing nothing. The page now names the settings the profile sets and marks their rows "profile <name>"
+    // switch changing nothing. The page now names the settings the profile sets and marks their rows "changed", by profile
     serveSettings();
     await openSettings();
     await userEvent.click(screen.getByRole("button", { name: "Edit: default settings" }));
     await userEvent.click(screen.getByRole("menuitemradio", { name: "profile: strict" }));
     expect(await screen.findByText(/Profile strict sets 1 setting:/)).toHaveTextContent(
-      "Profile strict sets 1 setting: budgets.maxAttempts. Every other value is the default settings'.");
-    expect(screen.getByText("profile strict")).toBeInTheDocument();
+      "Profile strict sets 1 setting: Tries per step. Every other value is the default settings'.");
+    expect(screen.getByTitle("set by profile strict")).toBeInTheDocument();
   });
 
   it("asks before a switch drops unsaved changes, and switches at once with none", async () => {

@@ -114,6 +114,11 @@ const FEEDBACK_SEEN_KEPT = 20;
 const RETIRED_FEEDBACK_PREFIX = "feedbackSeen:";
 
 // The kept recording's compression, or null when it was never compressed (the server sends an empty record then)
+// A run made on either fast workflow, the earlier one or the direct draft, is a Fast run
+function isFastWorkflow(workflow: string | undefined): boolean {
+  return workflow === "fast-processing" || workflow === "direct-draft";
+}
+
 function readCompression(recorded: Detail["recording_compression"]): RecordingCompression | null {
   return recorded && "status" in recorded ? recorded as RecordingCompression : null;
 }
@@ -209,7 +214,7 @@ export default function RunDetail({
   const [speedChoice, setSpeedChoice] = useState<Pick<PhaseSelection, "speed_preset" | "speed_settings"> | null>(null);
   const runDefaults = useRunDefaults(isMadeWithProfileGone ? "" : madeWithProfile);
   const keptSpeed = detail?.speed ? { speed_preset: detail.speed.preset, speed_settings: detail.speed.values }
-    : detail?.workflow === "fast-processing" ? { speed_preset: "fast", speed_settings: {} } : {};
+    : isFastWorkflow(detail?.workflow) ? { speed_preset: "fast", speed_settings: {} } : {};
   const runSpeed = detail?.workflow ? speedChoice ?? keptSpeed : {};
   const runChoice: PhaseSelection = { ...NO_SELECTION, profile: isMadeWithProfileGone ? "" : madeWithProfile, ...runSpeed };
   useEffect(() => {
@@ -796,7 +801,7 @@ export default function RunDetail({
             <span className="pill profile speed-pill" title="the Workflow speed: the run's next resume or phase run takes it">
               Speed: {runDefaults?.speed ? <WorkflowSpeedChoice selection={runChoice} defaults={runDefaults}
                 onChange={(next) => setSpeedChoice({ speed_preset: next.speed_preset, speed_settings: next.speed_settings })} />
-                : nameSpeedPreset(detail.speed?.name ?? (detail.workflow === "fast-processing" ? "fast" : "quality"))}
+                : nameSpeedPreset(detail.speed?.name ?? (isFastWorkflow(detail.workflow) ? "fast" : "quality"))}
             </span>
           )}
           {/* the worker set the run is on, and its machine: its own choice, else the default set, which a run that

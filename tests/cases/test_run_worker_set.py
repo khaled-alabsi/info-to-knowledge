@@ -19,9 +19,9 @@ from services import model_capability_service
 from services import run_worker_set_service
 from services import transcription_service
 
-_SETTINGS = {"lmstudioBaseUrl": "http://localhost:1234/v1",
-             "workerSets": {"second-host": {"lmstudioBaseUrl": "http://second-host.example:1234/v1"},
-                            "Mac": {"lmstudioBaseUrl": "http://mac.example:1234/v1"}}}
+_SETTINGS = {"hosts": {"lmstudio": {"url": "http://localhost:1234/v1"}},
+             "workerSets": {"second-host": {"hosts": {"lmstudio": {"url": "http://second-host.example:1234/v1"}}},
+                            "Mac": {"hosts": {"lmstudio": {"url": "http://mac.example:1234/v1"}}}}}
 
 
 def _use_settings(folder: Path, values: dict) -> tuple:

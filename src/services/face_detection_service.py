@@ -1,6 +1,6 @@
 """Finding the faces a frame shows, with OpenCV's YuNet detector. The side effect is loading its model file, once per
-path; everything runs on this machine, unless `providers.detection.url` is set: then a model server finds them
-(`detection_request_service`) and the program loads no detector.
+path; everything runs on this machine's processor, inside the program, with the 0.2 MB YuNet file in `weights/` (which
+the container image ships). No model server is asked for faces.
 
 A face alone decides nothing: `screen_crop_utils` cuts a panel only where at least two faces stand in a column beside
 the screen and a straight edge runs along them, so a photo inside a slide or a web page is never cut.
@@ -20,10 +20,8 @@ import numpy
 
 import config
 from models.video_errors import MissingFaceModel
-from services import detection_request_service
-from services import endpoint_client
 
-__all__ = ["detect_faces", "find_faces", "find_faces_with_yunet", "set_face_finder", "FACE_FINDER"]
+__all__ = ["detect_faces", "find_faces_with_yunet", "set_face_finder", "FACE_FINDER"]
 
 DETECT_WIDTH = 1000                         # faces are looked for on a copy of the frame this wide
 FACE_SCORE = 0.6                            # a detection scoring below this is not a face
@@ -61,18 +59,7 @@ def find_faces_with_yunet(gray: numpy.ndarray) -> list[FaceBox]:
     return faces
 
 
-def find_faces(gray: numpy.ndarray) -> list[FaceBox]:
-    """Face boxes as x0, y0, x1, y1 in the frame's own pixels: from the model server when `providers.detection.url` is set,
-    else from YuNet on this machine."""
-
-    endpoint = endpoint_client.find_endpoint(kind="detection")
-    if endpoint is None:
-        return find_faces_with_yunet(gray)
-
-    return detection_request_service.request_boxes(endpoint=endpoint, image=gray, kind="face", min_score=FACE_SCORE)
-
-
-FACE_FINDER: FaceFinder = find_faces
+FACE_FINDER: FaceFinder = find_faces_with_yunet
 
 
 def set_face_finder(finder: FaceFinder) -> None:

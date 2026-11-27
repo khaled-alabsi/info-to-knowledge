@@ -236,6 +236,57 @@ PHASE 3  frames_processing
   program  writes   03_notes.md          a copy of the joined text with the batch sections, for you; a speech line
                                          printed with its speaker when phase 1 placed one
 
+PHASE 3  frames_processing, for a direct-draft video run (the Fast speed)
+  actors   program = process_frames_node + direct_draft_batch_service, model = phase 3's (the same as Quality's), one
+           call per batch of framesProcessing.framesPerCall frames (8), no tools
+  program  reads    02_frames.json and frames/*.jpg; logs/worker-messages/frames_processing.jsonl, what the person
+                                         wrote to the worker, added before the next batch
+  program  writes   03_draft.md          before the first batch: "# Draft of <recording>"; then each batch appends
+                                         its marker line and the text the model wrote (the draft's format is below)
+  program  sends    the instruction (video/direct_draft_batch.md and the ingesting profile's section), the recording's
+                    name and tags, the draft's headings so far (H01 ## Title ...), the draft's last section (at most
+                    video.directDraft.lastSectionChars characters), then the batch's frames, each as a line (number,
+                    time, the speech said while it is on screen) and its image
+  model    writes   markdown: it continues the last section, or opens "## Chapter" and "### Section" headings itself;
+                    a picture it wants in the document is a line of its own, {{frame-017: caption}}; nothing is
+                    checked, no critique, no repair, no frame notes
+  program  writes   logs/fast-turns/fast-notes-<first>-<last>.jsonl   each call as a turn, read only by the page's
+                                         worker panels; each frame's status "written" in the run store
+  program  writes   no notes in 02_frames.json, no 03_notes.md, no 03_frame-descriptions.md
+  the text is appended before the frames are marked written, so a stop loses no answered batch; a resume continues
+  with the frames not yet written, and a batch's number is the count of markers already in 03_draft.md plus one.
+
+  The draft, 03_draft.md:
+    # Draft of Gateway-demo.mp4
+    <!-- batch 1 · frames 0-7 -->            one marker line per batch, with the frames it covered
+    ## Gateway                               headings as the model wrote them, "##" chapters, "###" sections
+    The gateway signs every token.
+    {{frame-002: The signing flow}}          a picture line: the frame's number and a one-line caption
+    <!-- batch 2 · frames 8-15 -->
+    It is refreshed after 50 minutes.        a batch that opens with no heading continues the last section
+
+PHASE 4  finalize, for a direct-draft video run
+  actors   program = write_document_node + direct_draft_outline_service, model = phase 4's (`document`), ONE
+           conversation of at most video.directDraft.outlineCalls calls
+  program  reads    03_draft.md, run-tags.json, 02_frames.json; frames/*.jpg and the video, for the frame tools
+  program  sends    the instruction (video/direct_draft_outline.md), the recording's name, the tags and the draft's
+                    outline: each section's number, heading, its first line (at most video.directDraft.firstLineChars
+                    characters) and the pictures it places; never the sections' text
+  model    calls    look, cut, mark, mask, undo_cut (the Quality frame tools, same code) on the frames the pictures
+                    name, then submit_outline(title, summary, agenda, changes) once; changes are rename, merge a
+                    heading into the one before it, move a heading after another, by section number
+  program  applies  the changes; one it cannot do (no such heading) is skipped and named on the console
+  program  builds   the document: "# <title>", the executive summary, the agenda (one numbered link line per chapter
+                    the model named), the table of contents (every heading, a section under its chapter), then the
+                    sections; each picture line becomes the figure of its frame's live cut, a picture line whose
+                    frame has no cut is dropped
+  program  writes   04_writing/direct-draft-outline.json (the answer, reused by a resume, which then calls no model),
+                    04_document.md, the published folder <name>/<name>.md with its figures in resources/ and its
+                    provenance.json; logs/fast-turns/fast-document.jsonl, the conversation's turns for the page's
+                    worker panel
+  a conversation that never submits publishes the draft as it stands, titled with the recording's name
+  nothing else of phase 4 runs, and phases 5 and 6 are off
+
 PHASE 3  frames_processing, for a fast-processing video run
   actors   program = process_frames_node + fast_frame_note_service, model = video.fastProcessing.frameModel
            (qwen3.5-4b), one session per video.fastProcessing.frameFollowUps (5) frames, each frame a follow-up

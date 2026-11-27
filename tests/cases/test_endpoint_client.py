@@ -92,45 +92,38 @@ def test_speaker_turns_ask_for_diarized_json_and_read_speaker_start_and_end():
                   reply["segments"][1] == {"speaker": "SPEAKER_01", "start": 2.0, "end": 4.0}, str(reply["segments"]))
 
 
-def test_embeddings_send_the_images_as_data_urls_and_give_one_vector_each_in_order():
+def test_embeddings_send_each_image_as_a_messages_request_and_give_one_vector_each_in_order():
     server = fake_model_server.FakeModelServer()
     image_list = [endpoint_client.build_data_url(content=b"crop-1", media_type="image/png"),
                   endpoint_client.build_data_url(content=b"crop-2", media_type="image/png")]
     with fake_model_server.serving(server):
         vector_list = endpoint_client.request_embeddings(endpoint=_build_endpoint(server=server, model="siglip2"),
                                                          data_url_list=image_list)
-    sent = server.request_list[0]
-    harness.check("one POST to the embeddings route", (sent.method, sent.path) == ("POST", "/v1/embeddings"))
-    harness.check("the images and the model go in the body", sent.read_json() == {"model": "siglip2", "input": image_list})
+    first = server.request_list[0]
+    harness.check("one POST to the embeddings route for each image",
+                  [(sent.method, sent.path) for sent in server.request_list] == [("POST", "/v1/embeddings")] * 2,
+                  str([(sent.method, sent.path) for sent in server.request_list]))
+    expected = {"model": "siglip2", "encoding_format": "float",
+                "messages": [{"role": "user", "content": [{"type": "image_url", "image_url": {"url": image_list[0]}}]}]}
+    harness.check("the body is vLLM's: the model, one user message with an image_url part, the float format",
+                  first.read_json() == expected, str(first.read_json()))
+    harness.check("the second request holds the second image",
+                  server.request_list[1].read_json()["messages"][0]["content"][0]["image_url"]["url"] == image_list[1])
     harness.check("an image is a base64 data URL", image_list[0] == "data:image/png;base64,Y3JvcC0x", image_list[0])
-    harness.check("one vector per image, in the order sent", vector_list == [[0.0, 0.5, 0.25], [1.0, 0.5, 0.25]],
+    harness.check("one vector per image, in the order sent", vector_list == [[0.0, 0.5, 0.25], [0.0, 0.5, 0.25]],
                   str(vector_list))
 
 
-def test_text_boxes_send_one_image_and_give_words_with_box_line_and_confidence():
+def test_text_embeddings_send_the_texts_as_the_standard_input_list_and_give_one_vector_each():
     server = fake_model_server.FakeModelServer()
     with fake_model_server.serving(server):
-        word_list = endpoint_client.request_text_boxes(endpoint=_build_endpoint(server=server),
-                                                       image_url="data:image/png;base64,AAAA", language_list=["eng", "deu"])
-    sent = server.request_list[0]
-    harness.check("one POST to the ocr route", (sent.method, sent.path) == ("POST", "/v1/ocr"))
-    harness.check("the image and the languages go in the body",
-                  sent.read_json() == {"image": "data:image/png;base64,AAAA", "languages": ["eng", "deu"]})
-    harness.check("each word has its text, box, line and confidence",
-                  word_list[0] == {"text": "Hello", "box": [10, 20, 60, 40], "line": 1, "confidence": 91.5}, str(word_list[0]))
-
-
-def test_detections_ask_for_the_kinds_named_and_give_kind_box_and_score():
-    server = fake_model_server.FakeModelServer()
-    with fake_model_server.serving(server):
-        both = endpoint_client.request_detections(endpoint=_build_endpoint(server=server), image_url="data:image/png;base64,AAAA",
-                                                  kind_list=["face", "person"])
-        faces = endpoint_client.request_detections(endpoint=_build_endpoint(server=server), image_url="data:image/png;base64,AAAA",
-                                                   kind_list=["face"])
-    harness.check("one POST to the detections route", server.request_list[0].path == "/v1/images/detections")
-    harness.check("both kinds asked, both found", [found["kind"] for found in both] == ["face", "person"], str(both))
-    harness.check("one kind asked, one found", [found["kind"] for found in faces] == ["face"], str(faces))
-    harness.check("a detection has its box and score", faces[0]["box"] == [5, 5, 40, 40] and faces[0]["score"] == 0.93)
+        vector_list = endpoint_client.request_text_embeddings(endpoint=_build_endpoint(server=server, model="siglip2"),
+                                                              text_list=["a board", "a face"])
+    harness.check("one POST holds both texts as `input`",
+                  len(server.request_list) == 1 and server.request_list[0].read_json()
+                  == {"model": "siglip2", "input": ["a board", "a face"], "encoding_format": "float"},
+                  str([sent.read_json() for sent in server.request_list]))
+    harness.check("one vector per text, in the order sent", vector_list == [[0.0, 0.5, 0.25], [1.0, 0.5, 0.25]], str(vector_list))
 
 
 def test_decisions_send_the_images_and_the_question_and_give_one_decision_each():
@@ -226,8 +219,6 @@ def test_a_reply_that_misses_a_field_is_an_error_naming_the_field():
     server.set_reply(path="/v1/chat/completions", status=200, body=b'{"choices": []}')
     server.set_reply(path="/v1/audio/transcriptions", status=200, body=b'{"text": "no segments"}')
     server.set_reply(path="/v1/embeddings", status=200, body=b'{"data": [{"index": 0}]}')
-    server.set_reply(path="/v1/ocr", status=200, body=b'{"words": [{"text": "x"}]}')
-    server.set_reply(path="/v1/images/detections", status=200, body=b'{"detections": [{"kind": "face"}]}')
     server.set_reply(path="/v1/classifications", status=200, body=b'{"results": []}')
     server.set_reply(path="/v1/models", status=200, body=b'{"data": [{"name": "no id"}]}')
     with fake_model_server.serving(server):
@@ -236,13 +227,11 @@ def test_a_reply_that_misses_a_field_is_an_error_naming_the_field():
             "transcription": _find_error(lambda: endpoint_client.request_transcription(endpoint=endpoint, audio=AUDIO, language="",
                                                                                        granularity_list=[])),
             "embeddings": _find_error(lambda: endpoint_client.request_embeddings(endpoint=endpoint, data_url_list=["x"])),
-            "ocr": _find_error(lambda: endpoint_client.request_text_boxes(endpoint=endpoint, image_url="x", language_list=[])),
-            "detections": _find_error(lambda: endpoint_client.request_detections(endpoint=endpoint, image_url="x", kind_list=["face"])),
             "decisions": _find_error(lambda: endpoint_client.request_decisions(endpoint=endpoint, image_url_list=["x"], question="q")),
             "models": _find_error(lambda: endpoint_client.list_served_models(endpoint=endpoint)),
         }
-    for route, field in (("chat", "message"), ("transcription", "segments"), ("embeddings", "embedding"), ("ocr", "confidence"),
-                         ("detections", "box"), ("decisions", "decisions came back"), ("models", "id")):
+    for route, field in (("chat", "message"), ("transcription", "segments"), ("embeddings", "embedding"),
+                         ("decisions", "decisions came back"), ("models", "id")):
         failed = failure_dict[route]
         harness.check(f"a {route} reply with no {field} is an error with status 200 that names it",
                       failed is not None and failed.status == 200 and field in failed.detail, str(failed))
@@ -256,27 +245,68 @@ def test_a_reply_that_is_not_json_is_an_error():
     harness.check("the error says the reply is not JSON", failed is not None and "not JSON" in failed.detail, str(failed))
 
 
-def test_find_endpoint_gives_none_for_an_empty_url_and_the_settings_values_for_a_set_one():
-    providers = {"providers": {"speech": {"url": "http://host:8791/v1", "apiKeyEnv": "I2K_KEY", "model": "whisper-large",
-                                          "timeoutS": 42}}}
+def test_find_endpoint_gives_none_for_no_host_and_the_hosts_values_for_a_named_one():
+    providers = {"hosts": {"speech-box": {"url": "http://host:8791/v1", "apiKeyEnv": "I2K_KEY"}},
+                 "providers": {"speech": {"host": "speech-box", "model": "whisper-large", "timeoutS": 42}}}
     kept = config.settings
     config.settings = config.Settings(**providers)
     try:
         speech = endpoint_client.find_endpoint(kind="speech")
         chat = endpoint_client.find_endpoint(kind="chat")
-        unknown = _find_unknown_kind_error()
+        unknown = _find_unknown_kind_error(kind="voice")
+        in_process_error_list = [_find_unknown_kind_error(kind=kind) for kind in ("ocr", "detection")]
     finally:
         config.settings = kept
-    harness.check("a kind with a URL gives its endpoint",
+    harness.check("a kind naming a host gives that host's address and key with the kind's model and timeout",
                   speech == EndpointSpec(base_url="http://host:8791/v1", api_key_env="I2K_KEY", timeout_s=42, model="whisper-large"),
                   str(speech))
-    harness.check("a kind with no URL gives none, so the program keeps its own way", chat is None, str(chat))
+    harness.check("a kind naming no host gives none, so the program keeps its own way", chat is None, str(chat))
     harness.check("a kind that does not exist is refused by name", "voice" in unknown, unknown)
+    harness.check("text reading and detection are no kind of server: each is refused by name, as they run inside the program",
+                  ["ocr" in in_process_error_list[0], "detection" in in_process_error_list[1]] == [True, True]
+                  and "decision" in in_process_error_list[0], str(in_process_error_list))
 
 
-def _find_unknown_kind_error() -> str:
+def test_find_endpoint_reads_a_library_model_for_its_server_its_model_name_and_its_wait_time():
+    values = {"hosts": {"gpu-box": {"url": "http://gpu-box.local:8090/v1", "apiKeyEnv": "GPU_KEY"}},
+              "models": {"whisper-gpu": {"spec": "lmstudio:whisper-large-v3", "host": "gpu-box", "requestTimeoutS": 7200},
+                         "reader-gpu": {"spec": "lmstudio:ocr-model", "host": "gpu-box"},
+                         "nowhere": {"spec": "openai-compatible:x"}},
+              "providers": {"speech": {"libraryModel": "whisper-gpu", "host": "ignored", "timeoutS": 42},
+                            "chat": {"libraryModel": "reader-gpu"}, "decision": {"libraryModel": "nowhere"},
+                            "diarization": {"libraryModel": "missing"}}}
+    kept = config.settings
+    config.settings = config.Settings(**values)
     try:
-        endpoint_client.find_endpoint(kind="voice")
+        speech = endpoint_client.find_endpoint(kind="speech")
+        chat = endpoint_client.find_endpoint(kind="chat")
+        no_server = endpoint_client.find_endpoint(kind="decision")
+        unknown = _find_unknown_library_model_error(kind="diarization")
+    finally:
+        config.settings = kept
+    harness.check("a library model gives its host's address and key, its model's name and the wait time it sets",
+                  speech == EndpointSpec(base_url="http://gpu-box.local:8090/v1", api_key_env="GPU_KEY", timeout_s=7200,
+                                         model="whisper-large-v3"), str(speech))
+    harness.check("a library model that sets no wait time takes the kind's own",
+                  chat == EndpointSpec(base_url="http://gpu-box.local:8090/v1", api_key_env="GPU_KEY", timeout_s=600, model="ocr-model"),
+                  str(chat))
+    harness.check("a library model naming no server keeps the program's own way", no_server is None, str(no_server))
+    harness.check("a name the library does not hold is refused, naming the models there are",
+                  "missing" in unknown and "whisper-gpu" in unknown, unknown)
+
+
+def _find_unknown_library_model_error(kind: str) -> str:
+    try:
+        endpoint_client.find_endpoint(kind=kind)
+    except ValueError as refused:
+        return str(refused)
+
+    return ""
+
+
+def _find_unknown_kind_error(kind: str) -> str:
+    try:
+        endpoint_client.find_endpoint(kind=kind)
     except ValueError as refused:
         return str(refused)
 

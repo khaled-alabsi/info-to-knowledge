@@ -183,6 +183,30 @@ describe("App", () => {
     expect(await screen.findByText("The setup check could not be read: 500: check failed")).toBeInTheDocument();
   });
 
+  it("in a container never opens the setup wizard, and names the missing model providers on the Settings page", async () => {
+    const user = userEvent.setup();
+    installServer({ "GET /api/phases": PHASES, "GET /api/inbox": [], "GET /api/runs": [], "GET /api/jobs": [], "GET /api/inbox/trash": [],
+      "GET /api/settings": [], "GET /api/profiles": { profiles: [] },
+      "GET /api/setup": { is_container: true, has_models: false, runtimes: [], models: [], download: { is_running: false, log: "" },
+        recommended: [], missing_providers: [{ name: "frame", used_by: ["frames_processing"],
+          reason: "no model is set for it: add models.frame in Settings" }] } });
+    render(<App />);
+    const gear = await screen.findByRole("button", { name: "Settings: provider missing" });
+    expect(screen.queryByRole("dialog", { name: "Setup" })).not.toBeInTheDocument();
+    await user.click(gear);
+    expect(await screen.findByText("A model provider a run needs is not set up.")).toBeInTheDocument();
+    expect(screen.getByText("no model is set for it: add models.frame in Settings", { exact: false })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Setup wizard|Setup needed/ })).not.toBeInTheDocument();
+  });
+
+  it("outside a container opens the setup wizard by itself when no model is configured", async () => {
+    installServer({ "GET /api/phases": PHASES, "GET /api/inbox": [], "GET /api/runs": [], "GET /api/jobs": [], "GET /api/inbox/trash": [],
+      "GET /api/setup": { is_container: false, has_models: false, runtimes: [], models: [], download: { is_running: false, log: "" },
+        recommended: [], missing_providers: [] } });
+    render(<App />);
+    expect(await screen.findByText("No model is configured.")).toBeInTheDocument();
+  });
+
   it("keeps what was chosen on a new video's page when the video is renamed", async () => {
     const user = userEvent.setup();
     installServer({ "GET /api/phases": PHASES, "GET /api/inbox": [makeInboxItem("Weekly.mp4", "new")], "GET /api/runs": [],

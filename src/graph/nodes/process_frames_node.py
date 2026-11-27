@@ -55,6 +55,7 @@ from services import attempt_log_service
 from services import batch_summaries_service
 from services import call_log_service
 from services import chain_dispatch_service
+from services import direct_draft_batch_service
 from services import dry_run_service
 from services import document_file_service
 from services import fast_frame_note_service
@@ -1493,6 +1494,28 @@ def _run_fast_session(ctx: RunContext,
     return update
 
 
+def _run_direct_draft_batch(ctx: RunContext,
+                            state: RunState,
+                            queue: list[str],
+                            cursor: int) -> dict:
+    """One call of a direct-draft run's phase 3 (`direct_draft_batch_service`): the next `framesPerCall` frames written
+    into the draft. The call that empties the queue ends the phase itself, so a direct-draft run never reaches
+    `end_phase_on_empty_queue` (no meeting notes, no stand-in accounts). A dry run advances without a call."""
+
+    slugs = queue[cursor:cursor + app_config.settings.resolve_frames_per_call()]
+    if state.get("is_dry_run"):
+        ctx.log.info(f"  [dry-run] a direct-draft call would write {len(slugs)} frame(s) into the draft")
+
+        return {"cursor": cursor + len(slugs)}
+    written = direct_draft_batch_service.write_batch(ctx, [ctx.store.get_item(slug) for slug in slugs])
+    update = {"cursor": cursor + len(slugs), "written": written, "blocked": []}
+    if update["cursor"] >= len(queue):
+        ctx.store.set_phase(PHASE, "complete")
+        performance_log_service.record_phase(ctx, PHASE, "complete", None)
+
+    return update
+
+
 def stop_phase_on_block(ctx: RunContext,
                          blocked_slugs: list[str]) -> None:
     """Phase 3 is recorded blocked, in the performance log and in the run's own record, which a "complete" from an
@@ -1556,15 +1579,22 @@ def process_frames_node(state: RunState,
     # STEP 3: a pass over every frame starts the records file empty, so it never mixes this run's
     # frames with frames an earlier run produced under another prompt or another model
     is_fast = video_workflow_service.is_fast_processing(ctx.paths.output_root)
+    is_direct_draft = video_workflow_service.is_direct_draft(ctx.paths.output_root)
     if not state.get("is_dry_run") and _is_fresh_pass(ctx, cursor):
         frame_records_service.clear_all_frame_records(ctx.paths)
         batch_summaries_service.reset_batch_summaries(ctx.paths)
         if is_fast:
             fast_frame_note_service.start_descriptions(ctx.paths)
+        if is_direct_draft:
+            direct_draft_batch_service.start_draft(ctx.paths)
 
     # STEP 3b: a fast-processing run describes its frames a session at a time, with no check
     if is_fast:
         return _run_fast_session(ctx, state, queue, cursor)
+
+    # STEP 3c: a direct-draft run writes a batch of frames straight into the draft, with no check
+    if is_direct_draft:
+        return _run_direct_draft_batch(ctx, state, queue, cursor)
 
     # STEP 4: the frames this call takes: this one, and with several frames per call the ones after it
     group = _list_group(ctx, queue, cursor, app_config.settings.resolve_frames_per_call())

@@ -25,7 +25,7 @@ this CLI and are described in [ui-context.md](ui-context.md).
 
 | Command | Module | What it does |
 |---|---|---|
-| `run` | `src/cli/run_command.py` | runs the numbered phases over one video into one run folder; the only command that calls a model; `--workflow quality|fast-processing` is kept in `run-workflow.json` before phase 1 and named in the header's `workflow:` line |
+| `run` | `src/cli/run_command.py` | runs the numbered phases over one video into one run folder; the only command that calls a model; `--workflow quality|direct-draft|fast-processing` is kept in `run-workflow.json` before phase 1 and named in the header's `workflow:` line |
 | `inbox` | `src/cli/inbox_command.py` | runs `run` over every inbox video that has no document yet, one after another |
 | `models` | `src/cli/setup_commands.py` | prints which configured model each phase calls, with the settings sent to it |
 | `probe` | `src/cli/setup_commands.py` | asks each configured model host whether it answers and what it has loaded |

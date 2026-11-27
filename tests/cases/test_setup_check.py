@@ -10,18 +10,24 @@ from a copy (`set_settings_reader`), so the suite runs with no network and none 
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import tempfile
 from pathlib import Path
 
+from fastapi.testclient import TestClient
+
 from support import harness
 
 import config
+from cli import mlx_setup_command
 from models.setup_runtime_vocabulary import SYSTEMS
 from services import host_model_service
+from services import mlx_setup_service
 from services import setup_check_service
 from services import text_detection_service
+from services import web_api_service
 
 
 def _check_with(programs: set[str],
@@ -36,7 +42,7 @@ def _check_with(programs: set[str],
     settings.phase_models = {}
     settings.frames.is_redundancy_filter_on, settings.frames.is_knowledge_filter_on = False, True
     settings.frames.knowledge_classifier_command = "/no/such/classifier"
-    addresses = {settings.lmstudio_base_url: "lmstudio", settings.ollama_base_url: "ollama"}
+    addresses = {settings.hosts["lmstudio"].url: "lmstudio", settings.hosts["ollama"].url: "ollama"}
     setup_check_service.set_settings_reader(lambda: settings)
     setup_check_service.set_program_finder(lambda name: f"/bin/{name}" if name in programs else None)
     setup_check_service.set_host_lister(lambda provider, base_url: hosts.get(addresses.get(base_url, provider)))
@@ -210,9 +216,9 @@ def test_the_chosen_host_and_model_are_saved_in_both_default_settings_files_and_
                   str(saved.output + lmstudio.output))
     harness.check("an unknown host and a server with no address are refused by name",
                   unknown.exit_code == 2 and no_address.exit_code == 2, str(unknown.output + no_address.output))
-    harness.check("both default settings files name the recommended model for every phase after LM Studio was chosen",
-                  all(values["models"][name]["spec"] == "lmstudio:qwen3.6-35b-a3b-mtp"
-                      for values in files for name in ("frame", "document")), str(files))
+    harness.check("the owner's own settings file names the recommended model for every phase after LM Studio was chosen",
+                  all(files[1]["models"][name]["spec"] == "lmstudio:qwen3.6-35b-a3b-mtp"
+                      for name in ("frame", "document")), str(files))
     harness.check("the key is in .env and in no settings file",
                   "OPENAI_API_KEY=sk-test" in env_text and all("sk-test" not in json.dumps(values) for values in files),
                   env_text)
@@ -233,3 +239,98 @@ def test_a_download_whose_process_ended_is_not_running():
     harness.check("an ended download is not running, and its log is shown",
                   download["is_running"] is False and "already downloaded: y" in download["log"]
                   and "objc[" not in download["log"], str(download))
+
+
+def _check_in_a_container(programs: set[str],
+                          hosts: dict[str, list[str] | None],
+                          specs: dict[str, str]) -> dict:
+    """`_check_with` while the server runs in a container (`I2K_CONTAINER`)."""
+
+    previous = config.IS_CONTAINER_MODE
+    config.IS_CONTAINER_MODE = True
+    try:
+        return _check_with(programs, hosts, specs)
+    finally:
+        config.IS_CONTAINER_MODE = previous
+
+
+def test_a_container_check_lists_no_setup_and_names_each_missing_provider():
+    specs = {"frame": "lmstudio:lfm2.5-vl-3b", "document": "lmstudio:other-model"}
+    served = _check_in_a_container(set(), {"lmstudio": ["lfm2.5-vl-3b"]}, specs)
+    harness.check("the page is told it runs in a container, with no runtime to set up and nothing to download",
+                  served["is_container"] is True and served["runtimes"] == [] and served["recommended"] == []
+                  and served["download"]["is_running"] is False, str(served))
+    harness.check("a model the host does not have is named with its role's phases and the reason",
+                  [row["name"] for row in served["missing_providers"]] == ["document"]
+                  and "finalize" in served["missing_providers"][0]["used_by"]
+                  and "does not have the model other-model" in served["missing_providers"][0]["reason"],
+                  str(served["missing_providers"]))
+    harness.check("the models are still listed with their state", _find(served["models"], "name", "frame")["is_on_host"] is True)
+
+    down = _check_in_a_container(set(), {"lmstudio": None}, specs)
+    harness.check("a host that does not answer is named for every model it serves",
+                  sorted(row["name"] for row in down["missing_providers"]) == ["document", "frame"]
+                  and all("does not answer" in row["reason"] for row in down["missing_providers"]),
+                  str(down["missing_providers"]))
+
+    empty = _check_in_a_container(set(), {}, {})
+    harness.check("no model set for a role is named, with where to add it",
+                  sorted(row["name"] for row in empty["missing_providers"]) == ["document", "frame"]
+                  and all("add models." in row["reason"] for row in empty["missing_providers"]),
+                  str(empty["missing_providers"]))
+
+    ready = _check_in_a_container(set(), {"lmstudio": ["m"]}, {"frame": "lmstudio:m", "document": "lmstudio:m"})
+    harness.check("every provider set up and answering: nothing is missing", ready["missing_providers"] == [],
+                  str(ready["missing_providers"]))
+
+
+def test_a_container_names_an_api_with_no_key_and_accepts_it_with_one():
+    specs = {"frame": "anthropic:claude-test", "document": "anthropic:claude-test"}
+    previous = os.environ.pop("ANTHROPIC_API_KEY", None)
+    try:
+        without = _check_in_a_container(set(), {}, specs)["missing_providers"]
+        os.environ["ANTHROPIC_API_KEY"] = "test-key"
+        with_key = _check_in_a_container(set(), {}, specs)["missing_providers"]
+    finally:
+        os.environ.pop("ANTHROPIC_API_KEY", None)
+        if previous is not None:
+            os.environ["ANTHROPIC_API_KEY"] = previous
+    harness.check("an API with no key is named with the variable to set",
+                  len(without) == 2 and all("ANTHROPIC_API_KEY" in row["reason"] for row in without), str(without))
+    harness.check("with its key set nothing is missing", with_key == [], str(with_key))
+
+
+def test_outside_a_container_the_check_is_the_full_wizard_check():
+    check = _check_with({"ffmpeg", "ffprobe"}, {"lmstudio": None}, {"frame": "lmstudio:m", "document": "lmstudio:m"})
+    harness.check("the runtimes and the recommended models are listed, and the page is not told it is in a container",
+                  check["is_container"] is False and len(check["runtimes"]) > 0 and len(check["recommended"]) > 0,
+                  str(check["is_container"]))
+
+
+def test_a_container_refuses_the_models_download_the_mlx_setup_and_a_run_with_no_provider():
+    started_downloads, started_installs = [], []
+    previous = (config.IS_CONTAINER_MODE, setup_check_service.start_models_download, mlx_setup_service.set_up_mlx)
+    setup_check_service.start_models_download = lambda token: started_downloads.append(token) or 1
+    mlx_setup_service.set_up_mlx = lambda *arguments, **keywords: started_installs.append(arguments) or 0
+    settings = config.settings.model_copy(deep=True)
+    settings.models, settings.phase_models = {}, {}
+    setup_check_service.set_settings_reader(lambda: settings)
+    setup_check_service.set_host_lister(lambda provider, base_url: None)
+    config.IS_CONTAINER_MODE = True
+    try:
+        client = TestClient(web_api_service.build_app())
+        download = client.post("/api/setup/models", json={"hf_token": ""})
+        queued = client.post("/api/jobs", json={"items": [{"video": "/in/a.mp3", "output": "/out/a"}]})
+        mlx_exit_code = mlx_setup_command.cmd_setup_mlx(argparse.Namespace(model=None, venv_dir=Path("~/no-venv")))
+    finally:
+        config.IS_CONTAINER_MODE = previous[0]
+        setup_check_service.start_models_download, mlx_setup_service.set_up_mlx = previous[1], previous[2]
+        setup_check_service.set_settings_reader(setup_check_service.settings_service.read_next_job_settings)
+        setup_check_service.set_host_lister(host_model_service.list_host_models)
+    harness.check("the page's models download is refused, by the container, and starts nothing",
+                  download.status_code == 409 and "container" in download.text and started_downloads == [], download.text)
+    harness.check("a run with no model provider is refused, naming the role and where to set it",
+                  queued.status_code == 409 and "frame" in queued.text and "document" in queued.text
+                  and "add models." in queued.text, queued.text)
+    harness.check("the Mac's mlx setup is refused with exit code 2 and installs nothing",
+                  mlx_exit_code == 2 and started_installs == [], str(mlx_exit_code))

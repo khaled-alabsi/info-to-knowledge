@@ -53,16 +53,15 @@ def test_a_server_that_gives_no_word_probability_still_gives_a_transcript_defect
     server = fake_model_server.FakeModelServer()
     server.set_reply("/v1/audio/transcriptions", 200, json.dumps(reply).encode("utf-8"))
     ctx = _load_run_context(media_fixtures.build_clip(is_with_audio=True))
-    saved = (config.settings.audio.engine, config.settings.audio.diarization.is_on, config.settings.providers.speech.url)
+    saved = (config.settings.audio.engine, config.settings.audio.diarization.is_on)
     config.settings.audio.engine = faster_whisper_client.ENGINE_NAME
     config.settings.audio.diarization.is_on = False
-    config.settings.providers.speech.url = server.build_url()
     try:
-        with fake_model_server.serving(server):
+        with fake_model_server.serving_kind(server=server, kind="speech"):
             update = transcribe_audio_node.produce_transcript_node(graph_state.new_run_state(TRANSCRIBE, LAST),
                                                                   {"configurable": {"ctx": ctx}})
     finally:
-        config.settings.audio.engine, config.settings.audio.diarization.is_on, config.settings.providers.speech.url = saved
+        config.settings.audio.engine, config.settings.audio.diarization.is_on = saved
     written = phase_file_service.read_phase_file(ctx.paths, TRANSCRIBE)
     harness.check("phase 1 completes", update["phases"]["transcribe"] == "complete", str(update))
     harness.check("the transcript file holds the segment with its three words", len(written["segments"]) == 1

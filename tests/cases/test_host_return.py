@@ -55,11 +55,12 @@ def _fake_host(states: list[bool],
     model_name = config.settings.resolve_phase_model_name(PHASE)
     saved_models = dict(config.settings.models)
     saved_phase_models = dict(config.settings.phase_models)
-    config.settings.models[model_name] = config.ModelSettings(spec=f"openai-compatible:{_model()}", base_url=server.build_url())
+    config.settings.models[model_name] = config.ModelSettings(spec=f"openai-compatible:{_model()}",
+                                                             host=fake_model_server.TEST_HOST)
     previous_clock = host_return_service.set_clock(lambda: clock[0], pause)
     previous_ask = host_return_service.set_test_call(ask)
     try:
-        with fake_model_server.serving(server):
+        with fake_model_server.serving_host(server=server):
             yield server
     finally:
         host_return_service.set_clock(*previous_clock)

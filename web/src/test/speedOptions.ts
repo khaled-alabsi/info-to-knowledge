@@ -6,15 +6,17 @@ const QUALITY = { "video.workflow": "quality", "framesProcessing.isCritiqueOn": 
 
 export const SPEED_OPTIONS: SpeedOptions = {
   settings: [
-    { key: "video.workflow", label: "Frame reading and writing", hint: "full notes or quick descriptions", kind: "choice",
+    { key: "video.workflow", label: "Frame reading and writing", hint: "full notes or a draft written straight from the frames",
+      kind: "choice",
       options: [{ value: "quality", label: "Full notes, chapter by chapter" },
+        { value: "direct-draft", label: "Straight into a draft, then one summary call" },
         { value: "fast-processing", label: "Quick descriptions, one call" }] },
     { key: "framesProcessing.isCritiqueOn", label: "Critique", hint: "the model lists what went wrong", kind: "boolean",
       options: [] },
     { key: "review.isOn", label: "Review (phase 5)", hint: "a critic reads the document", kind: "boolean", options: [] },
   ],
   presets: { quality: QUALITY, balanced: { ...QUALITY, "framesProcessing.isCritiqueOn": false },
-    fast: { "video.workflow": "fast-processing", "framesProcessing.isCritiqueOn": false, "review.isOn": false } },
+    fast: { "video.workflow": "direct-draft", "framesProcessing.isCritiqueOn": false, "review.isOn": false } },
   current: QUALITY,
   default_preset: "quality",
 };

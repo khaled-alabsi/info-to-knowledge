@@ -89,7 +89,8 @@ class RunJobRequest:
     range_pages: str = ""
     # `--phase-model PHASE=NAME` pairs: the configured model a phase calls in this job alone
     phase_models: tuple[str, ...] = ()
-    # `--workflow`: the video workflow from phase 3 on, quality or fast-processing; empty leaves the folder's or the settings'
+    # `--workflow`: the video workflow from phase 3 on (quality, direct-draft or fast-processing); empty leaves the
+    # folder's or the settings'
     workflow: str = ""
     # `--worker-set`: the worker set (an entry of the settings' `workerSets`, or `default`) the run is on, whose models and
     # hosts it calls; jobs of one set run one after another, jobs of different sets at the same time. Empty leaves the

@@ -17,9 +17,11 @@ CUSTOM = "custom"
 # for a choice, its values with their names
 SPEED_SETTINGS: tuple[dict, ...] = (
     {"key": "video.workflow", "label": "Frame reading and writing", "kind": CHOICE,
-     "hint": "full notes with the large model and a document written chapter by chapter, or a small model's quick "
+     "hint": "full notes and a document written chapter by chapter; or the frames written straight into a draft in "
+             "chapters, a few to a call, with one last call for the title and summary; or a small model's quick "
              "description of each frame and the document in one call",
-     "options": (("quality", "Full notes, chapter by chapter"), ("fast-processing", "Quick descriptions, one call"))},
+     "options": (("quality", "Full notes, chapter by chapter"), ("direct-draft", "Straight into a draft, then one summary call"),
+                 ("fast-processing", "Quick descriptions, one call"))},
     {"key": "framesProcessing.framesPerCall", "label": "Frames per call", "kind": NUMBER, "min": 1, "max": 20,
      "hint": "how many frames one call of phase 3 reads: more is fewer calls, each longer"},
     {"key": "framesProcessing.isCritiqueOn", "label": "Critique", "kind": BOOLEAN,

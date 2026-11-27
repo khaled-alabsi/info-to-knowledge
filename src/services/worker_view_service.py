@@ -43,9 +43,10 @@ __all__ = ["list_worker_steps", "read_attempt", "build_instruction_previews",
 INSTRUCTION_PHASE_NUMBERS = {
     "speech_structuring": 2, "frame_redundancy": 2,
     "preprocessing": 3, "frames_processing": 3, "critique": 3, "second_pass": 3, "open_questions": 3,
-    "answer_questions": 3, "fast_frame_note": 3,
+    "answer_questions": 3, "fast_frame_note": 3, "direct_draft_batch": 3,
     "takeaway": 4, "parts": 4, "outline": 4, "contents": 4, "section": 4, "summary": 4, "write": 4,
     "draft_headings": 4, "table_of_contents": 4, "fast_document": 4,
+    "direct_draft_outline": 4,
     "review": 5,
     "critique_collection": 6,
     "document_cleanup": 7, "document_knowledge": 7, "document_chat": 7,
@@ -53,7 +54,7 @@ INSTRUCTION_PHASE_NUMBERS = {
 # The instruction sets only one medium's workflow sends: a video run never gets the audio ones, nor an audio run the frames'
 AUDIO_ONLY_INSTRUCTIONS = {"speech_structuring", "preprocessing", "takeaway"}
 VIDEO_ONLY_INSTRUCTIONS = {"frame_redundancy", "frames_processing", "critique", "second_pass", "open_questions",
-                           "answer_questions", "fast_frame_note"}
+                           "answer_questions", "fast_frame_note", "direct_draft_batch"}
 # Who is sent each instruction set, at which stage: shown above its preview, so a reader knows what they are reading
 _CALLS_ONLY = ("Sent alone only when `document.writeMode` is \"calls\"; in the default conversation its rules are part "
                "of `write`, under \"When the follow-up asks for {}\".")
@@ -74,6 +75,8 @@ INSTRUCTION_USED_BY = {
     "answer_questions": "Phase 3 of a video, the last follow-up of each batch: the same model answers those questions "
                         "from the notes, the speech and the frames.",
     "fast_frame_note": "Phase 3 of the fast processing workflow only: the small vision model describes each frame.",
+    "direct_draft_batch": "Phase 3 of the direct draft workflow only: phase 3's model writes each batch of frames "
+                          "straight into the draft document.",
     "write": "Phase 4, the one writing conversation (the default): phase 4's model gets it once and answers every "
              "follow-up with it: summary draft, agenda, each chapter's headings and text, final title.",
     "parts": "Phase 4, the agenda. " + _CALLS_ONLY.format("the agenda"),
@@ -88,6 +91,8 @@ INSTRUCTION_USED_BY = {
     "takeaway": "Phase 4 of a takeaway run only: one call writes what was agreed and what was left open.",
     "fast_document": "Phase 4 of the fast processing workflow only: one call writes the document from the frames' "
                      "descriptions.",
+    "direct_draft_outline": "Phase 4 of the direct draft workflow only: phase 4's model cuts the pictures the draft "
+                            "places and submits its title, summary, agenda and heading changes.",
     "review": "Phase 5, the review conversation: phase 5's model lists what a reader still cannot know and resolves "
               "each point from the sources.",
     "critique_collection": "Phase 6, the critique collection: one call of phase 6's model words each group of critique "
@@ -102,7 +107,8 @@ INSTRUCTION_USED_BY = {
 }
 # An attempt folder's phase, when it is not one of the six phases' own names
 _EXTRA_FOLDER_PHASE_NUMBERS = {"frame_redundancy": 2, "speech_structuring": 2, "preprocessing": 3,
-                               "fast_frame_note": 3, "takeaway": 4, "fast_document": 4}
+                               "fast_frame_note": 3, "takeaway": 4, "fast_document": 4, "direct_draft_batch": 3,
+                               "direct_draft_outline": 4}
 _LOGS_DIR = "logs"
 _DRY_RUN_DIR = "dry-run"
 _HUMAN_MESSAGE_FILE = attempt_log_service.HUMAN_MESSAGE_FILE

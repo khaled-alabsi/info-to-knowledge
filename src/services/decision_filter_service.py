@@ -8,9 +8,11 @@ d1-2B gives most (`dropClass`); a frame the classifier tagged people that d1-2B 
 and kept. The classifier still runs: its text and board tags and its SigLIP vectors serve the other stages.
 Measured once, offline: 57 of 73 empty frames dropped at 0.20, none holding knowledge.
 
-With `providers.decision.url` set, a model server answers the same questions instead of the tool
-(`POST /v1/classifications`): the frames go in batches, one request for each question and batch, and each frame's score
-for a question is its probability. The program applies `decisionFilterCut` to the knowledge question's score as before.
+The tool runs inside the program's own machine or container, from the models volume (`I2K_MODELS_DIR`), on the processor
+or on CUDA. Optionally, with `providers.decision.host` set, a host server answers the same questions instead of the tool
+(`POST /v1/classifications`, the one request that no standard server answers): the frames go in batches, one request for
+each question and batch, and each frame's score for a question is its probability. The program applies
+`decisionFilterCut` to the knowledge question's score as before. That route is never required.
 """
 
 from __future__ import annotations
@@ -134,7 +136,7 @@ def _read_decisions_from_server(endpoint: EndpointSpec,
 def read_decisions(frames_dir: Path,
                    settings: FrameSettings) -> dict[str, dict]:
     """Every image of `frames_dir` by file name -> d1-2B's `{"frame", "pKnowledge", "classes"}`; a missing tool or a
-    failed run stops phase 2 by name. With `providers.decision.url` set, the model server answers and the tool is not
+    failed run stops phase 2 by name. With `providers.decision.host` set, the model server answers and the tool is not
     needed."""
 
     endpoint = endpoint_client.find_endpoint(kind="decision")

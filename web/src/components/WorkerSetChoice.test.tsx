@@ -6,7 +6,7 @@ import type { WorkerSets } from "../api";
 import { WorkerSetChoice, describeWorkerSet } from "./WorkerSetChoice";
 
 const SETS: WorkerSets = { default_set: "default", sets: [
-  { name: "default", changes: [] }, { name: "Mac", changes: ["lmstudioBaseUrl"] }, { name: "gpu-box", changes: ["models"] }] };
+  { name: "default", changes: [] }, { name: "Mac", changes: ["hosts"] }, { name: "gpu-box", changes: ["models"] }] };
 
 describe("WorkerSetChoice", () => {
   it("shows no choice while the sets are unknown or the settings define only the default", () => {

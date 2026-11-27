@@ -27,7 +27,7 @@ from models import phase_guide
 from models.operation_result import OperationResult
 from models import run_job
 from models.run_job import RunJob, RunJobRequest
-from models.web_api_request import (JobItemRequest, WorkerSetRequest, AccountChangeRequest, AccountRequest, SignInRequest, BatchDownloadRequest, JobMoveRequest, JobOnFailureRequest, QueuePauseRequest, PartMessageRequest,ModelsConfigureRequest, ModelsDownloadRequest, BranchRequest, ConvertRequest, PartRunRequest, RunNamesRequest, RunRefsRequest, ControlRequest, RunDisplayNameRequest, RunTagsRequest, FrameDropRequest, HiddenRequest, ResetRequest, SettingRequest, RestoreRequest, StartJobsRequest,
+from models.web_api_request import (JobItemRequest, WorkerSetRequest, AccountChangeRequest, AccountRequest, SignInRequest, BatchDownloadRequest, JobMoveRequest, JobOnFailureRequest, QueuePauseRequest, PartMessageRequest,ModelsConfigureRequest, ModelsDownloadRequest, BranchRequest, ConvertRequest, PartRunRequest, RunNamesRequest, RunRefsRequest, ControlRequest, RunDisplayNameRequest, RunTagsRequest, FrameDropRequest, HiddenRequest, ResetRequest, SettingRequest, SettingRemoveRequest, RestoreRequest, StartJobsRequest,
                                     InboxTagsRequest, RenameRequest, MergeRequest, MoveRequest, ZipRequest,
                                     MarkdownWriteRequest, ProjectRequest, GrantRequest, GroupRequest, GroupAccountsRequest,
                                     RunListsRequest, InstructionSaveRequest, InstructionResetRequest,
@@ -187,6 +187,14 @@ def save_setting(body: SettingRequest) -> dict:
     return _describe_operation(result)
 
 
+@router.post("/settings/remove")
+def remove_setting(body: SettingRemoveRequest) -> dict:
+    """One entry (a model, a worker set, a host) taken out of the owner's own settings file or a profile's file, refused
+    with the reason when it is shipped or the settings would not load without it."""
+
+    return _describe_operation(settings_service.remove_setting(key_parts=body.key_parts, profile=body.profile))
+
+
 def _find_account_name(request: Request) -> str:
     """The signed-in account's name, or "" when nobody signs in."""
 
@@ -303,11 +311,10 @@ def list_worker_sets() -> dict:
 
     merged = config.read_layers(profile_name=config.PROFILE_NAME, worker_set_name=config.DEFAULT_WORKER_SET_NAME)
     named = merged.get("workerSets") or {}
-    machine_dict = merged.get("workerSetMachines") or {}
-    default_set = {"name": config.DEFAULT_WORKER_SET_NAME, "changes": [],
-                   "machine": machine_dict.get(config.DEFAULT_WORKER_SET_NAME, "")}
-    named_set_list = [{"name": name, "changes": sorted(key for key in values if not key.startswith("_")),
-                       "machine": machine_dict.get(name, "")}
+    label = config.WORKER_SET_LABEL_KEY
+    default_set = {"name": config.DEFAULT_WORKER_SET_NAME, "changes": [], "machine": str(merged.get(label) or "")}
+    named_set_list = [{"name": name, "changes": sorted(key for key in values if not key.startswith("_") and key != label),
+                       "machine": str(values.get(label) or "")}
                       for name, values in sorted(named.items()) if not name.startswith("_")]
 
     return {"default_set": merged.get("defaultWorkerSet", config.DEFAULT_WORKER_SET_NAME),
@@ -345,7 +352,7 @@ def _check_worker_set_free_to_choose(items: list[JobItemRequest],
         held = _find_job_holding_folder(Path(item.output))
         if held is None:
             continue
-        held_set = job_queue_service.read_job_lane(held, default_set)
+        held_set = job_queue_service.read_job_worker_set(held, default_set)
         if held_set != worker_set:
             raise HTTPException(status_code=409, detail=f"{Path(item.output).name} is already queued on worker set "
                                                         f"{held_set!r}: cancel that job first or queue it on {held_set!r}")
@@ -465,7 +472,7 @@ def list_phases(flow: Annotated[PhaseFlowRequest, Query()]) -> list[dict]:
                   if is_audio or pdf_mode in output_contract.PDF_MODE_MEDIUMS else set())
     if pdf_mode == output_contract.PDF_MODE_MARKDOWN_CONVERSION:
         off_phases |= set(output_contract.MARKDOWN_CONVERSION_OFF_PHASES)
-    if workflow == video_workflow_vocabulary.FAST_PROCESSING and not is_audio and not pdf_mode:
+    if workflow in video_workflow_vocabulary.NO_CRITIC_WORKFLOWS and not is_audio and not pdf_mode:
         off_phases |= set(video_workflow_vocabulary.FAST_OFF_PHASES)
     # a video run's Workflow speed may switch the review or the critique collection off (Balanced does): the page sends
     # "off" for each its chosen speed switches off
@@ -1474,6 +1481,12 @@ def queue_jobs(body: StartJobsRequest,
     if body.ingesting_profile and body.ingesting_profile not in ingesting_profile_service.list_profile_names():
         raise HTTPException(status_code=400, detail=f"no ingesting profile {body.ingesting_profile!r}: the profiles are "
                                                     + ", ".join(ingesting_profile_service.list_profile_names()))
+    if config.IS_CONTAINER_MODE and not body.is_dry_run:
+        # in a container the page has no wizard to say what is missing: a run with no provider is refused by name
+        missing_providers = setup_check_service.list_missing_providers()
+        if missing_providers:
+            lines = [f"{row['name']} (called by {', '.join(row['used_by'])}): {row['reason']}" for row in missing_providers]
+            raise HTTPException(status_code=409, detail="a run needs a model provider that is not set up: " + "; ".join(lines))
     _check_worker_set_name(body.worker_set)
     _check_worker_set_free_to_choose(body.items, body.worker_set)
     for phase, name in body.phase_models.items():
@@ -1646,7 +1659,8 @@ def probe_hosts() -> dict:
 @router.get("/setup")
 def check_setup() -> dict:
     """What the setup wizard shows: each runtime a run needs (needed, installed, running), each model a phase calls
-    (configured, on its host, downloaded) and the models download (`setup_check_service`)."""
+    (configured, on its host, downloaded) and the models download (`setup_check_service`). Also `is_container`, which
+    the page reads to hide the wizard, and `missing_providers`, the models a run calls that have no reachable provider."""
 
     return setup_check_service.check_setup()
 
@@ -1664,8 +1678,11 @@ def configure_models(request: ModelsConfigureRequest) -> dict:
 
 @router.post("/setup/models")
 def start_models_download(request: ModelsDownloadRequest) -> dict:
-    """Start `i2k setup-models` in a process of its own session; downloading the models takes minutes to hours."""
+    """Start `i2k setup-models` in a process of its own session; downloading the models takes minutes to hours.
+    Refused in a container, where the models are mounted and nothing is set up from the page."""
 
+    if config.IS_CONTAINER_MODE:
+        raise HTTPException(status_code=409, detail=setup_check_service.describe_container_refusal("Downloading models"))
     if setup_check_service.check_setup()["download"]["is_running"]:
         # two downloads would write the same files at once
         raise HTTPException(status_code=409, detail="a models download is already running")

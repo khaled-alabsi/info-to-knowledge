@@ -1,4 +1,4 @@
-"""Speech to text by a model server: the recording's audio sent to `providers.speech.url`, the reply made into what an
+"""Speech to text by a model server: the recording's audio sent to the host `providers.speech.host` names, the reply made into what an
 in-process engine gives.
 
 The server is asked the standard way (`POST /v1/audio/transcriptions`, `verbose_json`, word and segment timestamps), so

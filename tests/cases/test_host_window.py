@@ -56,8 +56,8 @@ def _read_window(server: fake_model_server.FakeModelServer,
 def _resolve_window_with_loaded(loaded_window):
     server = _serve_listing(_build_listing({"loaded_context_length": loaded_window}))
     logger, handler = recording_tests._build_logger()
-    role = config.ModelSettings(spec=f"openai-compatible:{MODEL}", base_url=server.build_url())
-    with fake_model_server.serving(server):
+    role = config.ModelSettings(spec=f"openai-compatible:{MODEL}", host=fake_model_server.TEST_HOST)
+    with fake_model_server.serving_host(server=server):
         window = host_window_service.resolve_conversation_window(logger, role, PHASE_NUMBER)
 
     return window, handler.lines
@@ -114,8 +114,8 @@ def test_the_conversation_keeps_within_the_window_the_server_loaded_larger_small
 def test_a_server_that_reports_no_window_leaves_the_configured_one_with_a_warning():
     server = _serve_listing(_build_listing({}))
     logger, handler = recording_tests._build_logger()
-    role = config.ModelSettings(spec=f"openai-compatible:{MODEL}", base_url=server.build_url())
-    with fake_model_server.serving(server):
+    role = config.ModelSettings(spec=f"openai-compatible:{MODEL}", host=fake_model_server.TEST_HOST)
+    with fake_model_server.serving_host(server=server):
         window = host_window_service.resolve_conversation_window(logger, role, PHASE_NUMBER)
     harness.check("the configured window is used", window == config.settings.document.conversation_window_tokens, str(window))
     harness.check("the console says the server reported none", len(handler.lines) == 1 and "did not report" in handler.lines[0],

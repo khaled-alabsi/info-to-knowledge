@@ -169,8 +169,8 @@ def test_each_pass_keeps_the_wishes_it_was_last_queued_with_and_the_settings_sho
     harness.check("each pass's wishes are saved apart, trimmed", defaults["document_wishes"] == {
         "cleanup": "remove every Jira link", "rewrite": "write lists as tables", "knowledge": "keep the field tables"},
                   str(defaults))
-    harness.check("in both default settings files", json.loads((root / "local.json").read_text())["pdf"]
-                  == json.loads((root / "default.json").read_text())["pdf"])
+    harness.check("in the owner's own settings file only", "pdf" in json.loads((root / "local.json").read_text())
+                  and "pdf" not in json.loads((root / "default.json").read_text()))
     harness.check("the Settings page edits each in a box of its own",
                   rows["pdf.cleanupWishes"]["kind"] == rows["pdf.rewriteWishes"]["kind"]
                   == rows["pdf.knowledgeWishes"]["kind"] == "long-text"

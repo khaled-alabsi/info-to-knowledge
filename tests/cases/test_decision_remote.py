@@ -1,7 +1,7 @@
-"""Phase 2's knowledge filter decided by a model server when `providers.decision.url` is set: the decisions the program reads
+"""Phase 2's knowledge filter decided by a model server when `providers.decision.host` names a host: the decisions the program reads
 are the ones the tool gives for the same frames, the frames go to the server in batches of 8 with every question of the
 tool, a frame the server scores under the cut is dropped naming the kind of empty frame it scored highest, and a folder
-with no frame is refused by name. With the URL empty the tool runs and the server is not asked."""
+with no frame is refused by name. With no host named the tool runs and the server is not asked."""
 
 from __future__ import annotations
 
@@ -81,8 +81,13 @@ def _build_tool(folder: Path) -> None:
 def _read_decisions(url: str,
                     frames_dir: Path,
                     tool_dir: Path) -> dict[str, dict]:
+    """`url` "" leaves the decision model to the tool."""
+
     kept = config.settings
-    config.settings = config.Settings(**{"providers": {"decision": {"url": url, "model": "d1"}},
+    host_dict = {fake_model_server.TEST_HOST: {"url": url}} if url else {}
+    host_name = fake_model_server.TEST_HOST if url else ""
+    config.settings = config.Settings(**{"hosts": host_dict,
+                                         "providers": {"decision": {"host": host_name, "model": "d1"}},
                                          "frames": {"decisionFilterPython": str(tool_dir / ".venv" / "bin" / "python")}})
     try:
         return decision_filter_service.read_decisions(frames_dir=frames_dir, settings=config.settings.frames)

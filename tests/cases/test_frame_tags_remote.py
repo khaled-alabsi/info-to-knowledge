@@ -1,4 +1,4 @@
-"""The frame classifier asks a model server for the frames' image vectors: with `providers.embeddings.url` set, the tags and
+"""The frame classifier asks a model server for the frames' image vectors: with `providers.embeddings.host` naming a host, the tags and
 the vectors file are the ones the classifier's own copy gives on the same vectors and the real `tags.npz`, the server is
 asked once for each frame with the five images of it, and a server whose vectors have the wrong width is refused by the
 frame's name. With the URL empty the classifier is run as before, with no vectors handed over."""
@@ -34,6 +34,7 @@ from frame_knowledge_classifier.services import filter_service  # noqa: E402
 
 WEIGHTS_DIR = config.PLAYBOOK_ROOT / "weights" / "frame-classifier"
 FRAME_SIZE = (640, 360)
+ANSWERED_LIST: list[str] = []    # the images the stand-in image model answered, in order; each test that uses it clears it first
 COMMAND_TEXT = """#!/bin/sh
 PYTHONPATH="{src}" exec "{python}" "{run_filter}" "$@"
 """
@@ -71,14 +72,23 @@ def _calculate_vector(part: Image.Image,
     return numpy.random.default_rng(seed).normal(size=frame_embedding_service.IMAGE_EMBEDDING_SIZE).tolist()
 
 
-def _build_embeddings_reply(request: fake_model_server.RecordedRequest) -> dict:
-    input_list = request.read_json()["input"]
-    data = []
-    for index, data_url in enumerate(input_list):
-        image = Image.open(io.BytesIO(base64.b64decode(data_url.split(",", 1)[1])))
-        data.append({"object": "embedding", "index": index, "embedding": _calculate_vector(part=image, index=index)})
+def _read_sent_data_url(request: fake_model_server.RecordedRequest) -> str:
+    """Give me the `data:` URL of the one image a request holds, in the `messages` shape vLLM documents."""
 
-    return {"object": "list", "data": data}
+    content = request.read_json()["messages"][0]["content"]
+
+    return content[0]["image_url"]["url"]
+
+
+def _build_embeddings_reply(request: fake_model_server.RecordedRequest) -> dict:
+    """Answer one image at a time, as the program asks: its place among the five is how many images were answered before."""
+
+    data_url = _read_sent_data_url(request=request)
+    image = Image.open(io.BytesIO(base64.b64decode(data_url.split(",", 1)[1])))
+    index = len(ANSWERED_LIST) % frame_embedding_service.FRAME_PARTS
+    ANSWERED_LIST.append(data_url)
+
+    return {"object": "list", "data": [{"object": "embedding", "index": 0, "embedding": _calculate_vector(part=image, index=index)}]}
 
 
 def _calculate_known_vectors(path_list: list[Path]) -> numpy.ndarray:
@@ -115,7 +125,10 @@ def _read_with_url(url: str,
                    command: Path,
                    vectors_path: Path | None) -> dict:
     kept = config.settings
-    config.settings = config.Settings(**{"providers": {"embeddings": {"url": url}},
+    host_dict = {fake_model_server.TEST_HOST: {"url": url}} if url else {}
+    host_name = fake_model_server.TEST_HOST if url else ""
+    config.settings = config.Settings(**{"hosts": host_dict,
+                                         "providers": {"embeddings": {"host": host_name}},
                                          "frames": {"knowledgeClassifierWeights": str(WEIGHTS_DIR)}})
     try:
         return knowledge_filter_service.read_decisions(frames_dir=frames_dir, command=command,
@@ -133,6 +146,7 @@ def test_the_tags_and_the_vectors_file_are_the_classifiers_own_on_the_servers_ve
     route = (("POST", "/v1/embeddings"))
     kept_route = fake_model_server.ROUTE_DICT[route]
     fake_model_server.ROUTE_DICT[route] = _build_embeddings_reply
+    ANSWERED_LIST.clear()
     server = fake_model_server.FakeModelServer()
     vectors_path = folder / "frame-vectors.npz"
     try:
@@ -163,17 +177,20 @@ def test_the_tags_and_the_vectors_file_are_the_classifiers_own_on_the_servers_ve
                   str(sent["vectors"].shape))
 
 
-def test_the_server_is_asked_once_for_each_frame_with_its_five_images():
+def test_the_server_is_asked_once_for_each_image_five_for_each_frame():
     folder = Path(tempfile.mkdtemp())
     path_list = _build_frames(folder)
     server = fake_model_server.FakeModelServer()
     route = ("POST", "/v1/embeddings")
     kept_route = fake_model_server.ROUTE_DICT[route]
     fake_model_server.ROUTE_DICT[route] = _build_embeddings_reply
+    ANSWERED_LIST.clear()
     try:
         with fake_model_server.serving(server):
             kept = config.settings
-            config.settings = config.Settings(**{"providers": {"embeddings": {"url": server.build_url(), "model": "siglip2"}}})
+            config.settings = config.Settings(**{"hosts": {fake_model_server.TEST_HOST: {"url": server.build_url()}},
+                                                 "providers": {"embeddings": {"host": fake_model_server.TEST_HOST,
+                                                                              "model": "siglip2"}}})
             try:
                 frame_embedding_service.request_frame_vectors(endpoint=endpoint_client.find_endpoint(kind="embeddings"),
                                                               frame_path_list=path_list)
@@ -183,11 +200,11 @@ def test_the_server_is_asked_once_for_each_frame_with_its_five_images():
         fake_model_server.ROUTE_DICT[route] = kept_route
     request_list = [request for request in server.request_list if request.path == "/v1/embeddings"]
     size_list = []
-    for data_url in request_list[0].read_json()["input"]:
-        size_list.append(Image.open(io.BytesIO(base64.b64decode(data_url.split(",", 1)[1]))).size)
-    harness.check("three requests, one for each frame", len(request_list) == 3, str(len(request_list)))
-    harness.check("each request holds five images: the whole frame, then its four quarters",
-                  all(len(request.read_json()["input"]) == 5 for request in request_list)
+    for request in request_list[:5]:
+        size_list.append(Image.open(io.BytesIO(base64.b64decode(_read_sent_data_url(request=request).split(",", 1)[1]))).size)
+    harness.check("fifteen requests, five for each of the three frames", len(request_list) == 15, str(len(request_list)))
+    harness.check("each request holds one image, and a frame's five are the whole frame, then its four quarters",
+                  all(len(request.read_json()["messages"][0]["content"]) == 1 for request in request_list)
                   and size_list == [FRAME_SIZE] + [(FRAME_SIZE[0] // 2, FRAME_SIZE[1] // 2)] * 4, str(size_list))
     harness.check("each request names the model the settings give", request_list[0].read_json()["model"] == "siglip2")
 

@@ -49,7 +49,7 @@ export function describeJob(job: Job): string {
   if (request.is_dry_run) parts.push("dry run");
   // the choices a job runs with beside its phases (the owner, queuing 32 videos fast: each read "every phase" alone)
   const choices = [request.profile ? `profile ${request.profile}` : "",
-    request.workflow === "fast-processing" ? "Fast" : request.workflow === "quality" ? "Quality" : "",
+    request.workflow === "fast-processing" || request.workflow === "direct-draft" ? "Fast" : request.workflow === "quality" ? "Quality" : "",
     request.worker_set ? `set ${request.worker_set}` : "",
     request.speed_preset ? `${nameSpeedPreset(request.speed_preset)}${request.speed_settings?.length ? " (changed)" : ""}` : ""]
     .filter(Boolean);

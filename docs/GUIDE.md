@@ -152,8 +152,10 @@ turn on one point each, in `02_speech.md`; phase 3 has nothing to read, and phas
 paragraphs. `--tag` gives the run tags before phase 1. `--ingesting-profile NAME` picks the document's shape by hand
 (`meeting`, `conversation`, ...), over any tag and phase 2's own pick. `--as-audio` processes a video as an audio
 recording: its sound is transcribed, no frame is taken, and it runs the audio workflow; the choice is kept in the run
-folder, so a resume needs no flag. `--workflow fast-processing` runs a video's phases 3 and 4 fast: each frame described
-from its image alone, five frames to a session, and one call writing the document, with no check and no review;
+folder, so a resume needs no flag. `--workflow direct-draft` (the Fast speed's) runs a video's phases 3 and 4 fast: the
+frames go straight into a draft document in chapters, eight to a call, with no frame notes, no check and no review, and
+one last call cuts the pictures and writes the title, summary and agenda; `--workflow fast-processing` is the earlier
+fast workflow: each frame described from its image alone, five frames to a session, and one call writing the document;
 `--workflow quality` (the default) runs them as above; kept in the run folder too. `--ingesting-profile takeaway` is the fast profile: one call after the transcript lists only
 what the recording settled and what it left open (a video given it runs on its sound alone).
 
@@ -536,7 +538,7 @@ workflow, each holding its own file for every step it sends:
 
 | Folder | What it holds |
 |---|---|
-| `video/` | the video workflow's files: frame notes, critique, second look, open questions, answers, writing, review, critique collection, clean up; the redundancy filter and the fast workflow's two files |
+| `video/` | the video workflow's files: frame notes, critique, second look, open questions, answers, writing, review, critique collection, clean up; the redundancy filter, the fast-processing workflow's two files and the direct-draft workflow's two files |
 | `audio/` | the audio workflow's files: speech into paragraphs, preparing the notes, takeaway, writing, clean up |
 | `pdf/` | the PDF workflow's files: page and figure notes, critique, second look, open questions, answers, writing, review, critique collection, clean up |
 | `_shared/` | the text a step's files share (each workflow's file includes it with `{{SHARED:<name>}}`), and the team's terms and the problem report guideline |

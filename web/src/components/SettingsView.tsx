@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { describeError, fetchJson, saveSetting } from "../api";
-import type { SettingOption, SettingRow } from "../api";
+import type { MissingProvider, SettingRow } from "../api";
+import { describeRunValue, isOwnerChange } from "../settingRunValue";
 import { usePersistentState } from "../viewState";
-import { Dropdown } from "./Dropdown";
 import Icon from "./Icon";
+import OptionMenu from "./OptionMenu";
 import { useSettingsProfiles } from "./RunChoices";
 import Spinner from "./Spinner";
+import WorkerSetsPanel, { WORKER_SET_KEYS } from "./WorkerSetsPanel";
 
 // A change typed but not saved yet: its row, and the editor's value as it stands (text, or a checkbox's state)
 export type SettingDraft = { row: SettingRow; raw: string | boolean };
@@ -73,73 +75,27 @@ function isJson(text: string): boolean {
 // A setting with no dot in its key stands in the "general" section, never in a section of its own
 const GENERAL = "general";
 
+// The worker sets' keys have no dot but are a subject of their own (the owner): they stand in their own section, first
+const WORKER_SETS = "workerSets";
+
 function readSectionName(row: SettingRow): string {
+  if (WORKER_SET_KEYS.has(row.key)) return WORKER_SETS;
   return row.key.includes(".") ? row.key.split(".")[0] : GENERAL;
 }
 
+// The sections in the order the rows give them, the worker sets' first
+function orderSections(names: string[]): string[] {
+  return names.includes(WORKER_SETS) ? [WORKER_SETS, ...names.filter((name) => name !== WORKER_SETS)] : names;
+}
+
 // A section whose key is a name, written as the name is written
-const SECTION_TITLES: Record<string, string> = { pdf: "PDF" };
+const SECTION_TITLES: Record<string, string> = { pdf: "PDF", [WORKER_SETS]: "Worker sets" };
 
 // "framesProcessing" as "Frames processing"
 function renderSectionTitle(section: string): string {
   if (SECTION_TITLES[section]) return SECTION_TITLES[section];
   const words = section.replace(/([A-Z])/g, " $1").toLowerCase();
   return words.charAt(0).toUpperCase() + words.slice(1);
-}
-
-// A choice of one value from a list, in the page's own menu: a button showing the chosen value's label (after `prefix`,
-// when given), opening the options under their headings, the chosen one ticked, and "Other…" at the end when `onOther`
-// is given. Used for every list of the Settings page, never the browser's own dropdown, whose open list the page cannot
-// style
-function OptionMenu({ name, prefix, options, value, address, onChoose, onOther }: {
-  name: string;
-  prefix?: string;
-  options: SettingOption[];
-  value: string;
-  // a model's spec: the address its model is called at; of the hosts serving the model, only this one's entry is ticked
-  address?: string;
-  onChoose: (value: string, option: SettingOption) => void;
-  onOther?: () => void;
-}) {
-  const isChosen = (option: SettingOption) => option.value === value
-    && (address === undefined || option.address === undefined || option.address === address);
-  const label = options.find((option) => option.value === value)?.label ?? (value || "(empty)");
-  return (
-    <Dropdown label={prefix ? <><small className="muted">{prefix}</small> {label}</> : label} variant="setting-choice"
-      popup="menu" panelClassName="wide" ariaLabel={`${name}: ${label}`}>
-      {(_close, closeAndRefocus) => (
-        <ul className="menu setting-menu" role="menu" aria-label={name}>
-          {options.map((option, index) => [
-            option.group && option.group !== options[index - 1]?.group && (
-              <li key={`group:${option.group}`} className="menu-heading menu-group" role="none">{option.group}</li>
-            ),
-            <li key={`${option.group}:${option.value}`} role="none">
-              <button role="menuitemradio" aria-checked={isChosen(option)} onClick={() => {
-                closeAndRefocus();
-                onChoose(option.value, option);
-              }}>
-                <span className="menu-text">
-                  <span>{option.label}</span>
-                  {option.hint && <small>{option.hint}</small>}
-                </span>
-                {isChosen(option) && <Icon name="check" />}
-              </button>
-            </li>,
-          ])}
-          {onOther && (
-            <li role="none">
-              <button role="menuitem" onClick={() => {
-                closeAndRefocus();
-                onOther();
-              }}>
-                <span className="menu-text"><span>Other…</span><small>type a value of your own</small></span>
-              </button>
-            </li>
-          )}
-        </ul>
-      )}
-    </Dropdown>
-  );
 }
 
 // The section whose entries are models, each under a name the person gives
@@ -173,7 +129,7 @@ function renderComment(comment: string) {
 // Every setting with its value in force, the file that set it and its comment. A change is a draft, marked, until the
 // top bar's Save settings writes them all; the next run reads them.
 export default function SettingsView({ profile, onProfileChange, drafts, onDraft, version, onMessage, onOpenSetup,
-  isSetupNeeded = false }: {
+  isSetupNeeded = false, missingProviders = [] }: {
   profile: string;
   onProfileChange: (profile: string) => void;
   drafts: SettingDrafts;
@@ -184,6 +140,8 @@ export default function SettingsView({ profile, onProfileChange, drafts, onDraft
   onOpenSetup?: () => void;
   // something a run needs is missing: the wizard's button says so, as the gear's mark did
   isSetupNeeded?: boolean;
+  // in a container there is no wizard: the models a run calls that have no reachable provider, named above the settings
+  missingProviders?: MissingProvider[];
 }) {
   const settingsProfiles = useSettingsProfiles();
   const profiles = settingsProfiles.profiles ?? [];
@@ -233,20 +191,20 @@ export default function SettingsView({ profile, onProfileChange, drafts, onDraft
       raw: JSON.stringify(copyModelSettings(rows ?? [], newModel.source), null, 2) });
     setNewModel(null);
   };
-  // A model spec's sibling row holding the model's address (`models.<name>.baseUrl`), and the address in force: its draft
-  // when one is typed (empty meaning the provider's own), else the one the server says the model is called at
-  const findAddressRow = (specRow: SettingRow) => (rows ?? []).find((candidate) => candidate.path?.length === 3
-    && candidate.path[0] === specRow.path?.[0] && candidate.path[1] === specRow.path?.[1] && candidate.path[2] === "baseUrl");
-  const readModelAddress = (specRow: SettingRow): string | undefined => {
-    if (specRow.chosen_address === undefined) return undefined;
-    const addressRow = findAddressRow(specRow);
-    const draft = addressRow ? drafts[addressRow.key] : undefined;
-    if (!draft) return specRow.chosen_address;
-    return String(draft.raw) || specRow.default_address;
+  // A model spec's sibling row naming the model's host (`models.<name>.host`), and the host in force: its draft when one
+  // is chosen (empty meaning the host named like the provider), else the one the server says the model runs on
+  const findHostRow = (specRow: SettingRow) => (rows ?? []).find((candidate) => candidate.path?.length === 3
+    && candidate.path[0] === specRow.path?.[0] && candidate.path[1] === specRow.path?.[1] && candidate.path[2] === "host");
+  const readModelHost = (specRow: SettingRow): string | undefined => {
+    if (specRow.chosen_host === undefined) return undefined;
+    const hostRow = findHostRow(specRow);
+    const draft = hostRow ? drafts[hostRow.key] : undefined;
+    if (!draft) return specRow.chosen_host;
+    return String(draft.raw) || specRow.default_host;
   };
   const setTyped = (key: string, isTyped: boolean) =>
     setTypedKeys((current) => isTyped ? [...new Set([...current, key])] : current.filter((name) => name !== key));
-  const sections = [...new Set(shown.map(readSectionName))];
+  const sections = orderSections([...new Set(shown.map(readSectionName))]);
 
   return (
     <section className="settings-view">
@@ -269,11 +227,22 @@ export default function SettingsView({ profile, onProfileChange, drafts, onDraft
             // unsaved changes are lost on a switch: ask first, and switch at once when there are none (the owner)
             if (draftCount > 0) setPendingProfile(next); else onProfileChange(next);
           }} />
-        <input type="search" className="grow" aria-label="Find" autoFocus value={filter}
+        <input type="search" className="grow" aria-label="Find" value={filter}
           placeholder="Find a key or a word of its comment" onChange={(event) => setFilter(event.target.value)} />
       </header>
       <p className="muted">A change is marked until you press Save settings in the top bar. A run already going keeps its values;
         the next run reads the files at its start.</p>
+      {missingProviders.length > 0 && (
+        <div className="settings-switch-warning" role="alert">
+          <p><strong>A model provider a run needs is not set up.</strong> A run is refused until each model below has one:
+            choose its host and model here, then press Save settings.</p>
+          <ul className="settings-missing-providers">
+            {missingProviders.map((provider) => (
+              <li key={provider.name}><strong>{provider.name}</strong> (called by {provider.used_by.join(", ")}): {provider.reason}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       {pendingProfile !== null && (
         <div className="settings-switch-warning" role="alert">
           <p>You have {draftCount === 1 ? "1 unsaved change" : `${draftCount} unsaved changes`} to {describeFile(profile)}.
@@ -334,7 +303,8 @@ export default function SettingsView({ profile, onProfileChange, drafts, onDraft
                 {takenNames.has(newModelName) && <small className="error">a model has this name</small>}
               </div>
             ))}
-            {sectionRows.map((row) => {
+            {section === WORKER_SETS && <WorkerSetsPanel rows={rows ?? []} drafts={drafts} onEdit={edit} />}
+            {section !== WORKER_SETS && sectionRows.map((row) => {
               const raw = drafts[row.key]?.raw ?? readEditorValue(row);
               const optionValues = (row.choice_options ?? []).map((option) => option.value);
               const isTyped = Boolean(row.is_open_choice) && (typedKeys.includes(row.key) || !optionValues.includes(String(raw)));
@@ -343,9 +313,14 @@ export default function SettingsView({ profile, onProfileChange, drafts, onDraft
                   <div className="setting-text">
                     <div className="setting-name">
                       <code>{row.key.split(".").slice(1).join(".") || row.key}</code>
-                      <span className={`pill${profile && row.source === profile ? " running" : ""}`}
-                        title="the file that set this value">{row.source === profile && profile ? `profile ${row.source}` : row.source}</span>
-                      {drafts[row.key] && <span className="pill warn">changed</span>}
+                      {/* a built-in or shipped default value shows no mark; only a value the owner's own file or a profile
+                          changes does, and a change not saved yet is its own mark */}
+                      {drafts[row.key]
+                        ? <span className="pill warn" title="typed here, not saved yet">unsaved</span>
+                        : isOwnerChange(row.source) && (
+                          <span className={`pill${profile && row.source === profile ? " running" : ""}`}
+                            title={profile && row.source === profile ? `set by profile ${profile}` : "set in your own settings file"}>changed</span>
+                        )}
                     </div>
                     {row.comment && <p className="muted setting-comment">{renderComment(row.comment)}</p>}
                   </div>
@@ -355,15 +330,15 @@ export default function SettingsView({ profile, onProfileChange, drafts, onDraft
                     ) : row.choice_options ? (
                       <>
                         <OptionMenu name={row.key} options={row.choice_options} value={String(raw)}
-                          address={readModelAddress(row)}
+                          host={readModelHost(row)}
                           onOther={row.is_open_choice ? () => setTyped(row.key, true) : undefined}
                           onChoose={(value, option) => {
                             setTyped(row.key, false);
                             edit(row, value);
-                            // a model chosen under another host is called at that host: its address moves with it
-                            const addressRow = findAddressRow(row);
-                            if (option.address === undefined || !addressRow || option.address === readModelAddress(row)) return;
-                            edit(addressRow, option.address === row.default_address ? "" : option.address);
+                            // a model chosen under another host runs on that host: the model's host moves with it
+                            const hostRow = findHostRow(row);
+                            if (option.host === undefined || !hostRow || option.host === readModelHost(row)) return;
+                            edit(hostRow, option.host === row.default_host ? "" : option.host);
                           }} />
                         {isTyped && (
                           <input type="text" aria-label={`${row.key}, your own value`} autoFocus value={String(raw)}
@@ -375,13 +350,13 @@ export default function SettingsView({ profile, onProfileChange, drafts, onDraft
                         options={row.choices.map((choice) => ({ value: choice, label: choice, hint: "", group: "" }))} />
                     ) : row.kind === "long-text" ? (
                       <textarea aria-label={row.key} value={String(raw ?? "")} rows={4}
-                        placeholder="empty: none" onChange={(event) => edit(row, event.target.value)} />
+                        placeholder={describeRunValue(row)} onChange={(event) => edit(row, event.target.value)} />
                     ) : row.kind === "json" ? (
-                      <textarea aria-label={row.key} value={String(raw)} spellCheck={false}
+                      <textarea aria-label={row.key} value={String(raw)} spellCheck={false} wrap="off"
                         rows={Math.min(16, String(raw).split("\n").length)} onChange={(event) => edit(row, event.target.value)} />
                     ) : (
                       <input type={row.kind === "number" ? "number" : "text"} aria-label={row.key} value={String(raw)}
-                        placeholder={row.value === null ? "not set: uses its default" : undefined}
+                        placeholder={row.value === null || row.value === "" ? describeRunValue(row) : undefined}
                         onChange={(event) => edit(row, event.target.value)} />
                     )}
                     {row.kind === "json" && drafts[row.key] && !isJson(String(raw)) && (

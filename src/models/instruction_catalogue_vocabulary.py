@@ -20,7 +20,8 @@ _TAKEAWAY = "takeaway"                      # the audio workflow's fast profile,
 _OTHER_AUDIO_PROFILES = "ingesting-profiles"  # every other ingesting profile of an audio recording
 # Each workflow's profiles or modes, in the order the run form lists them, with the names it shows
 WORKFLOW_VARIANTS = {
-    VIDEO: {video_workflow_vocabulary.QUALITY: "quality", video_workflow_vocabulary.FAST_PROCESSING: "fast processing"},
+    VIDEO: {video_workflow_vocabulary.QUALITY: "quality", video_workflow_vocabulary.DIRECT_DRAFT: "direct draft",
+            video_workflow_vocabulary.FAST_PROCESSING: "fast processing"},
     AUDIO: {_OTHER_AUDIO_PROFILES: "ingesting profiles", _TAKEAWAY: "takeaway"},
     PDF: {output_contract.PDF_MODE_PAGES: "pages as images", output_contract.PDF_MODE_TEXT: "text only",
           output_contract.PDF_MODE_MARKDOWN_CONVERSION: "markdown conversion"},
@@ -41,7 +42,8 @@ STEP_TITLES = {
     "fast_frame_note": "Frame description", "takeaway": "Takeaway", "write": "Writing conversation",
     "parts": "Agenda", "draft_headings": "Draft headings", "table_of_contents": "Table of contents",
     "section": "Chapter text", "summary": "Final title, summary and agenda", "contents": "Title", "outline": "Outline",
-    "fast_document": "Document", "review": "Review", "critique_collection": "Critique collection",
+    "fast_document": "Document", "direct_draft_batch": "Draft batch",
+    "direct_draft_outline": "Draft title, summary and pictures", "review": "Review", "critique_collection": "Critique collection",
     "document_cleanup": "Clean up or rewrite", "document_knowledge": "Knowledge", "document_chat": "Chat on the document",
 }
 _VIDEO_QUALITY = {VIDEO: (video_workflow_vocabulary.QUALITY,)}
@@ -63,6 +65,8 @@ STEP_SENDERS = {
     "write": _WRITING, "parts": _WRITING, "draft_headings": _WRITING, "table_of_contents": _WRITING,
     "section": _WRITING, "summary": _WRITING, "contents": _WRITING, "outline": _WRITING,
     "fast_document": {VIDEO: (video_workflow_vocabulary.FAST_PROCESSING,)},
+    "direct_draft_batch": {VIDEO: (video_workflow_vocabulary.DIRECT_DRAFT,)},
+    "direct_draft_outline": {VIDEO: (video_workflow_vocabulary.DIRECT_DRAFT,)},
     "review": {**_VIDEO_QUALITY, PDF: (output_contract.PDF_MODE_PAGES,)},
     "critique_collection": {**_VIDEO_QUALITY, PDF: (output_contract.PDF_MODE_PAGES,)},
     "document_cleanup": {workflow: tuple(variants) for workflow, variants in WORKFLOW_VARIANTS.items()},

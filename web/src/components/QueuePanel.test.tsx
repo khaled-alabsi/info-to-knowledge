@@ -71,10 +71,10 @@ describe("QueuePanel", () => {
       makeJob({ job_id: "gpu-1", lane: "gpu-box" }, { video: "/work/inbox/C.mp4", output_root: "/work/output/C" }),
       makeJob({ job_id: "mac-2", lane: "Mac" }, { video: "/work/inbox/D.mp4", output_root: "/work/output/D" }),
     ]);
-    const pc = screen.getByRole("region", { name: "worker set gpu-box" });
-    const mac = screen.getByRole("region", { name: "worker set Mac" });
-    expect(within(pc).getByRole("heading")).toHaveTextContent("Worker set gpu-box · 1 running · 1 waiting");
-    expect(within(mac).getByRole("heading")).toHaveTextContent("Worker set Mac · 0 running · 2 waiting");
+    const pc = screen.getByRole("region", { name: "machine gpu-box" });
+    const mac = screen.getByRole("region", { name: "machine Mac" });
+    expect(within(pc).getByRole("heading")).toHaveTextContent(/^gpu-box · 1 running · 1 waiting/);
+    expect(within(mac).getByRole("heading")).toHaveTextContent(/^Mac · 0 running · 2 waiting/);
     expect(within(pc).getAllByRole("listitem").map((row) => row.querySelector(".row-name")?.textContent)).toEqual(["A", "C"]);
     const macRows = within(mac).getAllByRole("listitem");
     expect(macRows.map((row) => row.querySelector(".position")?.textContent)).toEqual(["1", "2"]);

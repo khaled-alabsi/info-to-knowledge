@@ -72,7 +72,7 @@ def read_decisions(frames_dir: Path,
     """The classifier's output for every image of `frames_dir` under its `task`: for `tags`, `{"peopleThreshold",
     "cuts", "frames": [{"frame", "tag", "peopleScore", "boardScore", "isPlainText"}]}` with the tag `people`, `text` or `other`. With
     `vectors_path` (tags only), each frame's SigLIP vectors are saved there too, for the similarity recheck. When
-    `providers.embeddings.url` is set, the model server gives the frames' vectors (`frame_embedding_service`) and the
+    `providers.embeddings.host` is set, the model server gives the frames' vectors (`frame_embedding_service`) and the
     classifier loads no image model: it reads them from a file the program hands it."""
 
     with tempfile.TemporaryDirectory() as scratch:

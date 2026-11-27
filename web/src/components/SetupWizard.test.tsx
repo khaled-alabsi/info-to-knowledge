@@ -16,6 +16,8 @@ function buildRuntime(key: string, kind: SetupRuntime["kind"], facts: Partial<Se
 
 function buildCheck(facts: Partial<SetupCheck>): SetupCheck {
   return {
+    is_container: false,
+    missing_providers: [],
     has_models: true,
     runtimes: [
       buildRuntime("lmstudio", "host", { is_needed: true, is_installed: false }),

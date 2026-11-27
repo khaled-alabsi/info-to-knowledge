@@ -23,9 +23,9 @@ import config
 from models import setting_choice_vocabulary
 from models.operation_result import OperationResult
 from models.ui_errors import SettingPathError, SettingsFileError
-from services import host_model_service
+from services import host_model_service, setting_run_value_service
 
-__all__ = ["list_settings", "save_setting", "read_next_job_settings", "set_host_lister"]
+__all__ = ["list_settings", "save_setting", "remove_setting", "read_next_job_settings", "set_host_lister"]
 
 # Sections with entries named by the person (`models.frame`, `models.document`), shown per entry
 _KEYED_SECTIONS = ("models",)
@@ -35,10 +35,8 @@ _PHASE_MODELS_KEY = "phaseModels"
 _LONG_TEXT_LENGTH = 1_000
 # The providers whose host lists its models, as a spec names them before its colon
 _LISTED_PROVIDERS = ("lmstudio", "ollama", "openai-compatible")
-# How each provider's host is named over the models it serves, in the list of a model's spec
-_PROVIDER_TITLES = {"lmstudio": "LM Studio", "ollama": "Ollama", "openai-compatible": "OpenAI-compatible host"}
 # The lists a person may go past by typing a value of their own: a host not listed yet, a model not downloaded yet
-_OPEN_CHOICE_SOURCES = (setting_choice_vocabulary.HOST_MODELS, setting_choice_vocabulary.BASE_URLS)
+_OPEN_CHOICE_SOURCES = (setting_choice_vocabulary.HOST_MODELS, setting_choice_vocabulary.HOST_NAMES)
 
 # What lists a host's models: a module-level name with a setter, since the suite runs with no host
 HOST_LISTER: Callable[[str, str], list[str] | None] = host_model_service.list_host_models
@@ -140,56 +138,38 @@ def _list_profile_files() -> list[tuple[str, dict]]:
     return [(label, config.read_settings_file(path)) for label, path in files]
 
 
-def _list_base_url_options(settings: config.Settings,
-                           files: list[tuple[str, dict]]) -> list[dict]:
-    """Each host address the settings in force or any settings file names, its hint the files that name it."""
+def _list_host_name_options(settings: config.Settings) -> list[dict]:
+    """Each entry of `hosts`, named by its name with its address under it."""
 
-    named = {settings.lmstudio_base_url: ["LM Studio on this machine"], settings.ollama_base_url: ["Ollama on this machine"]}
-    for label, values in files:
-        for entry in (values.get("models") or {}).values():
-            if isinstance(entry, dict) and entry.get("baseUrl"):
-                named.setdefault(entry["baseUrl"], [])
-                if label not in named[entry["baseUrl"]]:
-                    named[entry["baseUrl"]].append(label)
-
-    return [{"value": url, "label": url, "hint": ", ".join(names), "group": ""} for url, names in named.items()]
+    return [{"value": name, "label": name, "hint": host.url, "group": ""} for name, host in sorted(settings.hosts.items())]
 
 
-def _list_host_model_options(settings: config.Settings,
-                             files: list[tuple[str, dict]]) -> list[dict]:
-    """Each model a known host serves, as a spec (`lmstudio:<id>`) labelled by its id under its host's heading, every
-    host asked at once so one that does not answer costs its timeout once; a host that does not answer has no heading."""
+def _list_host_model_options(settings: config.Settings) -> list[dict]:
+    """Each model an entry of `hosts` serves, as a spec (`lmstudio:<id>`, `openai-compatible:<id>` for a host named
+    after no provider) labelled by its id under its host's heading, every host asked at once so one that does not answer
+    costs its timeout once; a host that does not answer has no heading."""
 
-    hosts = {("lmstudio", settings.lmstudio_base_url), ("ollama", settings.ollama_base_url)}
-    for _, values in files:
-        for name, entry in (values.get("models") or {}).items():
-            if not isinstance(entry, dict) or not entry.get("baseUrl"):
-                continue
-            # a profile may change only a model's address, as a worker set does: its provider is the spec in force
-            spec = entry.get("spec") or settings.resolve_model(name).spec
-            provider = str(spec).partition(":")[0]
-            if provider in _LISTED_PROVIDERS:
-                hosts.add((provider, entry["baseUrl"]))
-    ordered_hosts = sorted(hosts)
-    with ThreadPoolExecutor(max_workers=len(ordered_hosts)) as pool:
-        host_models = list(pool.map(lambda host: HOST_LISTER(*host), ordered_hosts))
+    ordered_hosts = sorted(settings.hosts.items())
+    providers = [name if name in _LISTED_PROVIDERS else "openai-compatible" for name, _ in ordered_hosts]
+    with ThreadPoolExecutor(max_workers=max(len(ordered_hosts), 1)) as pool:
+        host_models = list(pool.map(lambda pair: HOST_LISTER(pair[0], pair[1][1].url), zip(providers, ordered_hosts)))
 
     return [{"value": f"{provider}:{model_id}", "label": model_id, "hint": "",
-             "group": f"{_PROVIDER_TITLES.get(provider, provider)} at {base_url}", "address": base_url}
-            for (provider, base_url), model_ids in zip(ordered_hosts, host_models) for model_id in sorted(model_ids or [])]
+             "group": f"{name} at {host.url}", "host": name}
+            for provider, (name, host), model_ids in zip(providers, ordered_hosts, host_models)
+            for model_id in sorted(model_ids or [])]
 
 
 def _build_choice_lists(settings: config.Settings) -> dict[str, list[dict]]:
     """For each place a setting's list comes from (`setting_choice_vocabulary`), its options: a value, the label it is
     shown by, a hint under the label, and the heading it stands under."""
 
-    files = _list_profile_files()
     model_name_options = [{"value": name, "label": name, "hint": model.spec, "group": ""}
                           for name, model in sorted(settings.models.items())]
 
     return {setting_choice_vocabulary.MODEL_NAMES: model_name_options,
-            setting_choice_vocabulary.BASE_URLS: _list_base_url_options(settings, files),
-            setting_choice_vocabulary.HOST_MODELS: _list_host_model_options(settings, files)}
+            setting_choice_vocabulary.HOST_NAMES: _list_host_name_options(settings),
+            setting_choice_vocabulary.HOST_MODELS: _list_host_model_options(settings)}
 
 
 def _describe_choices(field: Any,
@@ -265,9 +245,9 @@ def _walk_model(model: type[BaseModel],
 
 def _add_model_addresses(rows: list[dict],
                          settings: config.Settings) -> list[dict]:
-    """Each model spec row with the address its model is called at (`chosen_address`) and its provider's own address
-    (`default_address`, what an empty `baseUrl` means): one model is served by several hosts, so the page ticks only the
-    entry under the host in use, and choosing one under another host points the model's address at that host."""
+    """Each model spec row with the host its model runs on (`chosen_host`) and the host named like its provider
+    (`default_host`, what an empty `host` means): one model is served by several hosts, so the page ticks only the entry
+    under the host in use, and choosing one under another host sets the model's `host` to it."""
 
     for row in rows:
         path = row.get("path") or []
@@ -275,9 +255,9 @@ def _add_model_addresses(rows: list[dict],
             continue
         model = settings.resolve_model(path[1])
         provider = model.spec.partition(":")[0]
-        default_address = {"lmstudio": settings.lmstudio_base_url, "ollama": settings.ollama_base_url}.get(provider, "")
-        row["default_address"] = default_address
-        row["chosen_address"] = model.base_url or default_address
+        default_host = provider if provider in settings.hosts else ""
+        row["default_host"] = default_host
+        row["chosen_host"] = model.host or default_host
 
     return rows
 
@@ -318,6 +298,72 @@ def _set_value(values: dict,
     values[key_parts[-1]] = new_value
 
 
+_MISSING = object()
+
+
+def _read_path(values: Any,
+               key_parts: list[str]) -> Any:
+    for part in key_parts:
+        if not isinstance(values, dict) or part not in values:
+            return _MISSING
+        values = values[part]
+    return values
+
+
+def _drop_value(values: dict,
+                key_parts: list[str]) -> None:
+    """The value at `key_parts` taken out, and every group it leaves holding nothing but notes with it"""
+
+    parents = [values]
+    for part in key_parts[:-1]:
+        child = parents[-1].get(part)
+        if not isinstance(child, dict):
+            return
+        parents.append(child)
+    parents[-1].pop(key_parts[-1], None)
+    for depth in range(len(key_parts) - 1, 0, -1):
+        if any(not name.startswith("_") for name in parents[depth]):
+            break
+        parents[depth - 1].pop(key_parts[depth - 1], None)
+
+
+def _drop_values_equal_to(values: dict,
+                          default: dict,
+                          prefix: list[str] | None = None) -> int:
+    """Every value of `values` the same as `default`'s at its place taken out (notes kept); the count taken out"""
+
+    prefix = prefix or []
+    dropped = 0
+    for name in list(values):
+        if name.startswith("_") or name not in values:
+            continue
+        value, default_value = values[name], _read_path(default, [*prefix, name])
+        if isinstance(value, dict) and isinstance(default_value, dict):
+            dropped += _drop_values_equal_to(value, default, [*prefix, name])
+            if not any(not key.startswith("_") for key in value):
+                values.pop(name)
+        elif value == default_value:
+            values.pop(name)
+            dropped += 1
+    return dropped
+
+
+def trim_local_settings() -> OperationResult:
+    """The owner's own settings file left holding only what differs from the shipped default settings: a value the same
+    as the default file's is taken out, as it changes nothing (the owner: one place per value, and a set holds only what
+    it overrides)."""
+
+    try:
+        local = _read_raw_file(config.LOCAL_CONFIG_FILE)
+        default = config.drop_notes(_read_raw_file(config.DEFAULT_CONFIG_FILE))
+    except SettingsFileError as error:
+        return OperationResult(2, [str(error)])
+    dropped = _drop_values_equal_to(local, default)
+    if dropped:
+        config.LOCAL_CONFIG_FILE.write_text(json.dumps(local, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    return OperationResult(0, [f"{dropped} values the same as the default settings taken out of {config.LOCAL_CONFIG_FILE.name}"])
+
+
 def _read_raw_file(path: Path) -> dict:
     """A settings file as written, notes included; {} for a file not there yet. A file that does not read as a JSON
     object raises SettingsFileError, so a save never writes over what it holds."""
@@ -356,7 +402,9 @@ def list_settings(profile: str = "") -> list[dict]:
 
     rows = _walk_model(config.Settings, settings, [], layers, _build_choice_lists(settings))
 
-    return _add_model_addresses(rows, settings)
+    rows = _add_model_addresses(rows, settings)
+
+    return setting_run_value_service.add_run_values(rows=rows, settings=settings)
 
 
 def save_setting(key: str,
@@ -372,7 +420,9 @@ def save_setting(key: str,
         _refuse_unknown_profile(profile)
     except SettingsFileError as error:
         return OperationResult(2, [str(error)])
-    targets = [config.build_profile_path(profile)] if profile else [config.DEFAULT_CONFIG_FILE, config.LOCAL_CONFIG_FILE]
+    # A change to the default settings goes into the owner's own file alone, never the shipped one: the shipped file is
+    # the public default, and writing both made the owner's file a second full copy of it
+    targets = [config.build_profile_path(profile)] if profile else [config.LOCAL_CONFIG_FILE]
 
     # STEP 1: the settings a run would read with the change, built before any file is written. A `_` key is a note,
     # which the schema check never sees, so it is refused here
@@ -383,6 +433,9 @@ def save_setting(key: str,
         changed = {target: _read_raw_file(target) for target in targets}
         for values in changed.values():
             _set_value(values, key_parts, new_value)
+        # a value set back to the shipped default leaves the owner's file, which holds only what differs
+        if not profile and _read_path(config.drop_notes(_read_raw_file(config.DEFAULT_CONFIG_FILE)), key_parts) == new_value:
+            _drop_value(changed[config.LOCAL_CONFIG_FILE], key_parts)
     except SettingPathError as error:
         return OperationResult(2, [f"{key} is not a setting: {error.part} holds a value"])
     except SettingsFileError as error:
@@ -401,3 +454,41 @@ def save_setting(key: str,
 
     return OperationResult(0, [f"{key} = {json.dumps(new_value)} saved in {', '.join(target.name for target in targets)}; "
                                f"the next run reads it"])
+
+
+def remove_setting(key_parts: list[str],
+                   profile: str = "") -> OperationResult:
+    """The entry or value at `key_parts` taken out of the owner's own settings file, or out of `profile`'s file; the
+    entry a model, a worker set or a host is. An entry the shipped default settings hold cannot be taken out of the
+    owner's file (the shipped file is never written), and nothing is written when the settings would not load without
+    it."""
+
+    key = ".".join(key_parts)
+    try:
+        _refuse_unknown_profile(profile)
+    except SettingsFileError as error:
+        return OperationResult(2, [str(error)])
+    note = next((part for part in key_parts if part.startswith("_")), None)
+    if note is not None:
+        return OperationResult(2, [f"{key} is not a setting: {note} is a note"])
+    target = config.build_profile_path(profile) if profile else config.LOCAL_CONFIG_FILE
+    try:
+        values = _read_raw_file(target)
+        shipped = config.drop_notes(_read_raw_file(config.DEFAULT_CONFIG_FILE))
+    except SettingsFileError as error:
+        return OperationResult(2, [str(error)])
+    if not profile and isinstance(_read_path(shipped, key_parts), dict):
+        return OperationResult(2, [f"{key} is part of the shipped settings: it can be changed, not removed"])
+    if _read_path(values, key_parts) is _MISSING:
+        return OperationResult(2, [f"{key} is not in {target.name}: nothing to remove"])
+    _drop_value(values, key_parts)
+    layers = [(label, file, config.drop_notes(values) if file == target else read_values)
+              for label, file, read_values in _build_layers(profile)]
+    try:
+        config.Settings(**_merge_layers(layers))
+    except ValidationError as error:
+        return OperationResult(2, [f"{key} is not removed: the settings would not load without it ("
+                                   + "; ".join(issue["msg"] for issue in error.errors()) + ")"])
+    target.write_text(json.dumps(values, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+    return OperationResult(0, [f"{key} removed from {target.name}; the next run reads it"])

@@ -28,6 +28,7 @@ from cli import frame_drop_command
 from cli import reset_command
 from cli import run_command
 from cli import serve_command
+from cli import serve_models_command
 from cli import setup_commands
 from cli import branch_command
 from cli import convert_command
@@ -69,7 +70,8 @@ HANDLERS = {
     "tidy-cuts": tidy_command.cmd_tidy_cuts,                          # the cuts no figure uses, moved into .trash/cuts
     "blocks": blocks_command.cmd_blocks,                              # how often each step of phases 4 and 5 blocked
     "serve": serve_command.cmd_serve,                                 # the web page, its API and the job queue
-    "tui": tui_command.cmd_tui,                                       # the terminal UI, talking to that server
+    "serve-models": serve_models_command.cmd_serve_models,            # the decision model served natively, for providers.decision.host
+    "tui": tui_command.cmd_tui,                                      # the terminal UI, talking to that server
 }
 """Command name -> handler. Each handler is given the parsed arguments and returns an exit code."""
 
@@ -175,6 +177,9 @@ def build_parser() -> argparse.ArgumentParser:
     serve = subparsers.add_parser("serve", parents=[common],
                                   help="serve the web page: upload, run, resume, logs and progress")
     serve_command.add_serve_arguments(serve)
+    serve_models = subparsers.add_parser("serve-models", parents=[common],
+                                         help="serve the decision model d1-2B natively, for providers.decision.host")
+    serve_models_command.add_serve_models_arguments(serve_models)
     tui = subparsers.add_parser("tui", parents=[common],
                                 help="open the terminal UI: clicks and slash commands over the same server")
     tui_command.add_tui_arguments(tui)

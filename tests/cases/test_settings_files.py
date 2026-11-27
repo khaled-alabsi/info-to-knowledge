@@ -168,30 +168,54 @@ def test_the_settings_list_names_each_value_its_file_and_its_comment():
                   str(rows["review.isOn"]))
 
 
-def test_a_setting_is_saved_in_both_default_settings_files_keeping_their_notes_and_a_bad_value_is_not_written():
+def test_a_setting_is_saved_in_the_owners_file_alone_and_a_value_set_back_to_the_default_leaves_it_defect():
+    # Every save wrote both the shipped default file and the owner's own, so the owner's file became a second full copy
+    # (141 of 189 values the same) and settings "made no sense". A save now writes the owner's file alone, and only what differs
     folder = Path(tempfile.mkdtemp())
     default = {"_comment": ["the default settings"], "budgets": {"_attempts": "a note", "maxAttempts": 3}}
     (folder / "playbook.default.json").write_text(json.dumps(default, indent=2) + "\n", encoding="utf-8")
-    (folder / "playbook.local.json").write_text(json.dumps(default, indent=2) + "\n", encoding="utf-8")
+    (folder / "playbook.local.json").write_text(json.dumps({"_comment": ["mine"]}, indent=2) + "\n", encoding="utf-8")
     (folder / "playbook.strict.json").write_text(json.dumps({"budgets": {"maxAttempts": 1}}), encoding="utf-8")
     previous = _swap_settings_files(folder)
     try:
         saved = settings_service.save_setting("budgets.maxAttempts", 5)
+        local_after_save = json.loads((folder / "playbook.local.json").read_text(encoding="utf-8"))
         refused = settings_service.save_setting("budgets.maxAttempts", "many")
         unknown = settings_service.save_setting("budgets.noSuchKey", 1)
         in_profile = settings_service.save_setting("budgets.maxAttempts", 2, "strict")
+        back = settings_service.save_setting("budgets.maxAttempts", 3)
     finally:
         config.DEFAULT_CONFIG_FILE, config.LOCAL_CONFIG_FILE, config.PLAYBOOK_ROOT = previous
-    files = [json.loads((folder / name).read_text(encoding="utf-8")) for name in ("playbook.default.json", "playbook.local.json")]
-    harness.check("saved in both default settings files, their notes kept",
-                  saved.exit_code == 0 and all(values["budgets"]["maxAttempts"] == 5 and values["budgets"]["_attempts"] == "a note"
-                                               and values["_comment"] == ["the default settings"] for values in files),
-                  str(files))
+    shipped, local = [json.loads((folder / name).read_text(encoding="utf-8")) for name in ("playbook.default.json", "playbook.local.json")]
+    harness.check("saved in the owner's file alone, the shipped file untouched",
+                  saved.exit_code == 0 and local_after_save["budgets"]["maxAttempts"] == 5 and shipped == default,
+                  str([local_after_save, shipped]))
+    harness.check("a value set back to the shipped default leaves the owner's file, its notes kept",
+                  back.exit_code == 0 and local == {"_comment": ["mine"]}, str(local))
     harness.check("a value the schema refuses is not written, and the reason is said",
                   refused.exit_code == 2 and "refused" in refused.output and unknown.exit_code == 2, refused.output)
     harness.check("a profile's change goes into its own file only",
-                  in_profile.exit_code == 0 and json.loads((folder / "playbook.strict.json").read_text())["budgets"]["maxAttempts"] == 2
-                  and files[0]["budgets"]["maxAttempts"] == 5, in_profile.output)
+                  in_profile.exit_code == 0 and json.loads((folder / "playbook.strict.json").read_text())["budgets"]["maxAttempts"] == 2,
+                  in_profile.output)
+
+
+def test_the_owners_file_is_trimmed_to_the_values_that_differ_from_the_shipped_defaults_defect():
+    # The owner's file repeated most of the shipped defaults, so a value could not be told as the owner's own or the
+    # default's. The trim takes out every value the same as the shipped one, keeping the notes and the values that differ
+    folder = Path(tempfile.mkdtemp())
+    default = {"budgets": {"maxAttempts": 3, "cutsPerFrame": 2}, "review": {"isOn": True}}
+    local = {"_comment": ["mine"], "budgets": {"maxAttempts": 3, "cutsPerFrame": 4}, "review": {"_note": "x", "isOn": True}}
+    (folder / "playbook.default.json").write_text(json.dumps(default), encoding="utf-8")
+    (folder / "playbook.local.json").write_text(json.dumps(local), encoding="utf-8")
+    previous = _swap_settings_files(folder)
+    try:
+        result = settings_service.trim_local_settings()
+    finally:
+        config.DEFAULT_CONFIG_FILE, config.LOCAL_CONFIG_FILE, config.PLAYBOOK_ROOT = previous
+    trimmed = json.loads((folder / "playbook.local.json").read_text(encoding="utf-8"))
+    harness.check("only the differing value and the notes stay",
+                  trimmed == {"_comment": ["mine"], "budgets": {"cutsPerFrame": 4}} and result.output.startswith("2 values"),
+                  str([trimmed, result.output]))
 
 
 def test_a_run_is_told_its_settings_changed_only_when_a_file_it_reads_changed_after_it_read_them():
@@ -350,25 +374,26 @@ def _list_models_of_made_hosts(provider: str,
     """Two made hosts: this machine's LM Studio serves two models, the other machine's one; Ollama does not answer."""
 
     hosts = {("lmstudio", "http://localhost:1234/v1"): ["big-model", "small-model"],
-             ("lmstudio", "http://other-mac:1234/v1"): ["big-model"]}
+             ("openai-compatible", "http://other-mac:1234/v1"): ["big-model"]}
 
     return hosts.get((provider, base_url))
 
 
 def _write_two_connection_files(folder: Path) -> None:
-    """Default settings with two model entries, one named with a dot, and a profile pointing one of them at another
-    machine, as a worker set does."""
+    """Default settings with the two shipped hosts and two model entries, one named with a dot, and a profile adding a
+    host on another machine and pointing one of the models at it, as a worker set does."""
 
+    hosts = {"lmstudio": {"url": "http://localhost:1234/v1"}, "ollama": {"url": "http://localhost:11434"}}
     models = {"frame": {"spec": "lmstudio:big-model"}, "small.v2": {"spec": "lmstudio:small-model"}}
     for name in ("playbook.default.json", "playbook.local.json"):
-        (folder / name).write_text(json.dumps({"models": models}), encoding="utf-8")
-    (folder / "playbook.other.json").write_text(json.dumps({"models": {"frame": {"baseUrl": "http://other-mac:1234/v1"}}}),
-                                                encoding="utf-8")
+        (folder / name).write_text(json.dumps({"hosts": hosts, "models": models}), encoding="utf-8")
+    other_values = {"hosts": {"other-mac": {"url": "http://other-mac:1234/v1"}}, "models": {"frame": {"host": "other-mac"}}}
+    (folder / "playbook.other.json").write_text(json.dumps(other_values), encoding="utf-8")
 
 
 def test_every_model_selection_is_offered_as_a_list_with_its_connections():
     """A setting naming a model lists the configured models, a model's spec the models the
-    known hosts serve, a model's address every host the files name, and each phase gets its own row."""
+    hosts serve, a model's host every entry of `hosts`, and each phase gets its own row."""
 
     folder = Path(tempfile.mkdtemp())
     _write_two_connection_files(folder)
@@ -380,14 +405,14 @@ def test_every_model_selection_is_offered_as_a_list_with_its_connections():
     finally:
         config.DEFAULT_CONFIG_FILE, config.LOCAL_CONFIG_FILE, config.PLAYBOOK_ROOT = previous
         settings_service.set_host_lister(host_model_service.list_host_models)
-    harness.check("a spec row names the address its model is called at, so only that host's entry is ticked",
-                  (rows["models.frame.spec"]["chosen_address"], other["models.frame.spec"]["chosen_address"],
-                   other["models.frame.spec"]["default_address"])
-                  == ("http://localhost:1234/v1", "http://other-mac:1234/v1", "http://localhost:1234/v1"),
+    harness.check("a spec row names the host its model runs on, so only that host's entry is ticked",
+                  (rows["models.frame.spec"]["chosen_host"], other["models.frame.spec"]["chosen_host"],
+                   other["models.frame.spec"]["default_host"])
+                  == ("lmstudio", "other-mac", "lmstudio"),
                   str(other["models.frame.spec"]))
-    harness.check("each host's model names its host's address",
-                  [option["address"] for option in other["models.frame.spec"]["choice_options"]]
-                  == ["http://localhost:1234/v1", "http://localhost:1234/v1", "http://other-mac:1234/v1"],
+    harness.check("each host's model names its host",
+                  [option.get("host") for option in other["models.frame.spec"]["choice_options"]]
+                  == ["lmstudio", "lmstudio", "other-mac"],
                   str(other["models.frame.spec"]["choice_options"]))
     redundancy = rows["frames.redundancyModel"]
     harness.check("a setting naming a model lists the configured models with their specs, its own value kept, no typing",
@@ -396,23 +421,26 @@ def test_every_model_selection_is_offered_as_a_list_with_its_connections():
                       ("lfm-vl-3b", "set in the files, not on any host listed")] and not redundancy["is_open_choice"],
                   str(redundancy))
     similarity = rows["frames.similarityModel"]
-    harness.check("one that may be empty lists the empty value first",
-                  similarity["choice_options"][0] == {"value": "", "label": "(empty)", "hint": "its default", "group": ""},
+    harness.check("one that may be empty lists the empty value first, naming the value a run uses",
+                  similarity["choice_options"][0] == {"value": "", "label": "default: lfm-vl-3b (the redundancy filter's model)",
+                                                      "hint": "", "group": ""},
                   str(similarity))
-    spec = rows["models.frame.spec"]
+    spec = other["models.frame.spec"]
     harness.check("a spec lists each host's models by their id under the host's heading, one model under each host "
                   "that serves it, and allows typing",
                   [(option["group"], option["label"], option["value"]) for option in spec["choice_options"]]
-                  == [("LM Studio at http://localhost:1234/v1", "big-model", "lmstudio:big-model"),
-                      ("LM Studio at http://localhost:1234/v1", "small-model", "lmstudio:small-model"),
-                      ("LM Studio at http://other-mac:1234/v1", "big-model", "lmstudio:big-model")]
+                  == [("lmstudio at http://localhost:1234/v1", "big-model", "lmstudio:big-model"),
+                      ("lmstudio at http://localhost:1234/v1", "small-model", "lmstudio:small-model"),
+                      ("other-mac at http://other-mac:1234/v1", "big-model", "openai-compatible:big-model")]
                   and spec["is_open_choice"], str(spec))
-    address = rows["models.frame.baseUrl"]
-    harness.check("an address lists the empty value and every host the files and profiles name, hinted by who names it",
-                  [(option["value"], option["hint"]) for option in address["choice_options"]]
-                  == [("", "its default"), ("http://localhost:1234/v1", "LM Studio on this machine"),
-                      ("http://localhost:11434", "Ollama on this machine"), ("http://other-mac:1234/v1", "profile other")]
-                  and address["is_open_choice"], str(address))
+    host = other["models.frame.host"]
+    harness.check("a model's host lists the empty value and every entry of `hosts`, each with its address",
+                  [(option["value"], option["hint"]) for option in host["choice_options"]]
+                  == [("", "its default"), ("lmstudio", "http://localhost:1234/v1"),
+                      ("ollama", "http://localhost:11434"), ("other-mac", "http://other-mac:1234/v1")]
+                  and host["value"] == "other-mac", str(host))
+    harness.check("no model row holds an address of its own: the address is its host's",
+                  not [key for key in rows if key.startswith("models.") and key.endswith(".baseUrl")])
     phase = rows["phaseModels.frames_processing"]
     harness.check("each phase that calls a model is a row of its own, empty for its default, choosing a configured model",
                   phase["value"] == "" and [option["label"] for option in phase["choice_options"]]

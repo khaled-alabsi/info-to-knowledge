@@ -68,8 +68,8 @@ def collect_critiques_node(state: RunState,
     if PHASE_NUMBER in output_contract.AUDIO_OFF_PHASES and phase_file_service.is_audio_run(ctx.paths):
         return _record_off(ctx, f"{phase_file_service.describe_frameless_run(ctx.paths)} has no critique collection")
     if (PHASE_NUMBER in video_workflow_vocabulary.FAST_OFF_PHASES
-            and video_workflow_service.is_fast_processing(ctx.paths.output_root)):
-        return _record_off(ctx, "a fast-processing run has no critique collection")
+            and video_workflow_service.has_no_critic(ctx.paths.output_root)):
+        return _record_off(ctx, "a fast run has no critique collection")
     if not app_config.settings.critique_collection.is_on:
         return _record_off(ctx, "critiqueCollection.isOn is off")
     hold_reasons = phase_hold_service.list_hold_reasons(ctx.store, PHASE_NUMBER)

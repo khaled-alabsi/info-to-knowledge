@@ -11,8 +11,8 @@ from models import output_contract
 __all__ = ["JobItemRequest", "RunSelectionRequest", "StartJobsRequest", "QueueRunRequest", "ControlRequest",
            "ResetRequest", "FrameDropRequest", "MoveRequest", "RestoreRequest", "ZipRequest", "HiddenRequest",
            "ConvertRequest", "BranchRequest", "RunTagsRequest", "RunRef", "BatchDownloadRequest", "RunNamesRequest",
-           "InboxTagsRequest", "RenameRequest", "MergeRequest", "MarkdownWriteRequest", "SettingRequest", "ModelsDownloadRequest",
-           "ModelsConfigureRequest", "SignInRequest", "AccountRequest", "AccountChangeRequest",
+           "InboxTagsRequest", "RenameRequest", "MergeRequest", "MarkdownWriteRequest", "SettingRequest", "SettingRemoveRequest",
+           "ModelsDownloadRequest", "ModelsConfigureRequest", "SignInRequest", "AccountRequest", "AccountChangeRequest",
            "InstructionSaveRequest", "InstructionResetRequest", "InstructionPreviewRequest", "PhaseFlowRequest"]
 
 
@@ -63,7 +63,7 @@ class RunSelectionRequest(BaseModel):
     range_start: str = Field(default="", max_length=20)
     range_end: str = Field(default="", max_length=20)
     range_pages: str = Field(default="", max_length=20)
-    # The video workflow from phase 3 on (`quality`, `fast-processing`); empty leaves the folder's or the settings'
+    # The video workflow from phase 3 on (`quality`, `direct-draft`, `fast-processing`); empty leaves the folder's or the settings'
     workflow: str = ""
     # The Workflow speed preset and the settings changed from it by hand; empty leaves the folder's or the settings'
     speed_preset: str = ""
@@ -302,6 +302,14 @@ class SettingRequest(BaseModel):
     profile: str = ""
     # The key part by part, as the settings list's `path` gives it: a model's name may hold a dot
     key_parts: list[str] | None = None
+
+
+class SettingRemoveRequest(BaseModel):
+    """One entry taken out of a settings file: its key part by part, as the settings list's `path` gives it, and the
+    profile whose file loses it ("" for the owner's own file)."""
+
+    key_parts: list[str] = Field(min_length=1)
+    profile: str = ""
 
 
 class InstructionSaveRequest(BaseModel):

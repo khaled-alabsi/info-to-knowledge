@@ -14,14 +14,15 @@ import config
 
 _DEFAULT_FILE_VALUES = {
     "budgets": {"maxAttempts": 3},
-    "lmstudioBaseUrl": "http://localhost:1234/v1",
+    "hosts": {"lmstudio": {"url": "http://localhost:1234/v1"}, "ollama": {"url": "http://localhost:11434"}},
     "workerSets": {
         "_note": "a note beside the sets is dropped like every note",
         "second-host": {"_note": "a second machine",
-               "lmstudioBaseUrl": "http://second-host.example:1234/v1",
-               "models": {"frame": {"spec": "openai-compatible:qwen3.6-35b-a3b-mtp", "baseUrl": "http://second-host.example:8090/v1"}},
+               "hosts": {"lmstudio": {"url": "http://second-host.example:1234/v1"},
+                         "second-llama": {"url": "http://second-host.example:8090/v1"}},
+               "models": {"frame": {"spec": "openai-compatible:qwen3.6-35b-a3b-mtp", "host": "second-llama"}},
                "budgets": {"maxAttempts": 5}},
-        "Mac": {"lmstudioBaseUrl": "http://mac.example:1234/v1"},
+        "Mac": {"hosts": {"lmstudio": {"url": "http://mac.example:1234/v1"}}},
     },
 }
 
@@ -72,15 +73,15 @@ def test_a_worker_set_overrides_only_what_it_names():
     finally:
         _give_back(previous)
     harness.check("the second-host set's host and model are the second host's",
-                  on_pc.lmstudio_base_url == "http://second-host.example:1234/v1"
-                  and on_pc.models["frame"].base_url == "http://second-host.example:8090/v1",
-                  f"{on_pc.lmstudio_base_url}, {on_pc.models.get('frame')}")
+                  on_pc.hosts["lmstudio"].url == "http://second-host.example:1234/v1"
+                  and on_pc.find_model_host(on_pc.models["frame"]).url == "http://second-host.example:8090/v1",
+                  f"{on_pc.hosts["lmstudio"].url}, {on_pc.models.get('frame')}")
     harness.check("a value the second-host set does not name comes from the default settings",
-                  on_pc.ollama_base_url == config.Settings().ollama_base_url, on_pc.ollama_base_url)
+                  on_pc.hosts["ollama"].url == config.Settings().hosts["ollama"].url, on_pc.hosts["ollama"].url)
     harness.check("the Mac set overrides the host only, and takes the default settings' attempts",
-                  on_mac.lmstudio_base_url == "http://mac.example:1234/v1" and on_mac.budgets.max_attempts == 3
+                  on_mac.hosts["lmstudio"].url == "http://mac.example:1234/v1" and on_mac.budgets.max_attempts == 3
                   and "frame" not in on_mac.models,
-                  f"{on_mac.lmstudio_base_url}, {on_mac.budgets.max_attempts}, {sorted(on_mac.models)}")
+                  f"{on_mac.hosts["lmstudio"].url}, {on_mac.budgets.max_attempts}, {sorted(on_mac.models)}")
     harness.check("a note inside a set is dropped, never read as a setting", on_pc.worker_sets["second-host"].get("_note") is None)
 
 
@@ -95,9 +96,9 @@ def test_the_default_worker_set_is_the_settings_files_as_they_are():
     finally:
         _give_back(previous)
     harness.check("no name takes `defaultWorkerSet`, which is `default` unless the files say otherwise",
-                  name_in_force == "default" and in_force.lmstudio_base_url == "http://localhost:1234/v1"
+                  name_in_force == "default" and in_force.hosts["lmstudio"].url == "http://localhost:1234/v1"
                   and in_force.budgets.max_attempts == 3,
-                  f"{name_in_force}, {in_force.lmstudio_base_url}, {in_force.budgets.max_attempts}")
+                  f"{name_in_force}, {in_force.hosts["lmstudio"].url}, {in_force.budgets.max_attempts}")
     harness.check("the sets stay readable beside the default one", sorted(in_force.worker_sets) == ["Mac", "second-host"],
                   str(sorted(in_force.worker_sets)))
 
@@ -108,7 +109,7 @@ def test_the_default_worker_set_setting_names_the_set_a_job_takes_when_none_is_c
     previous = _use_folder(folder)
     try:
         config.apply_worker_set("")
-        name_in_force, host = config.WORKER_SET_NAME, config.settings.lmstudio_base_url
+        name_in_force, host = config.WORKER_SET_NAME, config.settings.hosts["lmstudio"].url
     finally:
         _give_back(previous)
     harness.check("an empty name takes the set `defaultWorkerSet` names", name_in_force == "Mac"
@@ -122,7 +123,7 @@ def test_a_bad_worker_set_is_refused_by_its_name():
     unknown_key = _read_refusal({"workerSets": {"second-host": {"noSuchSetting": 1}}})
     harness.check("a set with a key the settings do not have is refused under its name",
                   "workerSets.second-host" in unknown_key and "noSuchSetting" in unknown_key, unknown_key)
-    named_default = _read_refusal({"workerSets": {"default": {"lmstudioBaseUrl": "http://x/v1"}}})
+    named_default = _read_refusal({"workerSets": {"default": {"hosts": {"lmstudio": {"url": "http://x/v1"}}}}})
     harness.check("a set named `default` is refused: the default set is the files as they are",
                   "workerSets.default" in named_default, named_default)
     nested_sets = _read_refusal({"workerSets": {"second-host": {"workerSets": {"Mac": {}}}}})
@@ -146,7 +147,7 @@ def test_an_unknown_worker_set_is_refused_by_name_and_leaves_the_settings_in_for
             refusal = "it was accepted"
         except ValueError as error:
             refusal = str(error)
-        name_in_force, host = config.WORKER_SET_NAME, config.settings.lmstudio_base_url
+        name_in_force, host = config.WORKER_SET_NAME, config.settings.hosts["lmstudio"].url
     finally:
         _give_back(previous)
     harness.check("the refusal names the set and the sets that exist", "'spare'" in refusal and "second-host" in refusal
@@ -160,7 +161,8 @@ def test_the_worker_set_survives_a_speed_choice_and_a_profile():
 
     folder = Path(tempfile.mkdtemp())
     _write_files(folder=folder, default_values=_DEFAULT_FILE_VALUES,
-                 profile_values={"budgets": {"maxAttempts": 9}, "lmstudioBaseUrl": "http://profile.example:1234/v1"})
+                 profile_values={"budgets": {"maxAttempts": 9},
+                                 "hosts": {"lmstudio": {"url": "http://profile.example:1234/v1"}}})
     previous = _use_folder(folder)
     try:
         config.apply_worker_set("second-host")
@@ -174,14 +176,14 @@ def test_the_worker_set_survives_a_speed_choice_and_a_profile():
     finally:
         _give_back(previous)
     harness.check("a speed choice keeps the set's host and attempts",
-                  after_speed.lmstudio_base_url == "http://second-host.example:1234/v1" and after_speed.budgets.max_attempts == 5,
-                  f"{after_speed.lmstudio_base_url}, {after_speed.budgets.max_attempts}")
+                  after_speed.hosts["lmstudio"].url == "http://second-host.example:1234/v1" and after_speed.budgets.max_attempts == 5,
+                  f"{after_speed.hosts["lmstudio"].url}, {after_speed.budgets.max_attempts}")
     harness.check("a profile loaded after the set is under the set: the set's host and attempts win over the profile's",
-                  after_profile.lmstudio_base_url == "http://second-host.example:1234/v1" and after_profile.budgets.max_attempts == 5,
-                  f"{after_profile.lmstudio_base_url}, {after_profile.budgets.max_attempts}")
+                  after_profile.hosts["lmstudio"].url == "http://second-host.example:1234/v1" and after_profile.budgets.max_attempts == 5,
+                  f"{after_profile.hosts["lmstudio"].url}, {after_profile.budgets.max_attempts}")
     harness.check("the speed values are on top of the set", after_both.budgets.max_attempts == 7
-                  and after_both.lmstudio_base_url == "http://second-host.example:1234/v1",
-                  f"{after_both.budgets.max_attempts}, {after_both.lmstudio_base_url}")
+                  and after_both.hosts["lmstudio"].url == "http://second-host.example:1234/v1",
+                  f"{after_both.budgets.max_attempts}, {after_both.hosts["lmstudio"].url}")
     harness.check("the profile and the set in force are the ones asked for",
                   profile_in_force == "strict" and name_in_force == "second-host", f"{profile_in_force}, {name_in_force}")
 
@@ -211,16 +213,18 @@ def test_the_shipped_default_file_holds_no_worker_set_and_a_set_laid_over_it_kee
     built = config.read_settings_files(config.DEFAULT_CONFIG_FILE, Path(tempfile.mkdtemp()) / "none.json")
     harness.check("the file builds into settings", config.Settings(**built).default_worker_set == "default")
     host = "http://second-host.example:8090/v1"
-    with_set = {**built, "workerSets": {"second-host": {"models": {
-        "frame": {"spec": "openai-compatible:qwen3.6-35b-a3b-mtp", "baseUrl": host},
-        "document": {"spec": "openai-compatible:qwen3.6-35b-a3b-mtp", "baseUrl": host}}}}}
+    with_set = {**built, "workerSets": {"second-host": {"hosts": {"second-llama": {"url": host}}, "models": {
+        "frame": {"spec": "openai-compatible:qwen3.6-35b-a3b-mtp", "host": "second-llama"},
+        "document": {"spec": "openai-compatible:qwen3.6-35b-a3b-mtp", "host": "second-llama"}}}}}
     on_second = config.Settings(**config.merge_worker_set(with_set, "second-host"))
     plain = config.Settings(**built)
     harness.check("a set points the frame and document models at its host, other values kept",
                   all(on_second.models[name].spec == "openai-compatible:qwen3.6-35b-a3b-mtp"
-                      and on_second.models[name].base_url == host
+                      and on_second.find_model_host(on_second.models[name]).url == host
                       and on_second.models[name].num_ctx == plain.models[name].num_ctx for name in ("frame", "document")),
-                  str({name: (on_second.models[name].spec, on_second.models[name].base_url) for name in ("frame", "document")}))
+                  str({name: (on_second.models[name].spec, on_second.models[name].host) for name in ("frame", "document")}))
+    harness.check("the set's host is added beside the shipped hosts",
+                  sorted(on_second.hosts) == sorted([*plain.hosts, "second-llama"]), str(sorted(on_second.hosts)))
 
 
 def test_the_hosts_a_run_calls_are_the_sets():
@@ -237,8 +241,8 @@ def test_the_hosts_a_run_calls_are_the_sets():
         on_pc = chat_model_service.resolve_host_url(pc_model)
         config.apply_worker_set("Mac")
         on_mac = chat_model_service.resolve_host_url(config.settings.resolve_model("frame"))
-        next_on_mac = settings_service.read_next_job_settings(worker_set="Mac").lmstudio_base_url
-        next_default = settings_service.read_next_job_settings().lmstudio_base_url
+        next_on_mac = settings_service.read_next_job_settings(worker_set="Mac").hosts["lmstudio"].url
+        next_default = settings_service.read_next_job_settings().hosts["lmstudio"].url
         try:
             settings_service.read_next_job_settings(worker_set="spare")
             refusal = "it was accepted"
@@ -246,7 +250,7 @@ def test_the_hosts_a_run_calls_are_the_sets():
             refusal = str(error)
     finally:
         _give_back(previous)
-    harness.check("the second-host set's model call goes to the second host's address (its own `baseUrl` on the `frame` model)",
+    harness.check("the second-host set's model call goes to the second host's address (the host its `frame` model names)",
                   on_pc == "http://second-host.example:8090/v1", str(on_pc))
     harness.check("the Mac set's model call goes to the Mac's LM Studio", on_mac == "http://mac.example:1234/v1", str(on_mac))
     harness.check("the next job's settings on a set are the set's, and the default set's are the files'",

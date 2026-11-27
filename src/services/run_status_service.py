@@ -390,7 +390,7 @@ def _list_off_phases(folder: Path,
         return (*output_contract.AUDIO_OFF_PHASES, *reshaping)
 
     return (*(video_workflow_vocabulary.FAST_OFF_PHASES
-              if video_workflow_service.resolve_workflow(folder) == video_workflow_vocabulary.FAST_PROCESSING else ()),
+              if video_workflow_service.has_no_critic(folder) else ()),
             *_list_speed_off_phases(folder), *reshaping)
 
 

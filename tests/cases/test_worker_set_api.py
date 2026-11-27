@@ -18,9 +18,10 @@ from models.run_job import RunJobRequest
 from models.web_api_request import StartJobsRequest, WorkerSetRequest
 from services import job_queue_service, run_worker_set_service, web_api_service
 
-_SETTINGS = {"lmstudioBaseUrl": "http://localhost:1234/v1",
-             "workerSets": {"_note": "a note", "second-host": {"lmstudioBaseUrl": "http://second-host.example:1234/v1"},
-                            "Mac": {"lmstudioBaseUrl": "http://mac.example:1234/v1"}}}
+_SETTINGS = {"hosts": {"lmstudio": {"url": "http://localhost:1234/v1"}},
+             "workerSets": {"_note": "a note",
+                            "second-host": {"hosts": {"lmstudio": {"url": "http://second-host.example:1234/v1"}}},
+                            "Mac": {"hosts": {"lmstudio": {"url": "http://mac.example:1234/v1"}}}}}
 
 
 def _use(folder: Path) -> tuple:
@@ -61,18 +62,21 @@ def test_the_list_names_default_first_then_each_set_with_what_it_changes():
     harness.check("default first, the note is no set, each set names the settings it changes",
                   listed == {"default_set": "default",
                              "sets": [{"name": "default", "changes": [], "machine": ""},
-                                      {"name": "Mac", "changes": ["lmstudioBaseUrl"], "machine": ""},
-                                      {"name": "second-host", "changes": ["lmstudioBaseUrl"], "machine": ""}]},
+                                      {"name": "Mac", "changes": ["hosts"], "machine": ""},
+                                      {"name": "second-host", "changes": ["hosts"], "machine": ""}]},
                   str(listed))
 
 
 def test_each_set_names_the_machine_it_runs_on_defect():
     # Defect: the owner could not find the main machine among the worker sets: its set showed only as "default".
-    # Fix: `workerSetMachines` names each set's machine, and the list carries it beside each set's name.
+    # Fix: `machine` names the default set's machine, and a set overrides it inside itself, so a set and its machine
+    # are one object (the owner: one place per value); the list carries it beside each set's name.
     folder = Path(tempfile.mkdtemp())
     previous = _use(folder)
     try:
-        settings = {**_SETTINGS, "workerSetMachines": {"default": "main machine", "second-host": "gpu-box"}}
+        settings = {**_SETTINGS, "machine": "main machine",
+                    "workerSets": {**_SETTINGS["workerSets"],
+                                   "second-host": {**_SETTINGS["workerSets"]["second-host"], "machine": "gpu-box"}}}
         (folder / "playbook.default.json").write_text(json.dumps(settings), encoding="utf-8")
         listed = web_api_service.list_worker_sets()
     finally:

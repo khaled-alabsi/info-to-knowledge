@@ -104,11 +104,13 @@ def _check_with_models_served(served_model: str,
     server = fake_model_server.FakeModelServer()
     server.set_reply("/v1/models", 200, json.dumps({"object": "list", "data": [{"id": listed, "object": "model"}]}).encode("utf-8"))
     previous_models = dict(config.settings.models)
+    previous_hosts = dict(config.settings.hosts)
     previous_phase_models = config.settings.phase_models
     try:
+        config.settings.hosts["fixture-server"] = config.HostSettings(url=server.build_url())
         for name in set(config.PHASE_DEFAULT_MODELS.values()):
             config.settings.models[name] = config.ModelSettings(spec=f"openai-compatible:{served_model}",
-                                                                base_url=server.build_url())
+                                                                host="fixture-server")
         config.settings.phase_models = {}
         with fake_model_server.serving(server):
             try:
@@ -119,6 +121,8 @@ def _check_with_models_served(served_model: str,
         config.settings.phase_models = previous_phase_models
         config.settings.models.clear()
         config.settings.models.update(previous_models)
+        config.settings.hosts.clear()
+        config.settings.hosts.update(previous_hosts)
 
 
 def test_the_phases_whose_server_reports_no_capabilities_share_one_line_naming_them():

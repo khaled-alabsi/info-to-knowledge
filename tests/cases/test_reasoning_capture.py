@@ -80,8 +80,7 @@ def test_streamed_reasoning_delta_is_kept():
 def test_openai_compatible_provider_builds_the_preserving_client():
     """The wiring, not just the class: an lmstudio role must not resolve to plain `ChatOpenAI`."""
 
-    model = chat_model_service._build(ModelSettings(spec="lmstudio:a-thinking-model",
-                                                    base_url="http://localhost:1234/v1"))
+    model = chat_model_service._build(ModelSettings(spec="lmstudio:a-thinking-model"))
     harness.check("lmstudio builds OpenAICompatibleChatModel",
                   isinstance(model, OpenAICompatibleChatModel), type(model).__name__)
 

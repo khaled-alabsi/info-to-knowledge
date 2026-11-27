@@ -33,7 +33,8 @@ from services import text_detection_service
 from services import unlimited_ocr_reader_service
 
 __all__ = ["check_setup", "configure_models", "start_models_download", "set_program_finder", "set_host_lister",
-           "set_settings_reader", "DOWNLOAD_LOG_PATH", "DOWNLOAD_STATE_PATH", "ENV_FILE"]
+           "set_settings_reader", "describe_container_refusal", "list_missing_providers", "DOWNLOAD_LOG_PATH",
+           "DOWNLOAD_STATE_PATH", "ENV_FILE"]
 
 DOWNLOAD_LOG_PATH = config.UI_DIR / "setup-models.log"
 DOWNLOAD_STATE_PATH = config.UI_DIR / "setup-models.json"
@@ -84,9 +85,25 @@ def _list_called_models(settings: config.Settings) -> dict[str, list[str]]:
 
 def _resolve_base_url(settings: config.Settings,
                       model: config.ModelSettings) -> str:
-    provider = model.spec.partition(":")[0]
+    """The address a run calls `model` at: its host's, from `hosts`; "" for a model whose host is no entry there, which
+    the check reports as having no address."""
 
-    return model.base_url or {"ollama": settings.ollama_base_url, "lmstudio": settings.lmstudio_base_url}.get(provider, "")
+    try:
+        host = settings.find_model_host(model)
+    except ValueError:
+        # the model names a host `hosts` lacks: the check says so as "no address", as a run would refuse it
+        return ""
+
+    return host.url if host else ""
+
+
+def _find_host_url(settings: config.Settings,
+                   name: str) -> str:
+    """The address of the entry of `hosts` under `name`; "" when there is none."""
+
+    host = settings.hosts.get(name)
+
+    return host.url if host else ""
 
 
 def _is_installed(key: str,
@@ -121,7 +138,7 @@ def _list_models_of_hosts(settings: config.Settings,
 
     addresses = {(model.spec.partition(":")[0], _resolve_base_url(settings, model)) for model in called_models
                  if model.spec.partition(":")[0] in ("lmstudio", "ollama", "openai-compatible")}
-    addresses |= {("lmstudio", settings.lmstudio_base_url), ("ollama", settings.ollama_base_url)}
+    addresses |= {(name, _find_host_url(settings, name)) for name in ("lmstudio", "ollama")}
 
     return {base_url: HOST_LISTER(provider, base_url) for provider, base_url in sorted(addresses) if base_url}
 
@@ -139,7 +156,7 @@ def _check_runtimes(settings: config.Settings,
                     "unlimited-ocr": settings.pdf.ocr_engine == "unlimited-ocr",
                     "d1-knowledge-filter": settings.frames.is_knowledge_filter_on
                     and settings.frames.knowledge_filter_model == "liquidai-d1-2B"}
-    host_addresses = {"lmstudio": [settings.lmstudio_base_url], "ollama": [settings.ollama_base_url],
+    host_addresses = {"lmstudio": [_find_host_url(settings, "lmstudio")], "ollama": [_find_host_url(settings, "ollama")],
                       "mlx": [_resolve_base_url(settings, model) for model in called_models
                               if model.spec.startswith("openai-compatible:")]}
     runtimes = []
@@ -209,18 +226,84 @@ def _describe_download() -> dict:
     return {"is_running": is_running, "log": log[-LOG_TAIL_CHARS:]}
 
 
+def _describe_missing_provider(settings: config.Settings,
+                               name: str,
+                               host_models: dict[str, list[str] | None]) -> str:
+    """Why the model `name` has no provider a run could call, in the words of the Settings page; "" when it has one."""
+
+    entry = settings.find_configured_model(name)
+    if entry is None:
+        return f"no model is set for it: add models.{name} in Settings"
+    provider, _, model_id = entry.spec.partition(":")
+    guide_key = PROVIDER_GUIDE_KEYS.get(provider)
+    if guide_key is None:
+        return f"{provider!r} is not a model provider; known: {', '.join(PROVIDER_GUIDE_KEYS)}"
+    guide = next(candidate for candidate in RUNTIME_SPECS if candidate.key == guide_key)
+    if guide.kind == API_KIND:
+        has_key = bool(os.environ.get(guide.key_variable)) or bool(entry.api_key)
+
+        return "" if has_key else f"{guide.name} has no key: set {guide.key_variable}"
+    address = _resolve_base_url(settings, entry)
+    if not address:
+        return f"no address for the {guide.name} server: set models.{name}.host to an entry of Hosts in Settings"
+    listed = host_models.get(address)
+    if listed is None:
+        return f"the server at {address} does not answer"
+
+    return "" if model_id in listed else f"the server at {address} does not have the model {model_id}"
+
+
+def _find_missing_providers(settings: config.Settings,
+                            called: dict[str, list[str]],
+                            host_models: dict[str, list[str] | None]) -> list[dict]:
+    """Each model a run calls that has no configured, reachable provider: its name, the phases that call it and why."""
+
+    missing_list = []
+    for name, callers in called.items():
+        reason = _describe_missing_provider(settings, name, host_models)
+        if reason:
+            missing_list.append({"name": name, "used_by": callers, "reason": reason})
+
+    return missing_list
+
+
+def describe_container_refusal(action: str) -> str:
+    """Why `action` (a machine setup) is refused while the server runs in a container."""
+
+    return config.CONTAINER_SETUP_REFUSAL.format(action=action)
+
+
+def list_missing_providers() -> list[dict]:
+    """Each model the next run calls that has no configured, reachable provider, read from the settings as a job
+    started now would read them."""
+
+    settings = SETTINGS_READER()
+    called = _list_called_models(settings)
+    called_models = [model for model in map(settings.find_configured_model, called) if model is not None]
+
+    return _find_missing_providers(settings, called, _list_models_of_hosts(settings, called_models))
+
+
 def check_setup() -> dict:
-    """`{"has_models", "runtimes", "models", "download", "recommended"}`: see the module's docstring."""
+    """`{"is_container", "has_models", "runtimes", "models", "download", "recommended", "missing_providers"}`: see the
+    module's docstring. In a container no runtime is checked and nothing is recommended to install or download."""
 
     settings = SETTINGS_READER()
     called = _list_called_models(settings)
     called_models = [model for model in map(settings.find_configured_model, called) if model is not None]
     host_models = _list_models_of_hosts(settings, called_models)
+    missing_providers = _find_missing_providers(settings, called, host_models)
+    if config.IS_CONTAINER_MODE:
+        return {"is_container": True, "has_models": bool(settings.models), "runtimes": [],
+                "models": _check_models(settings, called, host_models), "download": {"is_running": False, "log": ""},
+                "recommended": [], "missing_providers": missing_providers}
 
-    return {"has_models": bool(settings.models), "runtimes": _check_runtimes(settings, called_models, host_models),
+    return {"is_container": False, "has_models": bool(settings.models),
+            "runtimes": _check_runtimes(settings, called_models, host_models),
             "models": _check_models(settings, called, host_models), "download": _describe_download(),
             "recommended": [{"repository": model.repository, "spec": model.spec, "used_by": model.used_by}
-                            for model in RECOMMENDED_MODELS]}
+                            for model in RECOMMENDED_MODELS],
+            "missing_providers": missing_providers}
 
 
 def _save_env_value(variable: str,
@@ -238,7 +321,8 @@ def configure_models(provider: str,
                      base_url: str,
                      api_key: str) -> OperationResult:
     """The models every phase calls (`frame` and `document`) set to `<provider>:<model_id>` in both default settings
-    files, with `base_url` when given; an API key goes into `.env` under the provider's variable. LM Studio with no
+    files, with `base_url` as the address of the provider's entry of `hosts` when given; an API key goes into `.env` under
+    the provider's variable. LM Studio with no
     model id takes the recommended model. Refused by name for a provider the program does not know, or a model id
     missing where nothing recommended stands in."""
 
@@ -254,16 +338,15 @@ def configure_models(provider: str,
         return OperationResult(2, ["an OpenAI-compatible server needs its address (base URL)"])
 
     # STEP 2: written, each model by its own keys, so every other setting of it is kept
+    # the address goes into the host named like the provider, which a model with no host of its own runs on
+    changes = [(f"hosts.{provider}.url", base_url)] if base_url else []
+    changes += [(f"models.{name}.spec", f"{provider}:{model_id}") for name in CONFIGURED_MODEL_NAMES]
     lines = []
-    for name in CONFIGURED_MODEL_NAMES:
-        changes = [(f"models.{name}.spec", f"{provider}:{model_id}")]
-        if base_url:
-            changes.append((f"models.{name}.baseUrl", base_url))
-        for key, new_value in changes:
-            result = settings_service.save_setting(key, new_value)
-            if result.exit_code != 0:
-                return OperationResult(result.exit_code, [*lines, *result.output])
-            lines.extend(result.output)
+    for key, new_value in changes:
+        result = settings_service.save_setting(key, new_value)
+        if result.exit_code != 0:
+            return OperationResult(result.exit_code, [*lines, *result.output])
+        lines.extend(result.output)
 
     # STEP 3: the key, kept out of the settings files
     if api_key and guide.key_variable:

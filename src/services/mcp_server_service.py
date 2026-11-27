@@ -96,7 +96,7 @@ def queue_run(request: QueueRunRequest) -> str:
     page's Run form does: every phase, from a phase, or one phase, optionally on a settings profile, and optionally in
     an ingesting profile chosen by hand (`takeaway`, `meeting`, ...), which no tag and no model call then changes. With
     `is_run_as_audio`, a video is processed as an audio recording: its sound alone, no frame taken. `workflow` picks
-    the video workflow from phase 3 on: `quality` or `fast-processing`."""
+    the video workflow from phase 3 on: `quality`, `direct-draft` or `fast-processing`."""
 
     fields = request.model_dump()
     body = {"items": [{"video": fields.pop("video"), "output": fields.pop("output")}], "worker_indexes": [], **fields}

@@ -1,24 +1,51 @@
 {
+  "hosts": {
+    "lmstudio": {
+      "url": "http://localhost:1234/v1"
+    },
+    "ollama": {
+      "url": "http://localhost:11434"
+    },
+    "gpu-box": {
+      "url": "http://gpu-box.example:8090/v1"
+    }
+  },
   "_comment": [
     "Copy this file to playbook.local.json and set your own values. playbook.local.json is never committed.",
     "It is read on top of playbook.default.json; leave out any key you do not need. A key or a password never goes here:",
     "give the Hugging Face token through the HF_TOKEN environment variable."
   ],
-  "lmstudioBaseUrl": "http://localhost:1234/v1",
-  "ollamaBaseUrl": "http://localhost:11434",
+  "models": {
+    "gpu-box-frame": {
+      "_comment": "A llama.cpp server on another computer of your network, as the frame model reads frames.",
+      "spec": "openai-compatible:your-model-name",
+      "host": "gpu-box"
+    },
+    "gpu-box-document": {
+      "_comment": "The same server, as the document model writes the document.",
+      "spec": "openai-compatible:your-model-name",
+      "host": "gpu-box"
+    }
+  },
   "workerSets": {
-    "_note": "Other machines that run a model for this one. A job picks a set by name; jobs on different sets run at the same time, jobs on one set one after another. Remove the sets you do not use.",
+    "_note": "Other machines that run a model for this one. A set links each job to a model of the models above by its name; a job it does not name keeps the default model. A job picks a set by name; jobs on different sets run at the same time, jobs on one set one after another. Remove the sets you do not use.",
     "gpu-box": {
-      "_comment": "A llama.cpp server on another computer of your network: the frame and document models call it.",
-      "models": {
-        "frame": {"spec": "openai-compatible:your-model-name", "baseUrl": "http://gpu-box.example:8090/v1"},
-        "document": {"spec": "openai-compatible:your-model-name", "baseUrl": "http://gpu-box.example:8090/v1"}
+      "machine": "the GPU box",
+      "phaseModels": {
+        "frames_preparing": "gpu-box-document",
+        "frames_processing": "gpu-box-frame",
+        "finalize": "gpu-box-document",
+        "review": "gpu-box-document",
+        "critique_collection": "gpu-box-document",
+        "document_reshaping": "gpu-box-document"
+      },
+      "video": {
+        "fastProcessing": {
+          "documentModel": "gpu-box-document"
+        }
       }
     }
   },
   "defaultWorkerSet": "default",
-  "workerSetMachines": {
-    "default": "this computer",
-    "gpu-box": "the GPU box"
-  }
+  "machine": "this computer"
 }

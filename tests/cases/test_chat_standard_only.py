@@ -1,14 +1,12 @@
 """Chat reaches its model through the standard OpenAI-compatible requests only. REQUIREMENTS.md R12.
 
-The server is the stand-in server on port 0. A chat model whose settings name no address of its own calls the address
-`providers.chat.url` holds; the program asks that server nothing but `GET /v1/models` and `POST /v1/chat/completions`,
-and it never asks a host to load, unload or keep a model.
+The server is the stand-in server on port 0, an entry of `hosts`. A chat model calls the host it names; the program asks
+that server nothing but `GET /v1/models` and `POST /v1/chat/completions`, and it never asks a host to load, unload or
+keep a model.
 """
 
 import ast
-import contextlib
 import json
-from collections.abc import Iterator
 from pathlib import Path
 
 from support import harness
@@ -27,39 +25,27 @@ STANDARD_PATHS = {"/v1/models", "/v1/chat/completions"}
 KEEP_ALIVE_FIELDS = ("ttl", "keep_alive")
 
 
-@contextlib.contextmanager
-def _chat_url_set(server: fake_model_server.FakeModelServer) -> Iterator[None]:
-    """`providers.chat.url` pointed at `server` for the block."""
-
-    previous_url = config.settings.providers.chat.url
-    config.settings.providers.chat.url = server.build_url()
-    try:
-        with fake_model_server.serving(server):
-            yield
-    finally:
-        config.settings.providers.chat.url = previous_url
-
-
 def _build_model_name(provider: str,
                       case: str) -> str:
-    """A name in `models` for a model on `provider` with no address of its own. The program builds a model once per name,
-    with the address it had then, so each case that serves its own address takes its own name."""
+    """A name in `models` for a model on `provider` that runs on the test's host. The program builds a model once per
+    name, with the address it had then, so each case that serves its own address takes its own name."""
 
     name = f"chat-standard-only-{case}-{provider}"
-    config.settings.models[name] = config.ModelSettings(spec=f"{provider}:{CALLED_MODEL}")
+    config.settings.models[name] = config.ModelSettings(spec=f"{provider}:{CALLED_MODEL}",
+                                                        host=fake_model_server.TEST_HOST)
 
     return name
 
 
-def test_a_model_with_no_address_of_its_own_calls_the_chat_url_of_the_settings():
+def test_a_model_calls_the_host_it_names():
     server = fake_model_server.FakeModelServer()
     saved_models = dict(config.settings.models)
     try:
-        with _chat_url_set(server):
+        with fake_model_server.serving_host(server=server):
             for provider in ("openai-compatible", "lmstudio"):
                 name = _build_model_name(provider, "address")
                 reply = chat_model_service.get_named_model(name).invoke("hello")
-                harness.check(f"a {provider} model answers from the server `providers.chat.url` names",
+                harness.check(f"a {provider} model answers from the host it names",
                               reply.content == "stand-in text", str(reply.content))
         paths = [(request.method, request.path) for request in server.request_list]
         harness.check("every chat call is one POST to the standard chat route",
@@ -74,7 +60,7 @@ def test_the_program_asks_a_chat_server_only_the_standard_requests():
     saved_models = dict(config.settings.models)
     try:
         name = _build_model_name("openai-compatible", "requests")
-        with _chat_url_set(server):
+        with fake_model_server.serving_host(server=server):
             window = host_window_service.read_loaded_window(server.build_url(), CALLED_MODEL)
             chat_model_service.get_named_model(name).invoke("hello")
         paths = {request.path for request in server.request_list}

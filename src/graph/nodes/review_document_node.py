@@ -224,8 +224,8 @@ def write_reviewed_document_node(state: RunState,
     if PHASE_NUMBER in output_contract.AUDIO_OFF_PHASES and phase_file_service.is_audio_run(ctx.paths):
         return _record_off(ctx, f"off, {phase_file_service.describe_frameless_run(ctx.paths)} has no review")
     if (PHASE_NUMBER in video_workflow_vocabulary.FAST_OFF_PHASES
-            and video_workflow_service.is_fast_processing(ctx.paths.output_root)):
-        return _record_off(ctx, "off, a fast-processing run has no review")
+            and video_workflow_service.has_no_critic(ctx.paths.output_root)):
+        return _record_off(ctx, "off, a fast run has no review")
     if not app_config.settings.review.is_on:
         return _record_off(ctx, "not started, review.isOn is off")
     hold_reasons = phase_hold_service.list_hold_reasons(ctx.store, PHASE_NUMBER)

@@ -2,8 +2,8 @@
 its own environment (`tools/unlimited-ocr/setup.sh`) on the pages rendered as images, the model loaded once, and its
 reading of each page comes back as text in the model's block format (`utils/unlimited_ocr_block_utils.py`). It runs on
 MLX, Apple silicon only, and needs its model downloaded into the Hugging Face cache (3.9 GB, too large for git). With
-`providers.ocr.url` set, a model server reads each page instead: one chat request with the page's image and the same
-instruction, the tool and its model not needed here."""
+`providers.chat.host` set, that chat server reads each page instead: one standard chat request with the page's image and
+the same instruction, naming the model `pdf.unlimitedOcrModel`; the tool and its model are not needed here."""
 
 from __future__ import annotations
 
@@ -50,10 +50,10 @@ def is_model_downloaded() -> bool:
 
 
 def is_installed() -> bool:
-    """Whether scanned pages can be read: a model server is set for it, or the tool's environment is built and its model
-    downloaded."""
+    """Whether scanned pages can be read: a chat server is set (`providers.chat.host`), or the tool's environment is built
+    and its model downloaded."""
 
-    return endpoint_client.find_endpoint(kind="ocr") is not None or (_resolve_python().is_file() and is_model_downloaded())
+    return endpoint_client.find_endpoint(kind="chat") is not None or (_resolve_python().is_file() and is_model_downloaded())
 
 
 def _request_page_text(endpoint: EndpointSpec,
@@ -101,9 +101,9 @@ def read_pages(images: list[Path],
                on_page: Callable[[int, int], None] | None = None) -> list[str]:
     """Each image's reading, in order, as the model writes it; `on_page(read, total)` is told after each page, from
     the line the tool prints for it, so a reader of 8 to 20 s a page shows how far it is. A failing tool raises
-    `RuntimeError` with its last lines. With `providers.ocr.url` set, the model server reads each page instead."""
+    `RuntimeError` with its last lines. With `providers.chat.host` set, the chat server reads each page instead."""
 
-    endpoint = endpoint_client.find_endpoint(kind="ocr")
+    endpoint = endpoint_client.find_endpoint(kind="chat")
     if endpoint is not None:
         return _read_pages_from_server(endpoint=endpoint, images=images, on_page=on_page)
     names = {image.name for image in images}

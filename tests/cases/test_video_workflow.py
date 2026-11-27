@@ -370,7 +370,8 @@ def test_the_run_line_and_the_header_carry_the_workflow():
     harness.check("the queue's run line passes --workflow",
                   command[command.index("--workflow") + 1] == "fast-processing", str(command))
     checks = run_command.RunStartChecksResult(transcription="audio: mlx", diarization="diarization: off")
-    lines = run_command.render_model_lines(checks, {"finalize": 183040}, is_audio=False, is_fast=True)
+    lines = run_command.render_model_lines(checks, {"finalize": 183040}, is_audio=False, is_fast=True,
+                                            has_no_critic=True)
     harness.check("a fast run's phase 3 line names the frame model and its session, phase 4's the one call",
                   lines[2].split()[1] == "qwen3.5-4b:" and "5 frames a session" in lines[2]
                   and "one call, window 183,040" in lines[3], "\n".join(lines))

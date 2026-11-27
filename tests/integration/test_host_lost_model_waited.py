@@ -13,6 +13,7 @@ from pathlib import Path
 
 from langchain_core.messages import HumanMessage
 
+from support import fake_model_server
 from support import harness
 
 import config
@@ -98,7 +99,9 @@ def test_a_call_whose_host_lost_its_model_is_asked_again_once_it_is_back_defect(
     url = f"http://127.0.0.1:{server.server_address[1]}/v1"
     settings = config.settings
     previous_models, previous_phases = dict(settings.models), dict(settings.phase_models)
-    settings.models[MODEL_NAME] = config.ModelSettings(spec=f"lmstudio:{MODEL}", base_url=url, request_timeout_s=10)
+    settings.hosts[fake_model_server.TEST_HOST] = config.HostSettings(url=url)
+    settings.models[MODEL_NAME] = config.ModelSettings(spec=f"lmstudio:{MODEL}", host=fake_model_server.TEST_HOST,
+                                                       request_timeout_s=10)
     settings.phase_models[PHASE] = MODEL_NAME
     pauses = []
 
@@ -111,6 +114,7 @@ def test_a_call_whose_host_lost_its_model_is_asked_again_once_it_is_back_defect(
         result = chain_dispatch_service.invoke_chain(None, ChainCallSpec(PHASE, "critique"), [HumanMessage("x")])
     finally:
         host_return_service.set_clock(*previous_clock)
+        del settings.hosts[fake_model_server.TEST_HOST]
         settings.models.clear()
         settings.models.update(previous_models)
         settings.phase_models.clear()
@@ -132,7 +136,9 @@ def test_a_part_call_on_a_broken_load_waits_for_a_working_model_defect():
     url = f"http://127.0.0.1:{server.server_address[1]}/v1"
     settings = config.settings
     previous_models, previous_phases = dict(settings.models), dict(settings.phase_models)
-    settings.models[BROKEN_MODEL_NAME] = config.ModelSettings(spec=f"lmstudio:{MODEL}", base_url=url, request_timeout_s=10)
+    settings.hosts[fake_model_server.TEST_HOST] = config.HostSettings(url=url)
+    settings.models[BROKEN_MODEL_NAME] = config.ModelSettings(spec=f"lmstudio:{MODEL}", host=fake_model_server.TEST_HOST,
+                                                              request_timeout_s=10)
     settings.phase_models[output_contract.DOCUMENT_RESHAPING_PHASE] = BROKEN_MODEL_NAME
     pauses = []
 
@@ -149,6 +155,7 @@ def test_a_part_call_on_a_broken_load_waits_for_a_working_model_defect():
                                                         logging.getLogger("test"))
     finally:
         host_return_service.set_clock(*previous_clock)
+        del settings.hosts[fake_model_server.TEST_HOST]
         settings.models.clear()
         settings.models.update(previous_models)
         settings.phase_models.clear()

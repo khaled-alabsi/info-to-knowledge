@@ -12,7 +12,8 @@ from models import output_contract
 from models import video_workflow_vocabulary
 from utils import json_store_utils
 
-__all__ = ["read_chosen_workflow", "write_chosen_workflow", "resolve_workflow", "is_fast_processing", "describe_frame_grouping"]
+__all__ = ["read_chosen_workflow", "write_chosen_workflow", "resolve_workflow", "is_fast_processing", "is_direct_draft",
+           "has_no_critic", "describe_frame_grouping"]
 
 
 def read_chosen_workflow(folder: Path) -> dict | None:
@@ -47,10 +48,24 @@ def is_fast_processing(folder: Path) -> bool:
     return resolve_workflow(folder) == video_workflow_vocabulary.FAST_PROCESSING
 
 
-def describe_frame_grouping(folder: Path) -> str:
-    """How phase 3 hands the run's frames to its model, for the console: a fast-processing run's sessions, else the
-    quality workflow's batches."""
+def is_direct_draft(folder: Path) -> bool:
+    """Whether the run takes the direct-draft workflow (the Fast speed's)."""
 
+    return resolve_workflow(folder) == video_workflow_vocabulary.DIRECT_DRAFT
+
+
+def has_no_critic(folder: Path) -> bool:
+    """Whether the run's workflow has no review and no critique collection."""
+
+    return resolve_workflow(folder) in video_workflow_vocabulary.NO_CRITIC_WORKFLOWS
+
+
+def describe_frame_grouping(folder: Path) -> str:
+    """How phase 3 hands the run's frames to its model, for the console: a fast-processing run's sessions, a
+    direct-draft run's batches of the draft writer, else the quality workflow's batches."""
+
+    if is_direct_draft(folder):
+        return f"batches of {config.settings.resolve_frames_per_call()}"
     if is_fast_processing(folder):
         return f"sessions of {config.settings.video.fast_processing.frame_follow_ups}"
 

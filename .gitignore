@@ -31,3 +31,21 @@ tag-rules.local.json
 agent-context/instructions/_shared/known-terms.local.md
 # a person's own recordings and frames
 tests/real_media/
+*.mp4
+*.mov
+*.mkv
+*.webm
+*.vtt
+!tests/resources/**
+# a developer's own agent setup and notes, kept in a repository of their own
+/internal/
+/AGENTS.md
+/CLAUDE.md
+/.claude
+/HANDOFF.md
+/tasks/
+/message-to-others-agent.md
+/message-watchers.txt
+.denylist
+# archives of the working folder, which hold recordings and runs
+*.zip

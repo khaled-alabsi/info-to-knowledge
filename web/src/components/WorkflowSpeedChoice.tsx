@@ -9,7 +9,7 @@ function readValues(selection: PhaseSelection, options: SpeedOptions): Record<st
   return { ...options.current, ...(options.presets[preset] ?? {}), ...(selection.speed_settings ?? {}) };
 }
 
-// The workflow a selection's speed takes ("quality" or "fast-processing"); "" before the menu is known
+// The workflow a selection's speed takes ("quality", "direct-draft" or "fast-processing"); "" before the menu is known
 export function readSpeedWorkflow(selection: PhaseSelection, defaults: RunDefaults | null): string {
   const options = defaults?.speed;
   return options ? String(readValues(selection, options)["video.workflow"] ?? "") : "";
@@ -120,6 +120,6 @@ export default function WorkflowSpeedChoice({ selection, onChange, defaults }: {
 function describePreset(preset: string): string {
   if (preset === "quality") return "the large model, with critique, repairs, review and the rule set";
   if (preset === "balanced") return "the large model with no critique, no repair, no review and no rule set";
-  if (preset === "fast") return "a small model's quick description of each frame, the document in one call";
+  if (preset === "fast") return "the large model writes the document straight from the frames, 8 frames a call, with no check";
   return "";
 }

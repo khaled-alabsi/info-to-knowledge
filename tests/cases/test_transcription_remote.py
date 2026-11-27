@@ -1,15 +1,13 @@
 """Speech to text through a model server. REQUIREMENTS.md R12, plan step 4.
 
-With `providers.speech.url` set, `transcription_service.produce_transcript` sends the recording's audio, compressed, to
+With `providers.speech.host` naming a host, `transcription_service.produce_transcript` sends the recording's audio, compressed, to
 the server on port 0 and builds the same transcript the in-process engine builds. A long recording is cut into windows
 whose times are moved back onto the recording's clock. A word the server gives no `probability` is unknown, never 0.
 """
 
-import contextlib
 import json
 import tempfile
 import wave
-from collections.abc import Iterator
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -43,19 +41,6 @@ def _write_wav(seconds: float) -> Path:
         writer.writeframes(tone.tobytes())
 
     return path
-
-
-@contextlib.contextmanager
-def _speech_url_set(server: fake_model_server.FakeModelServer) -> Iterator[None]:
-    """`providers.speech.url` pointed at `server` for the block."""
-
-    previous_url = config.settings.providers.speech.url
-    config.settings.providers.speech.url = server.build_url()
-    try:
-        with fake_model_server.serving(server):
-            yield
-    finally:
-        config.settings.providers.speech.url = previous_url
 
 
 def _build_settings() -> config.AudioSettings:
@@ -106,7 +91,7 @@ def test_the_server_gives_the_same_transcript_the_in_process_engine_gives():
     server = fake_model_server.FakeModelServer()
     server.set_reply(PATH, 200, _build_reply([{"word": "hello", "start": 0.0, "end": 1.0, "probability": 0.9},
                                               {"word": "world", "start": 1.0, "end": 2.0, "probability": 0.8}]))
-    with _speech_url_set(server):
+    with fake_model_server.serving_kind(server=server, kind="speech"):
         remote = transcription_service.produce_transcript(wav, settings)
     in_process = _transcribe_in_process(settings, wav)
     harness.check("the transcript is the same dict, key for key", remote == in_process,
@@ -132,7 +117,7 @@ def test_a_long_recording_is_sent_in_windows_and_each_window_is_moved_to_its_pla
                                              text="hello there"))
     previous_window = audio_upload_service.set_window_s(1.0)
     try:
-        with _speech_url_set(server):
+        with fake_model_server.serving_kind(server=server, kind="speech"):
             transcript = transcription_service.produce_transcript(wav, settings)
     finally:
         audio_upload_service.set_window_s(previous_window)
@@ -156,7 +141,7 @@ def test_a_long_recording_is_sent_in_windows_and_each_window_is_moved_to_its_pla
 def test_a_word_the_server_gives_no_probability_is_kept_and_unknown():
     settings = _build_settings()
     server = fake_model_server.FakeModelServer()
-    with _speech_url_set(server):
+    with fake_model_server.serving_kind(server=server, kind="speech"):
         transcript = transcription_service.produce_transcript(_write_wav(3.0), settings)
     words = transcript["segments"][0]["words"]
     harness.check("both words are kept", [word["word"].strip() for word in words] == ["hello", "world"], str(words))
@@ -173,7 +158,7 @@ def test_words_with_no_probability_are_not_taken_for_invented_speech_defect():
     settings = _build_settings()
     server = fake_model_server.FakeModelServer()
     server.set_reply(PATH, 200, _build_reply(zero_length_words, text="one two three four"))
-    with _speech_url_set(server):
+    with fake_model_server.serving_kind(server=server, kind="speech"):
         transcript = transcription_service.produce_transcript(_write_wav(2.0), settings)
     harness.check("the segment of four words with no probability and no length is kept",
                   len(transcript["segments"]) == 1 and len(transcript["segments"][0]["words"]) == 4, str(transcript))
@@ -202,7 +187,7 @@ def test_words_listed_once_for_the_reply_go_to_the_segment_they_fall_in_and_word
     for name, reply in (("flat", flat), ("nested", nested)):
         server = fake_model_server.FakeModelServer()
         server.set_reply(PATH, 200, json.dumps(reply).encode("utf-8"))
-        with _speech_url_set(server):
+        with fake_model_server.serving_kind(server=server, kind="speech"):
             endpoint = endpoint_client.find_endpoint(kind="speech")
             placed[name] = speech_server_service.produce_remote_reply(audio_path=wav, settings=settings, endpoint=endpoint)
     flat_words = [[word["word"] for word in segment["words"]] for segment in placed["flat"]["segments"]]
@@ -218,7 +203,7 @@ def test_a_server_that_fails_is_reported_with_its_address_and_status():
     server = fake_model_server.FakeModelServer()
     server.set_reply(PATH, 500, b'{"error": "model not loaded"}')
     failure = None
-    with _speech_url_set(server):
+    with fake_model_server.serving_kind(server=server, kind="speech"):
         try:
             transcription_service.produce_transcript(_write_wav(1.0), _build_settings())
         except RuntimeError as failed:

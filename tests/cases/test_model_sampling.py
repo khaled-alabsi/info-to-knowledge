@@ -47,7 +47,7 @@ def test_a_role_without_sampling_sends_nothing_extra():
     body = _read_sent_body(ModelSettings(spec="lmstudio:a-model", temperature=0.6))
     harness.check("no top_p, and LM Studio is sent no extra body: how long it keeps a model is its own setting",
                   "top_p" not in body and not body.get("extra_body"), str(body))
-    other =_read_sent_body(ModelSettings(spec="openai-compatible:a-model", temperature=0.6, base_url="http://localhost:9"))
+    other =_read_sent_body(ModelSettings(spec="openai-compatible:a-model", temperature=0.6, host="lmstudio"))
     harness.check("another OpenAI-compatible host is sent no extra body", not other.get("extra_body"), str(other))
 
 

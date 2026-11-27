@@ -82,7 +82,7 @@ after another.
 ./i2k models    # which model each role resolved to
 ```
 
-To use the second Mac's LM Studio: `PB_LMSTUDIO_BASE_URL=http://<other-mac-address>:1234/v1 ./i2k run ...`
+To use another machine's LM Studio for one run: `PB_HOSTS__LMSTUDIO__URL=http://<other-machine-address>:1234/v1 ./i2k run ...`; to keep it, add a worker set that sets that host.
 
 ## Checks
 

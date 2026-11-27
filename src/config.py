@@ -53,6 +53,15 @@ DEFAULT_CONFIG_FILE = PLAYBOOK_ROOT / f"{_PROFILE_PREFIX}{DEFAULT_SETTINGS_NAME}
 # of asking for it. The name reaches a child process through the environment, so a queued job runs the profile its run
 # line named.
 PROFILE_ENV_VAR = "I2K_PROFILE"
+# `I2K_CONTAINER=1` says the program runs inside its container image, where Python, its libraries and the tools (ffmpeg,
+# Tesseract) are installed already. The setup wizard and every action that installs or downloads something on the machine
+# are then off: the page never shows them and the server refuses them. The model providers stay editable in Settings, and
+# a provider a run needs but lacks is named. Unset, every setup is on, as on a person's own machine. Read once, here.
+CONTAINER_ENV_VAR = "I2K_CONTAINER"
+IS_CONTAINER_MODE = os.environ.get(CONTAINER_ENV_VAR, "").strip().lower() in ("1", "true", "yes", "on")
+# What a refused setup action says; `{action}` is what was asked for
+CONTAINER_SETUP_REFUSAL = ("{action} is off: this server runs in a container, where Python, the tools and the libraries "
+                           f"are installed already ({CONTAINER_ENV_VAR} is set). Model providers are still set in Settings.")
 # The Hugging Face token a gated model's first download needs; never read from a settings file
 HF_TOKEN_ENV_VAR = "HF_TOKEN"
 # The name of the profile `load_profile` last applied; empty for the default settings. Only `load_profile` rebinds it.
@@ -63,8 +72,9 @@ PROFILE_NAME = ""
 DEFAULT_WORKER_SET_NAME = "default"
 WORKER_SET_NAME = DEFAULT_WORKER_SET_NAME
 # What a worker set may not hold: the sets and the choice of the default belong to the settings, never to one set
-_WORKER_SET_FORBIDDEN_KEYS = ("workerSets", "worker_sets", "defaultWorkerSet", "default_worker_set",
-                              "workerSetMachines", "worker_set_machines")
+_WORKER_SET_FORBIDDEN_KEYS = ("workerSets", "worker_sets", "defaultWorkerSet", "default_worker_set")
+# The one key of a worker set that changes no setting a run uses: the machine's name, shown beside the set's name
+WORKER_SET_LABEL_KEY = "machine"
 # The Workflow speed presets the program ships (the owner): Quality, the whole quality workflow; Balanced, the same large
 # model with no critique, no repair round, no review and no critique collection ("the best model without a critic and reparation
 # loops"); Fast, a small model's quick description of each frame and the document in one call
@@ -78,7 +88,7 @@ DEFAULT_SPEED_PRESETS: dict[str, dict[str, bool | int | str]] = {
                  "framesProcessing.repairCalls": 0,
                  "framesProcessing.singleFrameAttempts": 0, "budgets.askWhyAfterRejection": False, "review.isOn": False,
                  "critiqueCollection.isOn": False},
-    "fast": {"video.workflow": "fast-processing", "framesProcessing.framesPerCall": 4,
+    "fast": {"video.workflow": "direct-draft", "framesProcessing.framesPerCall": 8,
              "framesProcessing.isCritiqueOn": False, "framesProcessing.isCritiqueRepairOn": False,
              "framesProcessing.isOpenQuestionsOn": False, "framesProcessing.repairCalls": 0,
              "framesProcessing.singleFrameAttempts": 0,
@@ -215,10 +225,10 @@ class ModelSettings(_OverlaySettings):
     # with no error and no log of why. A local model on a long transcript legitimately takes
     # minutes; `None` restores the unbounded wait.
     request_timeout_s: int | None = 900
-    # The host's address; empty: the provider's own (`lmstudioBaseUrl`, `ollamaBaseUrl`). The connection a profile
-    # switches, as a worker set points the large model at another machine
-    base_url: str | None = Field(default=None,
-                                 json_schema_extra={setting_choice_vocabulary.CHOICES_KEY: setting_choice_vocabulary.BASE_URLS})
+    # The name of the entry of `hosts` this model runs on; empty: the host named like the spec's provider (`lmstudio`).
+    # What a worker set switches to point the large model at another machine
+    host: str = Field(default="",
+                      json_schema_extra={setting_choice_vocabulary.CHOICES_KEY: setting_choice_vocabulary.HOST_NAMES})
     # For a local host that insists on a key; a real key goes in the environment (OPENAI_API_KEY and the like), never in a settings file
     api_key: str | None = None
     # Measured on a local model: `json_schema` returns prose for a flat schema and the bare inner array
@@ -227,6 +237,11 @@ class ModelSettings(_OverlaySettings):
     # Phase 3's frames a call while this model runs it, over `framesProcessing.framesPerCall`; None: that setting's.
     # A small model keeps fewer frames apart in one call: qwen3.5-4b mixed the frames of a call of 8 (the owner set 5).
     frames_per_call: int | None = Field(default=None, ge=1, le=MAX_FRAMES_PER_CALL)
+    # The kinds of job this model suits, for the Settings page's lists: `frames` reads pictures (phase 3, a fast-workflow
+    # frame description), `writing` writes the document (phases 4 to 6, the audio transcript's cleanup), `filtering` is a
+    # small vision model that judges frames (phase 2). A job's menu lists only the models that suit it; empty suits
+    # every job. Nothing in a run reads it: a phase calls the model `phaseModels` names whatever it lists.
+    suits: list[Literal["frames", "writing", "filtering"]] = Field(default_factory=list)
 
     def resolve_max_output_tokens(self) -> int:
         """The most tokens one reply may take, by whichever name its host reads (`max_tokens`, Ollama's `num_predict`);
@@ -504,8 +519,9 @@ class FastProcessingSettings(_OverlaySettings):
     """The fast-processing video workflow: phase 3 describes each frame from its image
     alone, with no check, and phase 4 writes the document in one call from those descriptions."""
 
-    # The configured model that describes the frames: a small vision model is enough for one frame at a time
-    frame_model: str = Field(default="qwen3.5-4b",
+    # The configured model that describes the frames; empty uses the model the worker set's frames processing job names
+    # (a small vision model is enough for one frame at a time)
+    frame_model: str = Field(default="",
                              json_schema_extra={setting_choice_vocabulary.CHOICES_KEY: setting_choice_vocabulary.MODEL_NAMES})
     # How many frames one session of the frame model describes, each a follow-up of the one before; then the session
     # starts fresh, so its context never grows past this many frames
@@ -517,20 +533,39 @@ class FastProcessingSettings(_OverlaySettings):
     # The most one frame's reply may write: the longest description measured was about 530 words (under 1,000
     # tokens); without it a reply that looped ran to the model's own 40,960 for 20 minutes on one frame
     frame_max_tokens: int = Field(default=4096, ge=256)
-    # The configured model that writes the document from every description, in one call
-    document_model: str = Field(default="document",
+    # The configured model that writes the document from every description, in one call; empty uses the model the worker
+    # set's document writing job names
+    document_model: str = Field(default="",
                                 json_schema_extra={setting_choice_vocabulary.CHOICES_KEY: setting_choice_vocabulary.MODEL_NAMES})
     # Whether the document model thinks before it writes
     is_document_thinking_on: bool = True
+
+
+class DirectDraftSettings(_OverlaySettings):
+    """The direct-draft video workflow, the Fast speed's: the models are the quality workflow's (phase 3's writes each
+    batch of frames into the draft, phase 4's titles and summarises it), and a batch holds
+    `framesProcessing.framesPerCall` frames (the Fast speed sets 8), so only what differs is set here."""
+
+    # The width each frame is sent at
+    frame_width: int = Field(default=1280, ge=320)
+    # The most characters of the draft's last section a batch is given, counted from its end, so a long section does
+    # not grow every call
+    last_section_chars: int = Field(default=6000, ge=500)
+    # The most characters of a section's start phase 4's call reads, beside the section's heading
+    first_line_chars: int = Field(default=240, ge=40)
+    # The most calls phase 4's one conversation may make: each look, cut, mark and mask of a picture is a call, then the
+    # submit; the conversation ends at the submit, or with the draft as written when the calls run out
+    outline_calls: int = Field(default=60, ge=2)
 
 
 class VideoSettings(_OverlaySettings):
     """The video workflow."""
 
     # The workflow a video run takes when its run line names none: `quality` (checked batches, the document
-    # conversation, the review) or `fast-processing`
-    workflow: Literal["quality", "fast-processing"] = "quality"
+    # conversation, the review), `direct-draft` (the Fast speed's) or `fast-processing` (the earlier fast workflow)
+    workflow: Literal["quality", "direct-draft", "fast-processing"] = "quality"
     fast_processing: FastProcessingSettings = Field(default_factory=FastProcessingSettings)
+    direct_draft: DirectDraftSettings = Field(default_factory=DirectDraftSettings)
 
 
 class AudioSettings(_OverlaySettings):
@@ -813,27 +848,54 @@ class QueueSettings(_OverlaySettings):
     on_failure: Literal["continue", "block"] = "continue"
 
 
+class HostSettings(_OverlaySettings):
+    """A model server the program calls by its address, named once in `hosts` and named by every model and every kind of
+    model that runs on it (`models.frame.host`, `providers.speech.host`), so its address is written in one place."""
+
+    # The address up to and including `/v1` for an OpenAI-compatible server
+    url: str
+    # The NAME of the environment variable that holds the server's key; "" for a server with no key. A key is never in a
+    # settings file
+    api_key_env: str = ""
+    # The jobs this provider can do: the Settings page lists a provider only for the jobs named here (a provider that
+    # serves speech to text is no choice for the scanned page reader). A provider that names none does chat
+    kinds: list[Literal["chat", "speech", "diarization", "embeddings", "decision"]] = Field(default_factory=lambda: ["chat"])
+
+
+# The hosts every machine has: LM Studio and Ollama on this machine. A model whose spec names one of them as its
+# provider (`lmstudio:...`) runs on that host when it names no host of its own
+DEFAULT_HOSTS = {"lmstudio": "http://localhost:1234/v1", "ollama": "http://localhost:11434"}
+# Seconds a chat request may take when its model gives no `requestTimeoutS`
+DEFAULT_CHAT_TIMEOUT_S = 600
+
+
 class ChatProviderSettings(_OverlaySettings):
     """The server that answers chat and vision requests. The model's name is each phase's own (`models`), so there is no
     `model` here."""
 
-    # The address up to and including `/v1`; "" keeps the program's own way of reaching the chat models
-    url: str = ""
-    # The NAME of the environment variable that holds the server's key; "" for a server with no key. A key is never in a
-    # settings file
-    api_key_env: str = ""
+    # The entry of `models` that reads scanned pages: its server, its model's name there and its wait time (`requestTimeoutS`)
+    # are used, over `host` and `timeoutS` below. "" keeps `host` below
+    library_model: str = Field(default="", json_schema_extra={
+        setting_choice_vocabulary.CHOICES_KEY: setting_choice_vocabulary.MODEL_NAMES})
+    # The name of the entry of `hosts` that reads scanned pages as chat requests; "" keeps the program's own reader
+    host: str = Field(default="",
+                      json_schema_extra={setting_choice_vocabulary.CHOICES_KEY: setting_choice_vocabulary.HOST_NAMES})
     # Seconds one request may take before the program gives up on it
     timeout_s: int = Field(default=600, gt=0)
 
 
 class ProviderSettings(_OverlaySettings):
-    """A server that answers one kind of model request by URL: speech to text, speaker turns, image vectors, text with
-    boxes, face and person detection, or the frame decision filter."""
+    """A server that answers one kind of model request by URL: speech to text, speaker turns, image vectors, or the
+    decision model's yes-or-no questions about frames."""
 
-    # The address up to and including `/v1`; "" keeps the program's own way of running that model on this machine
-    url: str = ""
-    # The NAME of the environment variable that holds the server's key; "" for a server with no key
-    api_key_env: str = ""
+    # The entry of `models` this kind of model is: its server, its model's name there and its wait time (`requestTimeoutS`)
+    # are used, over `host`, `model` and `timeoutS` below. "" keeps those
+    library_model: str = Field(default="", json_schema_extra={
+        setting_choice_vocabulary.CHOICES_KEY: setting_choice_vocabulary.MODEL_NAMES})
+    # The name of the entry of `hosts` that answers this kind of model; "" keeps the program's own way of running that
+    # model on this machine
+    host: str = Field(default="",
+                      json_schema_extra={setting_choice_vocabulary.CHOICES_KEY: setting_choice_vocabulary.HOST_NAMES})
     # The model's name on that server; "" means the name the program uses for it
     model: str = ""
     # Seconds one request may take before the program gives up on it
@@ -852,22 +914,16 @@ class DiarizationProviderSettings(ProviderSettings):
     timeout_s: int = Field(default=3600, gt=0)
 
 
-class DetectionProviderSettings(ProviderSettings):
-    """Face and person detection: one request per frame, so a request is short."""
-
-    timeout_s: int = Field(default=120, gt=0)
-
-
 class ProvidersSettings(_OverlaySettings):
-    """Where each kind of model is reached: one server per kind, called by URL with the standard REST requests. Every URL
-    is "" until a person sets it, and a kind with no URL runs the way it always has (`docs/models.md`)."""
+    """Where each kind of model is reached: one host per kind, named from `hosts`. `chat`, `speech`, `diarization` and
+    `embeddings` use the standard requests of OpenAI-compatible servers; `decision` is the one optional request that no
+    standard server answers. Every kind names no host until a person sets one, and a kind with no host runs the way it always has
+    (`docs/models.md`). Text reading, face detection and person detection run inside the program and have no URL."""
 
     chat: ChatProviderSettings = Field(default_factory=ChatProviderSettings)
     speech: SpeechProviderSettings = Field(default_factory=SpeechProviderSettings)
     diarization: DiarizationProviderSettings = Field(default_factory=DiarizationProviderSettings)
     embeddings: ProviderSettings = Field(default_factory=ProviderSettings)
-    ocr: ProviderSettings = Field(default_factory=ProviderSettings)
-    detection: DetectionProviderSettings = Field(default_factory=DetectionProviderSettings)
     decision: ProviderSettings = Field(default_factory=ProviderSettings)
 
 
@@ -892,8 +948,9 @@ class Settings(BaseSettings):
                                       alias_generator=to_camel, populate_by_name=True,
                                       extra="forbid")
 
-    ollama_base_url: str = "http://localhost:11434"
-    lmstudio_base_url: str = "http://localhost:1234/v1"
+    # Every model server by name, its address written here once; a model and a kind of model name the host they run on
+    hosts: dict[str, HostSettings] = Field(default_factory=lambda: {
+        name: HostSettings(url=url) for name, url in DEFAULT_HOSTS.items()})
     models: dict[str, ModelSettings] = Field(default_factory=dict)
     # phase -> the name of the entry of `models` it calls, for the phases that should not use their default
     # (`PHASE_DEFAULT_MODELS`). Set per run by `run --phase-model PHASE=NAME`, which the page's run form writes.
@@ -911,21 +968,23 @@ class Settings(BaseSettings):
     pdf: PdfSettings = Field(default_factory=PdfSettings)
     tags: TagSettings = Field(default_factory=TagSettings)
     queue: QueueSettings = Field(default_factory=QueueSettings)
-    # The server each kind of model is reached at, by URL. Read by `services/endpoint_client.py`; every URL is "" by default
+    # The host each kind of model is reached at, by the name of its entry of `hosts`. Read by
+    # `services/endpoint_client.py`; every kind names no host by default
     providers: ProvidersSettings = Field(default_factory=ProvidersSettings)
     # The Workflow speed menu's presets: each a name and the settings it sets, by their playbook names (the keys
     # `models.speed_setting_vocabulary.SPEED_KEYS` lists). A run keeps the preset chosen for it, and any value changed
     # by hand, in `run-speed.json`; a setting a preset leaves out keeps the settings' own value
     speed_presets: dict[str, dict[str, bool | int | str]] = Field(default_factory=lambda: dict(DEFAULT_SPEED_PRESETS))
     # The worker sets: each a name and the part of the settings it overrides, nested as a profile
-    # file nests it (`models`, `lmstudioBaseUrl`, `audio.mlx.model`). Jobs on different sets run at the same time, jobs
+    # file nests it (`models`, `hosts`, `audio.mlx.model`). Jobs on different sets run at the same time, jobs
     # on one set one after another. The default set is the settings files as they are and has no entry here
     worker_sets: dict[str, dict[str, Any]] = Field(default_factory=dict)
     # The set a job takes when none is chosen: "default", or the name of one entry of `workerSets`
     default_worker_set: str = DEFAULT_WORKER_SET_NAME
-    # The machine each worker set runs on, in the owner's words ("default": "main machine"), shown beside the set's name
-    # wherever a set is chosen; a set with no entry shows its name alone
-    worker_set_machines: dict[str, str] = Field(default_factory=dict)
+    # The machine the settings run on, in the owner's words, shown beside a worker set's name wherever a
+    # set is chosen. The default set's machine is this value; another set names its own by overriding it
+    # (`workerSets.<name>.machine`), so a set's name and machine are one object
+    machine: str = ""
 
     @model_validator(mode="before")
     @classmethod
@@ -1005,6 +1064,31 @@ class Settings(BaseSettings):
 
         return self.find_configured_model(name) or ModelSettings()
 
+    def find_host(self,
+                  name: str) -> HostSettings:
+        """The entry of `hosts` under this name. Raises `ValueError` naming the hosts there are, for a name none holds."""
+
+        if name not in self.hosts:
+            raise ValueError(f"no host {name!r} in `hosts`: the hosts are {', '.join(sorted(self.hosts)) or 'none'}")
+
+        return self.hosts[name]
+
+    def find_model_host(self,
+                        cfg: ModelSettings) -> HostSettings | None:
+        """The host a model runs on: the one it names, else the one named like its spec's provider (`lmstudio`); None
+        for a model that names none and whose provider is no host's name."""
+
+        name = cfg.host or cfg.spec.partition(":")[0]
+
+        return self.find_host(name) if cfg.host or name in self.hosts else None
+
+    def find_host_by_url(self,
+                         url: str) -> HostSettings | None:
+        """The entry of `hosts` at this address, None when no host is there: a key is looked up by the address a
+        setup check or a probe calls."""
+
+        return next((host for host in self.hosts.values() if host.url.rstrip("/") == url.rstrip("/")), None)
+
     def select_phase_model_name(self,
                                 phase: str) -> str:
         """The name of the model this phase is set to call, `phaseModels`' when it names one, checked by nothing: the
@@ -1032,6 +1116,18 @@ class Settings(BaseSettings):
         """The entry of `models` this phase calls, from `resolve_phase_model_name`."""
 
         return self.resolve_model(self.resolve_phase_model_name(phase))
+
+    def resolve_fast_model_name(self,
+                                phase: str) -> str:
+        """The name of the model a fast-processing run calls in phase 3 (describing a frame) or phase 4 (writing the
+        document): the one `video.fastProcessing` names for it, else the model the worker set's own job (`phaseModels`
+        for that phase) names, so the fast workflow is another flow on the same models. Raises `KeyError` for any other
+        phase."""
+
+        fast = self.video.fast_processing
+        own = {FRAMES_PROCESSING_PHASE: fast.frame_model, FINALIZE_PHASE: fast.document_model}[phase]
+
+        return own or self.resolve_phase_model_name(phase)
 
     def resolve_frames_per_call(self) -> int:
         """Phase 3's frames a call: its model's own `framesPerCall` when the entry sets one, else
@@ -1142,6 +1238,21 @@ def merge_worker_set(merged: dict,
     return merge_settings(merged, worker_sets[worker_set_name])
 
 
+def read_set_machine(merged: dict) -> str:
+    """The machine a worker set runs on, from `merged` (the settings with the set on top): the `machine` an old file still
+    names, else the provider (`hosts` entry) the model of the set's frames processing job runs on, else "". A set's lane
+    in the job queue and the name beside it in the run form are this."""
+
+    named = merged.get(WORKER_SET_LABEL_KEY)
+    if named:
+        return str(named)
+    phase_models = merged.get("phaseModels") or {}
+    model_name = phase_models.get(FRAMES_PROCESSING_PHASE) or PHASE_DEFAULT_MODELS[FRAMES_PROCESSING_PHASE]
+    entry = (merged.get("models") or {}).get(model_name) or {}
+
+    return str(entry.get("host") or str(entry.get("spec") or "").partition(":")[0])
+
+
 def load_profile(name: str) -> list[str]:
     """Read `playbook.<name>.json` on top of the default and local files and rebind `settings` to the result. Returns
     the top-level sections the profile sets, for the line the CLI prints. A name with no file raises: a profile
@@ -1151,6 +1262,12 @@ def load_profile(name: str) -> list[str]:
     global PROFILE_NAME, settings
     path = build_profile_path(name)
     if not path.is_file():
+        # `strict` is a shipped worker set now: `--profile strict` reads that set, as the file of that name once did
+        shipped_sets = read_settings_files(DEFAULT_CONFIG_FILE, LOCAL_CONFIG_FILE).get("workerSets") or {}
+        if name in shipped_sets and name != DEFAULT_WORKER_SET_NAME:
+            apply_worker_set(name)
+
+            return sorted(key for key in shipped_sets[name])
         raise FileNotFoundError(f"no profile {name!r}: {path} is not on disk")
     overrides = read_settings_file(path)
     if not overrides:

@@ -151,7 +151,8 @@ def describe_phase_worker(output_root: Path,
                           now: float) -> dict:
     """What the worker of phase `number` did and does now, for the panel its card opens."""
 
-    if number in _FAST_PHASES and video_workflow_service.is_fast_processing(output_root):
+    # both fast workflows keep their workers' turns the same way (`fast_turn_service`)
+    if number in _FAST_PHASES and video_workflow_service.has_no_critic(output_root):
         return _describe_fast_turns(output_root, number, fast_turn_service.list_phase_turns(output_root, number))
     thinking = _find_thinking_file(output_root, number)
     text = thinking.read_text(encoding="utf-8", errors="replace") if thinking else ""

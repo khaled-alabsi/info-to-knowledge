@@ -623,6 +623,30 @@
       "base": [],
       "contracts": [],
       "templates": []
+    },
+    "direct_draft_batch": {
+      "why": "Phase 3 of a direct-draft video run (the Fast speed): one call for a batch of frames, which goes straight into the draft document, continuing the last section or opening a new heading. Without the continue-or-open rule the draft is one run-on section or repeats its last section, and without the picture-line rule no frame's picture reaches the document.",
+      "instruction": "video/direct_draft_batch.md",
+      "identity": {
+        "number": "3",
+        "label": "draft writer",
+        "doing": "writing the next part of a meeting's reference document from a batch of frames of its recording"
+      },
+      "base": [],
+      "contracts": [],
+      "templates": []
+    },
+    "direct_draft_outline": {
+      "why": "Phase 4 of a direct-draft video run (the Fast speed): one conversation over the draft's outline, in which the model cuts the pictures its draft places and submits the title, summary, agenda and heading changes. Without the cut-what-you-keep rule every picture is left out, and without the outline-only rule the summary invents what the headings do not show.",
+      "instruction": "video/direct_draft_outline.md",
+      "identity": {
+        "number": "4",
+        "label": "draft finisher",
+        "doing": "titling and summarising a meeting's draft document and cutting the pictures it places"
+      },
+      "base": [],
+      "contracts": [],
+      "templates": []
     }
   }
 }

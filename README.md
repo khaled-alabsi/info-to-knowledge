@@ -76,6 +76,10 @@ run.
   `http://localhost:1234/v1`.
 - Disk space for the models. Check your free disk first: the recommended language model is about 19 GB.
 
+Chat, speech, speaker and image-embedding models are reached by URL and can be any OpenAI-compatible provider. Text
+reading (Tesseract) and face and person detection run inside i2k on the processor. The optional decision model runs
+inside i2k, or natively through `i2k serve-models`. See [docs/models.md](docs/models.md).
+
 On an Apple silicon Mac the program also uses MLX for speech recognition and Apple's text recognizer. On Linux and in a
 container it uses faster-whisper and Tesseract instead (`--profile container`).
 
@@ -92,7 +96,8 @@ i2k probe                                    # checks that every configured mode
 ```
 
 `./setup.sh hf_...` does the same steps in one script. To run in a container, read
-[docs/container.md](docs/container.md).
+[docs/container.md](docs/container.md); the image sets `I2K_CONTAINER=1`, which switches the setup wizard and the
+machine setup off and leaves the model providers editable in Settings.
 
 Speaker recognition (who spoke when) is optional: `pip install -r requirements-diarization.txt`, then accept the terms
 of the model on huggingface.co with the account of your token.

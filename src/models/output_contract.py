@@ -181,6 +181,13 @@ FAST_DOCUMENT_SLUG = "fast-document"
 # (`fast-document.jsonl`), under the run folder's logs: each model call's thinking, words and tool call, for the page's
 # worker panels (`services/fast_turn_service.py`)
 FAST_TURNS_DIR = "fast-turns"
+# A direct-draft run's phase 3: the draft document, one marker line and one text per batch of frames, appended as each
+# batch is written; phase 4 reads it whole (`services/direct_draft_batch_service.py`)
+DRAFT_FILE = "03_draft.md"
+# What a direct-draft run's phase 4 call submitted (title, summary, agenda, heading changes), under the run folder's
+# `04_writing/`: a resume builds the document from it and asks nothing again (`services/direct_draft_outline_service.py`).
+# The call's slug and turns are the fast-processing document call's (`FAST_DOCUMENT_SLUG`), so the page's panel shows them
+DIRECT_DRAFT_OUTLINE_FILE = "direct-draft-outline.json"
 # Phase 3's folder for an audio recording whose ingesting profile declares preparation steps: one markdown file per
 # call, `<step>.md` for a step over the whole speech and `<step>/NN.md` for each item of an earlier step
 # (`services/prepared_file_service.py`)

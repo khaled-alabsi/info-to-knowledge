@@ -18,6 +18,24 @@ from models import run_job
 from models.run_job import RunJobRequest
 from services import job_queue_service
 
+def _point_at_own_settings(text: str = '{"defaultWorkerSet": "default"}') -> tuple:
+    """Points the settings at a folder of the test's own holding `text` as the default file, and returns what to point
+    back to. Never the owner's files: a set they put on a machine moves its jobs to that machine's lane, and a test
+    asking the set's lane would wait for ever."""
+
+    previous = (config.DEFAULT_CONFIG_FILE, config.LOCAL_CONFIG_FILE, config.PLAYBOOK_ROOT, config.PROFILE_NAME)
+    folder = Path(tempfile.mkdtemp())
+    (folder / "playbook.default.json").write_text(text, encoding="utf-8")
+    config.DEFAULT_CONFIG_FILE, config.LOCAL_CONFIG_FILE = folder / "playbook.default.json", folder / "playbook.local.json"
+    config.PLAYBOOK_ROOT, config.PROFILE_NAME = folder, ""
+
+    return previous
+
+
+def _point_back(previous: tuple) -> None:
+    config.DEFAULT_CONFIG_FILE, config.LOCAL_CONFIG_FILE, config.PLAYBOOK_ROOT, config.PROFILE_NAME = previous
+
+
 _FAKE_MAIN = '''
 import os, sys
 from pathlib import Path
@@ -70,13 +88,15 @@ def _use_stand_in(pipes: Path, retries: int = 0, on_failure: str = "continue") -
     return (job_queue_service.set_command_prefix([sys.executable, str(main)]),
             job_queue_service.set_run_lister(lambda: []),
             job_queue_service.set_queue_settings_reader(
-                lambda profile: config.QueueSettings(retries=retries, on_failure=on_failure)))
+                lambda profile: config.QueueSettings(retries=retries, on_failure=on_failure)),
+            _point_at_own_settings())
 
 
 def _give_back(previous: tuple) -> None:
     job_queue_service.set_command_prefix(previous[0])
     job_queue_service.set_run_lister(previous[1])
     job_queue_service.set_queue_settings_reader(previous[2])
+    _point_back(previous[3])
 
 
 def _run_in_thread(queue_dir: Path,
@@ -98,11 +118,28 @@ def test_the_run_line_carries_the_worker_set_and_a_job_knows_its_lane():
     kept = run_job.RunJob(job_id="k", request=RunJobRequest(video=Path("/in/a.mp4"), output_root=folder))
     asked = run_job.RunJob(job_id="a", request=RunJobRequest(video=Path("/in/a.mp4"), output_root=folder, worker_set="second-host"))
     none = run_job.RunJob(job_id="n", request=RunJobRequest(video=Path("/in/a.mp4"), output_root=Path("/out/none")))
+    previous = _point_at_own_settings()
+    try:
+        lanes = tuple(job_queue_service.read_job_lane(job, "default") for job in (asked, kept, none))
+    finally:
+        _point_back(previous)
     harness.check("the lane is the request's set, else the folder's, else the default's",
-                  (job_queue_service.read_job_lane(asked, "default"), job_queue_service.read_job_lane(kept, "default"),
-                   job_queue_service.read_job_lane(none, "default")) == ("second-host", "Mac", "default"),
-                  str((job_queue_service.read_job_lane(asked, "default"), job_queue_service.read_job_lane(kept, "default"),
-                       job_queue_service.read_job_lane(none, "default"))))
+                  lanes == ("second-host", "Mac", "default"), str(lanes))
+
+
+def test_two_sets_on_one_machine_share_one_lane_defect():
+    # Defect: jobs waited for each other by set name, so a "strict" set on the same machine ran beside a default job
+    # on the same card. Fix: a job's lane is the machine its set names, its set's own name only when it names none.
+    previous = _point_at_own_settings(
+        '{"defaultWorkerSet": "default", "machine": "office", "workerSets": {"strict": {"machine": "office"},'
+        ' "remote": {"machine": "gpu-box"}, "plain": {}}}')
+    try:
+        lanes = tuple(job_queue_service.read_job_lane(run_job.RunJob(job_id=name, request=_request(name, name)), "default")
+                      for name in ("default", "strict", "remote", "plain"))
+    finally:
+        _point_back(previous)
+    harness.check("default, strict and a set naming no machine share the office lane, remote has its machine's",
+                  lanes == ("office", "office", "gpu-box", "office"), str(lanes))
 
 
 def test_a_profile_can_name_the_set_its_jobs_run_on():

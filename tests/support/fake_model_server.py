@@ -14,6 +14,8 @@ import json
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+import config
+
 MODEL_NAME = "stand-in-model"                                 # the one model `GET /v1/models` lists
 
 
@@ -88,24 +90,14 @@ def _build_transcription_reply(request: RecordedRequest) -> dict:
 
 
 def _build_embeddings_reply(request: RecordedRequest) -> dict:
-    image_count = len(request.read_json()["input"])
+    """Answer the way vLLM does: one vector for a request whose `messages` hold an image, one for each text of `input`."""
+
+    body = request.read_json()
+    image_count = len(body["input"]) if "input" in body else 1
 
     return {"object": "list", "model": MODEL_NAME,
             "data": [{"object": "embedding", "index": index, "embedding": [float(index), 0.5, 0.25]}
                      for index in range(image_count)]}
-
-
-def _build_ocr_reply(request: RecordedRequest) -> dict:
-    return {"words": [{"text": "Hello", "box": [10, 20, 60, 40], "line": 1, "confidence": 91.5},
-                      {"text": "world", "box": [70, 20, 130, 40], "line": 1, "confidence": 88.0}]}
-
-
-def _build_detections_reply(request: RecordedRequest) -> dict:
-    kind_list = request.read_json()["kinds"]
-    found = [{"kind": "face", "box": [5, 5, 40, 40], "score": 0.93},
-             {"kind": "person", "box": [0, 0, 100, 200], "score": 0.81}]
-
-    return {"detections": [detection for detection in found if detection["kind"] in kind_list]}
 
 
 def _build_classifications_reply(request: RecordedRequest) -> dict:
@@ -122,8 +114,6 @@ ROUTE_DICT = {
     ("POST", "/v1/chat/completions"): _build_chat_reply,
     ("POST", "/v1/audio/transcriptions"): _build_transcription_reply,
     ("POST", "/v1/embeddings"): _build_embeddings_reply,
-    ("POST", "/v1/ocr"): _build_ocr_reply,
-    ("POST", "/v1/images/detections"): _build_detections_reply,
     ("POST", "/v1/classifications"): _build_classifications_reply,
     ("GET", "/v1/models"): _build_models_reply,
 }
@@ -214,3 +204,37 @@ def serving(server: ThreadingHTTPServer):
         server.shutdown()
         thread.join()
         server.server_close()
+
+
+TEST_HOST = "test-server"                                     # the entry of `hosts` a test's server is added under
+
+
+@contextlib.contextmanager
+def serving_host(server: FakeModelServer):
+    """Run `server` for the block as the entry `TEST_HOST` of `hosts`, which is put back after."""
+
+    previous_entry = config.settings.hosts.get(TEST_HOST)
+    config.settings.hosts[TEST_HOST] = config.HostSettings(url=server.build_url())
+    try:
+        with serving(server):
+            yield server
+    finally:
+        if previous_entry is None:
+            del config.settings.hosts[TEST_HOST]
+        else:
+            config.settings.hosts[TEST_HOST] = previous_entry
+
+
+@contextlib.contextmanager
+def serving_kind(server: FakeModelServer,
+                 kind: str):
+    """Run `server` for the block as the host `providers.<kind>` names, `TEST_HOST`; the kind's host is put back after."""
+
+    provider = getattr(config.settings.providers, kind)
+    previous_host = provider.host
+    provider.host = TEST_HOST
+    try:
+        with serving_host(server):
+            yield server
+    finally:
+        provider.host = previous_host

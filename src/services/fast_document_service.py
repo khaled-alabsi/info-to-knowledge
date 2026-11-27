@@ -36,8 +36,8 @@ from utils import document_text_utils
 from utils import json_store_utils
 from utils import message_content_utils
 
-__all__ = ["PHASE", "PROMPT_PHASE", "ANSWER_FILE", "set_model_factory", "build_answer_path", "build_messages",
-           "count_prompt_tokens", "compute_answer_room", "build_request_path", "render_request", "write_document"]
+__all__ = ["PHASE", "PROMPT_PHASE", "ANSWER_FILE", "set_model_factory", "build_answer_path", "read_profile_text",
+           "build_messages", "count_prompt_tokens", "compute_answer_room", "build_request_path", "render_request", "write_document"]
 
 PHASE = "finalize"
 PROMPT_PHASE = "fast_document"
@@ -66,9 +66,9 @@ def build_answer_path(paths: RunPaths) -> Path:
     return paths.output_root / output_contract.WRITING_DIR_NAME / ANSWER_FILE
 
 
-def _read_profile_text(folder: Path) -> str:
+def read_profile_text(folder: Path) -> str:
     """The ingesting profile's own section, which shapes the document as it does on the quality workflow; none for
-    `knowledge`, the shape the instruction itself describes."""
+    `knowledge`, the shape the instruction itself describes. A direct-draft run's batches read it too."""
 
     profile = ingesting_profile_service.resolve_profile(folder)
     file_id = f"base/ingesting-profile-{profile}.md"
@@ -87,7 +87,7 @@ def build_messages(paths: RunPaths,
     tags_line = f"\nThe owner tagged it: {', '.join(tags)}. Read the tags as a hint of what the recording is.\n" if tags else ""
     human = (f"## Write the document of this recording\n\nThe recording is {recording}.{tags_line}\n\n{descriptions}\n\n"
              f"Answer with the document in markdown and nothing else.")
-    system = system_prompt_builder.build_system_prompt(PROMPT_PHASE) + _read_profile_text(paths.output_root)
+    system = system_prompt_builder.build_system_prompt(PROMPT_PHASE) + read_profile_text(paths.output_root)
 
     return [SystemMessage(content=system), HumanMessage(content=[{"type": "text", "text": human}])]
 

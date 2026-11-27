@@ -203,7 +203,8 @@ def list_artifacts(folder: Path) -> list[dict]:
     processed = [path for path in sorted((folder / output_contract.ITEMS_DIR_NAME).glob("*.md")) if path not in critiques]
     groups = [
         ("document", "Document", "markdown", documents),
-        ("draft", "Draft", "markdown", [folder / _DRAFT_FILE]),
+        # a direct-draft run's draft is the one phase 3 wrote, in chapters, before phase 4 titles it
+        ("draft", "Draft", "markdown", [folder / _DRAFT_FILE, folder / output_contract.DRAFT_FILE]),
         # a running part's thinking so far, which the part's row opens (the owner could not tell it from a stuck one); the
         # page shows this group as Worker turns, every worker's session with its turns and tool calls
         ("thinking", "Worker turns", "markdown",

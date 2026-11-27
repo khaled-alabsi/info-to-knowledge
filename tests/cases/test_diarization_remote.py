@@ -1,15 +1,13 @@
 """Speaker turns through a model server. REQUIREMENTS.md R12, plan step 5.
 
-With `providers.diarization.url` set, `diarization_service.compute_speaker_turns` sends the meeting's audio, every part
+With `providers.diarization.host` naming a host, `diarization_service.compute_speaker_turns` sends the meeting's audio, every part
 at its offset and compressed, to the server on port 0 as one request, and returns the turns the server names in the form
 the in-process model gives them. Nothing of pyannote or torch is used.
 """
 
-import contextlib
 import json
 import tempfile
 import wave
-from collections.abc import Iterator
 from pathlib import Path
 
 import numpy
@@ -42,19 +40,6 @@ def _write_wav(seconds: float) -> Path:
     return path
 
 
-@contextlib.contextmanager
-def _diarization_url_set(server: fake_model_server.FakeModelServer) -> Iterator[None]:
-    """`providers.diarization.url` pointed at `server` for the block."""
-
-    previous_url = config.settings.providers.diarization.url
-    config.settings.providers.diarization.url = server.build_url()
-    try:
-        with fake_model_server.serving(server):
-            yield
-    finally:
-        config.settings.providers.diarization.url = previous_url
-
-
 def _read_sent_audio(request: fake_model_server.RecordedRequest) -> bytes:
     return [content for name, file, content in request.read_multipart_fields() if file is not None][0]
 
@@ -80,7 +65,7 @@ def _loudest(samples: numpy.ndarray,
 def test_the_meeting_goes_as_one_request_with_every_part_at_its_offset_and_the_turns_come_back():
     server = fake_model_server.FakeModelServer()
     settings = config.DiarizationSettings(max_speakers=4)
-    with _diarization_url_set(server):
+    with fake_model_server.serving_kind(server=server, kind="diarization"):
         result = diarization_service.compute_speaker_turns([(_write_wav(1.0), 0.0), (_write_wav(0.5), 2.0)], settings)
     harness.check("one POST to the transcription route for the whole meeting",
                   [(request.method, request.path) for request in server.request_list] == [("POST", PATH)],
@@ -107,7 +92,7 @@ def test_a_server_that_marks_overlap_gives_the_exclusive_turns_apart():
         "segments": [{"speaker": "A", "start": 0.0, "end": 2.0}, {"speaker": "B", "start": 1.5, "end": 3.0}],
         "exclusive_segments": [{"speaker": "A", "start": 0.0, "end": 1.5}, {"speaker": "B", "start": 1.5, "end": 3.0}],
     }).encode("utf-8"))
-    with _diarization_url_set(server):
+    with fake_model_server.serving_kind(server=server, kind="diarization"):
         result = diarization_service.compute_speaker_turns([(_write_wav(1.0), 0.0)], config.DiarizationSettings())
     harness.check("the turns overlap where two people speak at once",
                   [(turn["start"], turn["end"], turn["label"]) for turn in result["turns"]]
@@ -125,7 +110,7 @@ def test_a_remote_run_loads_no_model_and_frees_no_device_memory():
     previous_release = diarization_service._release_device_memory
     diarization_service._release_device_memory = lambda: freed.append("freed")
     try:
-        with _diarization_url_set(server):
+        with fake_model_server.serving_kind(server=server, kind="diarization"):
             diarization_service.compute_speaker_turns([(_write_wav(1.0), 0.0)], config.DiarizationSettings())
     finally:
         diarization_service.set_pipeline_loader(previous_loader)
@@ -137,7 +122,7 @@ def test_a_remote_run_loads_no_model_and_frees_no_device_memory():
 def test_the_run_header_says_the_server_instead_of_asking_for_pyannote():
     server = fake_model_server.FakeModelServer()
     settings = config.DiarizationSettings(is_on=True)
-    with _diarization_url_set(server):
+    with fake_model_server.serving_kind(server=server, kind="diarization"):
         line = diarization_service.describe_diarization(settings)
     harness.check("the line names the server's address and does not say pyannote is missing",
                   server.build_url() in line and "not installed" not in line, line)
@@ -147,7 +132,7 @@ def test_a_server_that_fails_leaves_the_transcript_without_speakers():
     server = fake_model_server.FakeModelServer()
     server.set_reply(PATH, 500, b'{"error": "out of memory"}')
     failure = None
-    with _diarization_url_set(server):
+    with fake_model_server.serving_kind(server=server, kind="diarization"):
         try:
             diarization_service.compute_speaker_turns([(_write_wav(1.0), 0.0)], config.DiarizationSettings())
         except DiarizationFailed as failed:
@@ -158,16 +143,17 @@ def test_a_server_that_fails_leaves_the_transcript_without_speakers():
 
 def test_a_server_nobody_answers_is_unavailable():
     server = fake_model_server.FakeModelServer()
-    with _diarization_url_set(server):
+    with fake_model_server.serving_kind(server=server, kind="diarization"):
         address = server.build_url()
-    previous_url = config.settings.providers.diarization.url
-    config.settings.providers.diarization.url = address
+    config.settings.hosts[fake_model_server.TEST_HOST] = config.HostSettings(url=address)
+    config.settings.providers.diarization.host = fake_model_server.TEST_HOST
     failure = None
     try:
         diarization_service.compute_speaker_turns([(_write_wav(1.0), 0.0)], config.DiarizationSettings())
     except DiarizationUnavailable as unavailable:
         failure = str(unavailable)
     finally:
-        config.settings.providers.diarization.url = previous_url
+        config.settings.providers.diarization.host = ""
+        del config.settings.hosts[fake_model_server.TEST_HOST]
     harness.check("a refused connection is DiarizationUnavailable and names the address",
                   failure is not None and address in failure and "no answer" in failure, str(failure))

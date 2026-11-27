@@ -52,7 +52,7 @@ def _build_part_data_urls(frame_path: Path) -> list[str]:
 def request_frame_vectors(endpoint: EndpointSpec,
                           frame_path_list: list[Path]) -> numpy.ndarray:
     """Give me one row of 3,840 numbers for each frame of `frame_path_list`, in that order, asked of the server one frame
-    at a time; the error names the frame whose five vectors did not come back right."""
+    at a time (one request for each of its five images); the error names the frame whose five vectors did not come back right."""
 
     row_list = []
     for frame_path in frame_path_list:

@@ -181,17 +181,18 @@ def _build_model_field(endpoint: EndpointSpec) -> dict[str, str]:
 
 
 def find_endpoint(kind: str) -> EndpointSpec | None:
-    """Give me the server set for `kind` of model (`chat`, `speech`, `diarization`, `embeddings`, `ocr`, `detection`,
-    `decision`); None when its URL is empty, which keeps the program's own way of running that model."""
+    """Give me the server set for `kind` of model (`chat`, `speech`, `diarization`, `embeddings`, `decision`): the entry of
+    `hosts` it names. None when it names none, which keeps the program's own way of running that model."""
 
     providers = config.settings.providers
     if kind not in type(providers).model_fields:
         raise ValueError(f"no kind of model {kind!r}: the kinds are {sorted(type(providers).model_fields)}")
     provider = getattr(providers, kind)
-    if not provider.url:
+    if not provider.host:
         return None
+    host = config.settings.find_host(provider.host)
 
-    return EndpointSpec(base_url=provider.url, api_key_env=provider.api_key_env, timeout_s=provider.timeout_s,
+    return EndpointSpec(base_url=host.url, api_key_env=host.api_key_env, timeout_s=provider.timeout_s,
                         model=getattr(provider, "model", ""))
 
 
@@ -309,14 +310,41 @@ def request_speaker_turns(endpoint: EndpointSpec,
 
 def request_embeddings(endpoint: EndpointSpec,
                        data_url_list: list[str]) -> list[list[float]]:
-    """Give me one vector per image of `data_url_list`, from `POST /v1/embeddings`, in the order the images were sent."""
+    """Give me one vector per image of `data_url_list`, in the order the images were sent. Each image is its own request to
+    `POST /v1/embeddings` in the shape vLLM documents for image models: `messages` holding one user message whose content
+    is an `image_url` part, and `encoding_format` `float`."""
+
+    vector_list = []
+    for data_url in data_url_list:
+        content = [{"type": "image_url", "image_url": {"url": data_url}}]
+        body = {**_build_model_field(endpoint=endpoint), "messages": [{"role": "user", "content": content}],
+                "encoding_format": "float"}
+        vector_list.extend(_read_embedding_vectors(endpoint=endpoint, body=body, expected_count=1))
+
+    return vector_list
+
+
+def request_text_embeddings(endpoint: EndpointSpec,
+                            text_list: list[str]) -> list[list[float]]:
+    """Give me one vector per text of `text_list` from `POST /v1/embeddings` with the standard `input` list, in the order
+    the texts were sent."""
+
+    body = {**_build_model_field(endpoint=endpoint), "input": text_list, "encoding_format": "float"}
+
+    return _read_embedding_vectors(endpoint=endpoint, body=body, expected_count=len(text_list))
+
+
+def _read_embedding_vectors(endpoint: EndpointSpec,
+                            body: dict,
+                            expected_count: int) -> list[list[float]]:
+    """Give me the `embedding` of each item of the `data` list the embeddings route answers `body` with; the error names
+    the URL when the count is not `expected_count` or an item has no `embedding`."""
 
     url = _build_url(endpoint=endpoint, path="/embeddings")
-    body = {**_build_model_field(endpoint=endpoint), "input": data_url_list}
     reply = _send_json(endpoint=endpoint, path="/embeddings", body=body)
     item_list = _read_list_field(url=url, reply=reply, field="data")
-    if len(item_list) != len(data_url_list):
-        raise EndpointError(url=url, status=200, detail=f"{len(data_url_list)} images were sent and {len(item_list)} vectors came back")
+    if len(item_list) != expected_count:
+        raise EndpointError(url=url, status=200, detail=f"{expected_count} inputs were sent and {len(item_list)} vectors came back")
     vector_list = []
     for item in item_list:
         if not isinstance(item, dict) or not isinstance(item.get("embedding"), list):
@@ -324,42 +352,6 @@ def request_embeddings(endpoint: EndpointSpec,
         vector_list.append(item["embedding"])
 
     return vector_list
-
-
-def request_text_boxes(endpoint: EndpointSpec,
-                       image_url: str,
-                       language_list: list[str]) -> list[dict]:
-    """Give me the words of one image from `POST /v1/ocr` (a project extension, not a standard route): each with `text`,
-    `box`, `line` and `confidence`."""
-
-    url = _build_url(endpoint=endpoint, path="/ocr")
-    body = {**_build_model_field(endpoint=endpoint), "image": image_url, "languages": language_list}
-    reply = _send_json(endpoint=endpoint, path="/ocr", body=body)
-    word_list = _read_list_field(url=url, reply=reply, field="words")
-    for word in word_list:
-        if not isinstance(word, dict) or not {"text", "box", "line", "confidence"} <= set(word):
-            raise EndpointError(url=url, status=200,
-                                detail=f"a word has no 'text', 'box', 'line' and 'confidence': {str(word)[:REPLY_SHOWN_CHARS]}")
-
-    return word_list
-
-
-def request_detections(endpoint: EndpointSpec,
-                       image_url: str,
-                       kind_list: list[str]) -> list[dict]:
-    """Give me what `POST /v1/images/detections` finds in one image (a project extension, not a standard route): each
-    detection has a `kind` (`face` or `person`), a `box` and a `score`."""
-
-    url = _build_url(endpoint=endpoint, path="/images/detections")
-    body = {**_build_model_field(endpoint=endpoint), "image": image_url, "kinds": kind_list}
-    reply = _send_json(endpoint=endpoint, path="/images/detections", body=body)
-    detection_list = _read_list_field(url=url, reply=reply, field="detections")
-    for detection in detection_list:
-        if not isinstance(detection, dict) or not {"kind", "box", "score"} <= set(detection):
-            raise EndpointError(url=url, status=200,
-                                detail=f"a detection has no 'kind', 'box' and 'score': {str(detection)[:REPLY_SHOWN_CHARS]}")
-
-    return detection_list
 
 
 def request_decisions(endpoint: EndpointSpec,

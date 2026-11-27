@@ -6,7 +6,7 @@ are duplicated across files, "swap the model" becomes a search-and-replace with 
 sites, and the ones you miss are the ones that fail on item 40 of 60.
 
 Every host is reached with the standard OpenAI-compatible requests (`/v1/chat/completions`, `/v1/models`), at the address
-of `providers.chat.url` when it is set, else at the model's own `base_url` or the provider's default.
+of the entry of `hosts` the model names (`models.frame.host`), else of the entry named like its spec's provider.
 """
 
 from __future__ import annotations
@@ -24,6 +24,7 @@ from services import endpoint_client
 from services.openai_compatible_client import OpenAICompatibleChatModel
 from models.chain_call_spec import NO_THINKING
 from models.endpoint_errors import EndpointError
+from models import structured_method_vocabulary
 from models.endpoint_spec import EndpointSpec
 from models.run_errors import ModelUnavailable
 
@@ -50,11 +51,7 @@ def bind_no_thinking(chat_model: Any,
 
 
 # Which structured-output method a provider can actually honour: measured, not assumed
-_STRUCTURED_DEFAULT = {
-    "lmstudio": "function_calling",
-    "openai-compatible": "function_calling",
-    "openai": "json_schema",
-}
+_STRUCTURED_DEFAULT = structured_method_vocabulary.STRUCTURED_METHOD_BY_PROVIDER
 
 # Providers the program once built a client of its own for: each is now served behind an OpenAI-compatible address
 _RETIRED_PROVIDERS = ("ollama", "anthropic")
@@ -90,24 +87,24 @@ def split_spec(spec: str) -> tuple[str, str]:
 
 
 def resolve_host_url(cfg: config.ModelSettings) -> str | None:
-    """The address a model's host answers at: its own `base_url`, else `providers.chat.url`, else LM Studio's default for
-    an `lmstudio` model. None for an `openai-compatible` model with neither: that host has no default to guess."""
+    """The address a model's host answers at: the entry of `hosts` it names, else the one named like its spec's provider
+    (`lmstudio`). None for an `openai-compatible` model that names no host: that host has no default to guess."""
 
-    provider, _ = split_spec(cfg.spec)
-    chat_url = config.settings.providers.chat.url
-    defaults = {"lmstudio": chat_url or config.settings.lmstudio_base_url}
+    split_spec(cfg.spec)
+    host = config.settings.find_model_host(cfg)
 
-    return cfg.base_url or defaults.get(provider) or chat_url or None
+    return host.url if host else None
 
 
 def build_chat_endpoint(base_url: str,
                         timeout_s: int | None = None) -> EndpointSpec:
-    """Give me the server spec for the chat host at `base_url`, with the key `providers.chat.apiKeyEnv` names and the
-    request timeout `timeout_s` (`providers.chat.timeoutS` when None)."""
+    """Give me the server spec for the chat host at `base_url`, with the key its entry of `hosts` names and the request
+    timeout `timeout_s` (`DEFAULT_CHAT_TIMEOUT_S` when None)."""
 
-    chat = config.settings.providers.chat
+    host = config.settings.find_host_by_url(base_url)
 
-    return EndpointSpec(base_url=base_url, api_key_env=chat.api_key_env, timeout_s=timeout_s or chat.timeout_s)
+    return EndpointSpec(base_url=base_url, api_key_env=host.api_key_env if host else "",
+                        timeout_s=timeout_s or config.DEFAULT_CHAT_TIMEOUT_S)
 
 
 def resolve_structured_method(phase: str) -> str:
@@ -125,7 +122,7 @@ def _split_known_spec(cfg: config.ModelSettings) -> tuple[str, str]:
     if provider in _RETIRED_PROVIDERS:
         raise ModelUnavailable(f"provider {provider!r} in {cfg.spec!r} is no longer built by the program: serve it behind an "
                                f"OpenAI-compatible address and name the model `openai-compatible:{model}` with its "
-                               f"`baseUrl` (or `providers.chat.url`)")
+                               f"`host`, an entry of `hosts`")
     if provider not in _STRUCTURED_DEFAULT:
         raise ModelUnavailable(f"unknown provider {provider!r} in {cfg.spec!r}. Known: "
                                f"{', '.join(sorted(_STRUCTURED_DEFAULT))}")
@@ -169,7 +166,7 @@ def _build_openai_compatible(cfg: config.ModelSettings,
     base = resolve_host_url(cfg)
     if not base:
         raise ModelUnavailable(
-            f"provider {provider!r} needs a base_url - set it in playbook.local.json"
+            f"provider {provider!r} needs a host - name an entry of `hosts` in the model's `host`"
         )
 
     # `api_key` is required even when the host ignores it: the client refuses to construct
@@ -183,9 +180,10 @@ def _build_openai_compatible(cfg: config.ModelSettings,
     # here; a local host decides for itself whether it separates thinking, and this client logs
     # it whenever it does. `stream_usage`: a streamed markdown call (`chain_runner`) still reports its token
     # counts, which the host sends only when asked for them.
-    chat = config.settings.providers.chat
-    key = cfg.api_key or (os.environ.get(chat.api_key_env) if chat.api_key_env else None) or "not-needed"
-    timeout_s = cfg.request_timeout_s if cfg.request_timeout_s is not None else chat.timeout_s
+    host = config.settings.find_model_host(cfg)
+    key_env = host.api_key_env if host else ""
+    key = cfg.api_key or (os.environ.get(key_env) if key_env else None) or "not-needed"
+    timeout_s = cfg.request_timeout_s if cfg.request_timeout_s is not None else config.DEFAULT_CHAT_TIMEOUT_S
 
     return OpenAICompatibleChatModel(model=model, base_url=base,
                                      api_key=key,
@@ -302,7 +300,7 @@ def probe_hosts() -> list[dict[str, Any]]:
             endpoints[base] = provider
         elif provider == "openai-compatible":
             missing.append({"host": "", "provider": provider, "reachable": False,
-                            "detail": f"phase {phase!r}: provider {provider!r} needs a base_url"})
+                            "detail": f"phase {phase!r}: provider {provider!r} needs a host"})
 
     results = missing
     for base, provider in sorted(endpoints.items()):

@@ -20,8 +20,8 @@ def list_host_models(provider: str,
     """The model ids the server at `base_url` lists, None when it does not answer. `provider` names the kind of host the
     caller shows it under; every host is asked the same way."""
 
-    endpoint = EndpointSpec(base_url=base_url, api_key_env=config.settings.providers.chat.api_key_env,
-                            timeout_s=HOST_TIMEOUT_S)
+    host = config.settings.find_host_by_url(base_url)
+    endpoint = EndpointSpec(base_url=base_url, api_key_env=host.api_key_env if host else "", timeout_s=HOST_TIMEOUT_S)
     try:
         return endpoint_client.list_served_models(endpoint=endpoint)
     except EndpointError:

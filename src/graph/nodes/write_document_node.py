@@ -62,6 +62,8 @@ from services import chain_dispatch_service
 from services import document_assembly_service
 from services import document_conversation_service
 from services import document_file_service
+from services import direct_draft_batch_service
+from services import direct_draft_outline_service
 from services import dry_run_service
 from services import fast_document_service
 from services import fast_frame_note_service
@@ -1187,6 +1189,33 @@ def _write_fast_document(ctx: RunContext,
     return _mark_phase(ctx, "complete", handles)
 
 
+def _write_direct_draft_document(ctx: RunContext,
+                                 is_dry_run: bool) -> dict:
+    """Phase 4 of a direct-draft run: one conversation of the document model over the draft's outline, in which it looks
+    at frames, cuts the pictures its draft places and submits the title, summary, agenda and heading changes; the program
+    builds the document and the published folder from that."""
+
+    if not direct_draft_batch_service.build_draft_path(ctx.paths).is_file():
+        ctx.log.error(f"phase {PHASE_NUMBER} failed: {output_contract.DRAFT_FILE} is missing; phase 3 writes it")
+
+        return _end_phase_failed(ctx, is_dry_run)
+    if is_dry_run:
+        system_text, human_text = chain_response_utils.render_prompt_as_text(
+            direct_draft_outline_service.build_messages(ctx.paths, _read_recording_name(ctx)))
+        dry_run_service.describe_dry_run(ctx, PHASE, output_contract.FAST_DOCUMENT_SLUG, system_text, human_text)
+
+        return {"phases": {PHASE: "complete"}}
+    handles = performance_log_service.start_unit(ctx, PHASE, None)
+    ctx.log.info("")
+    # the conversation is a unit of its own, as a phase 3 batch is: the phase's line sums its units' calls
+    unit = performance_log_service.start_unit(ctx, PHASE, output_contract.FAST_DOCUMENT_SLUG,
+                                              label="titling and summarising the draft")
+    direct_draft_outline_service.write_document(ctx, _read_recording_name(ctx))
+    performance_log_service.record_unit(ctx, unit, performance_log_service.PART_LEVEL, "written", [])
+
+    return _mark_phase(ctx, "complete", handles)
+
+
 def describe_writing_input(entries: list[dict],
                            integration: dict,
                            notes_tokens: int) -> str:
@@ -1229,6 +1258,10 @@ def write_document_node(state: RunState,
     # STEP 1c: a fast-processing video run writes its document in one call over its frame descriptions
     if video_workflow_service.is_fast_processing(ctx.paths.output_root) and not phase_file_service.is_audio_run(ctx.paths):
         return _write_fast_document(ctx, bool(state.get("is_dry_run")))
+
+    # STEP 1d: a direct-draft video run titles and summarises the draft its phase 3 wrote, in one conversation
+    if video_workflow_service.is_direct_draft(ctx.paths.output_root) and not phase_file_service.is_audio_run(ctx.paths):
+        return _write_direct_draft_document(ctx, bool(state.get("is_dry_run")))
 
     # STEP 2: merge layer 2 from the files phases 1 to 3 wrote, and refuse by name when one is not there
     handles = performance_log_service.start_unit(ctx, PHASE, None)

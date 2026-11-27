@@ -374,7 +374,7 @@ export interface PhaseSelection {
   ingesting_profile: string;
   // a video processed as an audio recording: its sound alone, no frame taken
   is_run_as_audio: boolean;
-  // the video workflow from phase 3 on, "quality" or "fast-processing"; "" leaves the run folder's or the settings'
+  // the video workflow from phase 3 on, "quality", "direct-draft" or "fast-processing"; "" leaves the run folder's or the settings'
   workflow?: string;
   // the worker set the run is on, whose models and hosts it calls: "" leaves the run folder's, else the settings' default
   worker_set?: string;
@@ -1187,9 +1187,13 @@ export interface SettingRow {
   choice_options?: SettingOption[] | null;
   // Whether a value of one's own may be typed beside the list (a model not on a host yet, a new host's address)
   is_open_choice?: boolean;
-  // A model's spec only: the address the model is called at, and the one an empty `baseUrl` means
-  chosen_address?: string;
-  default_address?: string;
+  // A model's spec only: the host the model runs on, and the one an empty `host` means
+  chosen_host?: string;
+  default_host?: string;
+  // Only on a row whose own value is empty: what a run uses instead (null when it uses no value, as a limit that is not
+  // sent), and where that comes from or what happens instead, in plain words ("found from the recording")
+  resolved?: unknown;
+  resolved_note?: string;
 }
 
 export interface SettingOption {
@@ -1198,8 +1202,8 @@ export interface SettingOption {
   hint: string;
   // the heading the option stands under ("LM Studio at http://localhost:1234/v1"), "" for none
   group: string;
-  // a host's model: the address of the host serving it
-  address?: string;
+  // a host's model: the name of the host serving it, an entry of Hosts
+  host?: string;
 }
 
 // One phase 3 batch or follow-up, read from the run's logs: what it cost, what came of it, and why an answer was refused
@@ -1357,7 +1361,22 @@ export interface SetupModel {
   is_downloaded: boolean;
 }
 
+// A model a run calls that has no configured, reachable provider, and why
+export interface MissingProvider {
+  name: string;
+  used_by: string[];
+  reason: string;
+}
+
+// The missing providers as one sentence part per model: its name, the phases that call it, and why it has none
+export function describeMissingProviders(providers: MissingProvider[]): string {
+  return providers.map((provider) => `${provider.name} (called by ${provider.used_by.join(", ")}): ${provider.reason}`).join("; ");
+}
+
 export interface SetupCheck {
+  // the server runs in a container (`I2K_CONTAINER`): no wizard and no setup action; the providers stay in Settings
+  is_container: boolean;
+  missing_providers: MissingProvider[];
   has_models: boolean;
   runtimes: SetupRuntime[];
   models: SetupModel[];

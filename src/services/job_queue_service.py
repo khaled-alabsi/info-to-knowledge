@@ -4,10 +4,11 @@ ONE QUEUE FOR BOTH FRONT ENDS. The web page and the terminal UI reach it through
 two runs never start at once whichever window asked for them. The queue is `ui/jobs.json` beside the
 playbook, rewritten whole on every change; the console of each job is `ui/jobs/<job id>.log`.
 
-ONE LANE PER WORKER SET. A job's lane is the worker set it runs on (its request's, else the one its
-run folder kept, else the settings' `defaultWorkerSet`). Jobs of one lane run one after another; jobs of different lanes
-run at the same time, each lane at its own models and hosts. A job that holds the queue after its last failed try holds
-its own lane only; the person's pause stops every lane.
+ONE LANE PER MACHINE. A job runs on a worker set (its request's, else the one its run folder kept, else the settings'
+`defaultWorkerSet`), and its lane is the machine that set names (`machine`; the set's own name when it names none). Jobs
+of one machine run one after another, whichever of its sets they use, so two sets on one machine never load two models
+on its card at once; jobs of different machines run at the same time. A job that holds the queue after its last failed
+try holds its own lane only; the person's pause stops every lane.
 
 A JOB IS A CHILD PROCESS, NEVER AN IN-PROCESS CALL. `run` keeps every refusal and every exit code in
 one place, and a child in its own session outlives the server: a server started again adopts a job
@@ -21,6 +22,7 @@ import logging
 import os
 import signal
 import subprocess
+from functools import lru_cache
 import sys
 import threading
 import time
@@ -648,13 +650,41 @@ def read_default_worker_set(profile_name: str = "") -> str:
         "defaultWorkerSet", config.DEFAULT_WORKER_SET_NAME))
 
 
-def read_job_lane(job: RunJob,
-                  default_set: str) -> str:
-    """The lane a job runs in: the worker set its request names, else the one its run folder kept, else the
+def read_job_worker_set(job: RunJob,
+                        default_set: str) -> str:
+    """The worker set a job runs on: the one its request names, else the one its run folder kept, else the
     `defaultWorkerSet` of the job's own profile when it names one, else `default_set`."""
 
     return (job.request.worker_set or run_worker_set_service.read_chosen_worker_set(Path(job.request.output_root))
             or (read_default_worker_set(job.request.profile) if job.request.profile else default_set))
+
+
+def read_job_lane(job: RunJob,
+                  default_set: str) -> str:
+    """The lane a job runs in: the machine its worker set names, so jobs of two sets on one machine wait for each
+    other."""
+
+    files = [config.DEFAULT_CONFIG_FILE, config.LOCAL_CONFIG_FILE]
+    if job.request.profile:
+        files.append(config.build_profile_path(job.request.profile))
+    stamps = tuple((str(path), path.stat().st_mtime_ns if path.is_file() else 0) for path in files)
+
+    return _read_set_machine(read_job_worker_set(job, default_set), job.request.profile, stamps)
+
+
+@lru_cache(maxsize=64)
+def _read_set_machine(worker_set: str,
+                      profile: str,
+                      file_stamps: tuple[tuple[str, int], ...]) -> str:
+    """The machine `worker_set` names, its own name when it names none or is gone from the files. `file_stamps` (each
+    settings file's path and change time) makes another file, or a file saved since the last call, read again."""
+
+    try:
+        merged = config.read_layers(profile_name=profile or config.PROFILE_NAME, worker_set_name=worker_set)
+    except (ValueError, OSError):
+        return worker_set
+
+    return str(merged.get(config.WORKER_SET_LABEL_KEY) or worker_set)
 
 
 def _select_next_job(jobs: list[RunJob],

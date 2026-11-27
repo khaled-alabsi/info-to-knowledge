@@ -1,8 +1,10 @@
 # info-to-knowledge in a container: the web page and the server that runs the pipeline. Builds with Podman or Docker:
 #   podman build -t info-to-knowledge -f Containerfile .
 #   podman compose up --build            # see compose.yaml and docs/container.md
-# No model is inside the image: recordings, run results, settings and every downloaded model are mounted from the
-# host. Language models run outside the container, in LM Studio, Ollama or llama.cpp, and are reached by URL.
+# Inside the image: Tesseract for the text on frames, and the two small OpenCV weight files in weights/ that find faces
+# and people (0.2 MB and 3.8 MB). Every other model is outside: recordings, run results, settings and every downloaded
+# model are mounted from the host. Chat, speech, speaker and embedding models run elsewhere, in LM Studio, Ollama, llama.cpp
+# or at a provider, and are reached by URL (docs/models.md); the optional decision model d1-2B loads from /models.
 
 # 1. The web page, built once; the second stage keeps only its built files, so the image needs no Node.
 FROM docker.io/library/node:22.12.0-bookworm-slim AS page
@@ -41,8 +43,11 @@ COPY --from=page /page/dist web/dist
 # The program is installed in place, so the `i2k` command runs the code in /app and reads its settings from /app.
 RUN pip install --no-cache-dir --no-deps -e .
 
-# I2K_WORKSPACE holds inbox/, output/ and ui/; I2K_MODELS_DIR and HF_HOME hold every downloaded model.
-ENV I2K_PROFILE=container \
+# I2K_WORKSPACE holds inbox/, output/ and ui/; I2K_MODELS_DIR and HF_HOME hold every downloaded model. I2K_CONTAINER=1
+# switches the setup wizard and every machine setup off (Python, the tools and the libraries are in the image); the model
+# providers stay editable in Settings.
+ENV I2K_CONTAINER=1 \
+    I2K_PROFILE=container \
     I2K_WORKSPACE=/data \
     I2K_MODELS_DIR=/models \
     HF_HOME=/models/huggingface \

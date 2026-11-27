@@ -254,6 +254,14 @@ def _is_fast_run(output_root: Path,
     return not is_audio and video_workflow_service.is_fast_processing(output_root)
 
 
+def _has_no_critic_run(output_root: Path,
+                       is_audio: bool) -> bool:
+    """Whether this run takes a video workflow with no review and no critique collection (a Fast speed's): an audio
+    recording takes the audio workflow whatever the run's workflow says."""
+
+    return not is_audio and video_workflow_service.has_no_critic(output_root)
+
+
 def _build_context(paths: RunPaths,
                    store: run_store_service.RunStore,
                    selection: PhaseRequest,
@@ -323,10 +331,16 @@ def _record_run_outcome(ctx: RunContext,
 
 
 def describe_workflow(run_folder: Path) -> str:
-    """The header's workflow line: the video workflow the run takes and, for fast-processing, its models and session."""
+    """The header's workflow line: the video workflow the run takes and, for direct-draft and fast-processing, what
+    each of its phases does."""
 
     workflow = video_workflow_service.resolve_workflow(run_folder)
     title = video_workflow_vocabulary.WORKFLOW_TITLES[workflow]
+    if workflow == video_workflow_vocabulary.DIRECT_DRAFT:
+        frames_per_batch = config.settings.resolve_frames_per_call()
+
+        return (f"{title} (phase 3 writes {frames_per_batch} frames a call straight into the draft, no check; phase 4 "
+                f"one call titles and summarises it; phases 5 and 6 off)")
     if workflow != video_workflow_vocabulary.FAST_PROCESSING:
         return title
     fast = config.settings.video.fast_processing
@@ -379,11 +393,13 @@ def _render_header_line(label: str,
 def render_model_lines(checks: RunStartChecksResult,
                        windows: dict[str, int],
                        is_audio: bool,
-                       is_fast: bool = False) -> list[str]:
+                       is_fast: bool = False,
+                       has_no_critic: bool = False) -> list[str]:
     """The header's lines of what each phase runs, in phase order: phase 1's transcription and diarization, then each
     phase's model with its context and the window its host loaded (`windows`), a video's phase 2 naming the model its
     redundancy filter calls, a fast-processing run's phases 3 and 4 naming the models that workflow calls
-    (`video.fastProcessing`), then the capability lines."""
+    (`video.fastProcessing`), a run with no critic (fast-processing, direct-draft) showing phases 5 and 6 off, then
+    the capability lines."""
 
     lines = [_render_header_line("transcribe", f"{checks.transcription} · {checks.diarization}")]
     for row in chat_model_service.describe_phase_models():
@@ -392,8 +408,8 @@ def render_model_lines(checks: RunStartChecksResult,
         if phase == config.FRAMES_PREPARING_PHASE and not is_audio:
             lines.append(_render_header_line(phase, describe_redundancy_model()))
             continue
-        if is_fast and output_contract.PHASE_NUMBERS[phase] in video_workflow_vocabulary.FAST_OFF_PHASES:
-            lines.append(_render_header_line(phase, f"off (a fast-processing run has no {phase})"))
+        if has_no_critic and output_contract.PHASE_NUMBERS[phase] in video_workflow_vocabulary.FAST_OFF_PHASES:
+            lines.append(_render_header_line(phase, f"off (a fast run has no {phase})"))
             continue
         if is_fast and phase in _FAST_MODEL_PHASES:
             lines.append(_render_header_line(phase, _describe_fast_model(phase, windows)))
@@ -465,13 +481,14 @@ def _log_run_header(ctx: RunContext,
     ctx.log.info(f"  config: {config.DEFAULT_CONFIG_FILE.name} + {config.LOCAL_CONFIG_FILE.name}{profile_part}")
     ctx.log.info(f"  worker set: {config.WORKER_SET_NAME}")
     is_fast = _is_fast_run(ctx.paths.output_root, is_audio)
-    # A fast-processing run repairs nothing: the quality workflow's retry settings would only mislead
-    if not is_fast:
+    has_no_critic = _has_no_critic_run(ctx.paths.output_root, is_audio)
+    # A fast run repairs nothing: the quality workflow's retry settings would only mislead
+    if not has_no_critic:
         ctx.log.info(f"  repair: {_describe_repair_settings()}")
     # The video workflow from phase 3 on; an audio recording takes the audio workflow whatever it says
     if not is_audio:
         ctx.log.info(f"  workflow: {describe_workflow(ctx.paths.output_root)}")
-    for line in render_model_lines(checks, ctx.phase_windows, is_audio, is_fast):
+    for line in render_model_lines(checks, ctx.phase_windows, is_audio, is_fast, has_no_critic):
         ctx.log.info(line)
     if ctx.is_dry_run:
         ctx.log.info("  DRY RUN: prompts are rendered, no model is called")
@@ -679,8 +696,10 @@ def add_run_arguments(parser: argparse.ArgumentParser) -> None:
                              "call changes it. One of: " + ", ".join(ingesting_profile_service.list_profile_names()))
     parser.add_argument("--workflow", dest="workflow", default="", choices=video_workflow_vocabulary.WORKFLOWS,
                         help="the video workflow from phase 3 on: quality (checked batches, the document conversation, "
-                             "the review) or fast-processing (each frame described alone, one call writes the document, "
-                             "no review). Kept in the run folder, so a resume needs no flag; none takes video.workflow")
+                             "the review), direct-draft (the Fast speed's: frames written straight into a draft in "
+                             "chapters, one call titles and summarises it, no review) or fast-processing (the earlier "
+                             "fast workflow: each frame described alone, one call writes the document, no review). Kept "
+                             "in the run folder, so a resume needs no flag; none takes video.workflow")
     parser.add_argument("--as-audio", dest="is_run_as_audio", action="store_true",
                         help="process a video as an audio recording: its sound is transcribed and runs the audio "
                              "workflow, and no frame is taken. Kept in the run folder, so a resume needs no flag")

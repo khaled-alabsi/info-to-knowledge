@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { buildRunPath, describeError, fetchJson, fetchProjects, isAdmin, OPEN_INSTRUCTION_EVENT, sendJson } from "./api";
+import { buildRunPath, describeError, describeMissingProviders, fetchJson, fetchProjects, isAdmin, OPEN_INSTRUCTION_EVENT, sendJson } from "./api";
 import type { Account, InboxItem, InstructionTarget, Job, Phase, Project, RunSummary, SetupCheck } from "./api";
 import { Dropdown, Menu } from "./components/Dropdown";
 import Icon from "./components/Icon";
@@ -228,7 +228,11 @@ export default function App({ account = null, onSignOut }: { account?: Account |
   // What a run needs, checked once when the page starts and again from the wizard. With no model configured the
   // wizard opens by itself: no run could start
   const [setupCheck, setSetupCheck] = useState<SetupCheck | null>(null);
-  const isSetupNeeded = Boolean(setupCheck && hasSetupProblem(setupCheck));
+  // In a container (`I2K_CONTAINER`) the machine is set up already: there is no wizard, and what a run lacks is a model
+  // provider, named on the Settings page
+  const isContainer = Boolean(setupCheck?.is_container);
+  const missingProviders = setupCheck?.missing_providers ?? [];
+  const isSetupNeeded = Boolean(setupCheck && (isContainer ? missingProviders.length > 0 : hasSetupProblem(setupCheck)));
   const [isSetupOpen, setIsSetupOpen] = useState(false);
   const loadSetup = useCallback(async () => {
     const check = await fetchJson<SetupCheck>("/setup");
@@ -245,10 +249,14 @@ export default function App({ account = null, onSignOut }: { account?: Account |
     }
   }, [loadSetup, addMessage]);
   useEffect(() => {
-    void loadSetup().then((check) => { if (!check.has_models) setIsSetupOpen(true); })
+    void loadSetup().then((check) => { if (!check.is_container && !check.has_models) setIsSetupOpen(true); })
       // at load a failed check is not announced: the top bar says when the server is down, and Check again says why
       .catch(() => undefined);
   }, [loadSetup]);
+  // In a container the providers are set in Settings: the missing ones are read again after each save
+  useEffect(() => {
+    if (settingsVersion > 0 && isContainer) void loadSetup().catch(() => undefined);
+  }, [settingsVersion, isContainer, loadSetup]);
 
   useEffect(() => {
     reloadLists();
@@ -487,8 +495,11 @@ export default function App({ account = null, onSignOut }: { account?: Account |
           {/* one who may open the settings sees it as a mark on the gear (the owner: the button beside the gear "look very
               ugly"); anyone else keeps the button */}
           {isSetupNeeded && !canAdmin && (
-            <button className="btn ghost setup-button" title="Something a run needs is not set up" onClick={() => setIsSetupOpen(true)}>
-              <Icon name="alert" /> Setup needed
+            <button className="btn ghost setup-button" title="Something a run needs is not set up"
+              onClick={() => isContainer
+                ? addMessage(`A run needs a model provider that is not set up: ${describeMissingProviders(missingProviders)}`, true)
+                : setIsSetupOpen(true)}>
+              <Icon name="alert" /> {isContainer ? "Provider missing" : "Setup needed"}
             </button>
           )}
           {draftCount > 0 ? (
@@ -519,9 +530,10 @@ export default function App({ account = null, onSignOut }: { account?: Account |
           {canAdmin && (
             // Closed: the gear alone. Open: how to leave, in words; changes not saved stay marked for when it opens again
             <button className={`btn ghost settings-button${isSettingsOpen ? " on" : " icon-only"}${isSetupNeeded ? " has-alert" : ""}`}
-              aria-label={isSettingsOpen ? undefined : isSetupNeeded ? "Settings: setup needed" : "Settings"}
+              aria-label={isSettingsOpen ? undefined : isSetupNeeded ? (isContainer ? "Settings: provider missing" : "Settings: setup needed") : "Settings"}
               title={isSettingsOpen ? "close the settings"
-                : isSetupNeeded ? "Settings: something a run needs is not set up" : "Settings"}
+                : isSetupNeeded ? (isContainer ? "Settings: a model provider a run needs is missing"
+                  : "Settings: something a run needs is not set up") : "Settings"}
               onClick={() => {
                 if (isSettingsOpen) {
                   closeSettings();
@@ -585,8 +597,8 @@ export default function App({ account = null, onSignOut }: { account?: Account |
           {isSettingsOpen && settingsPage === "instructions" && <InstructionsView onMessage={addMessage} />}
           {isSettingsOpen && settingsPage === "settings" && (
             <SettingsView profile={settingsProfile} drafts={settingsDrafts} onDraft={setDraft} version={settingsVersion}
-              onOpenSetup={() => void checkSetup().then((check) => { if (check) setIsSetupOpen(true); })}
-              isSetupNeeded={isSetupNeeded}
+              onOpenSetup={isContainer ? undefined : () => void checkSetup().then((check) => { if (check) setIsSetupOpen(true); })}
+              isSetupNeeded={isSetupNeeded} missingProviders={isContainer ? missingProviders : []}
               onMessage={addMessage} onProfileChange={(profile) => {
                 // A draft belongs to the files it was typed for
                 setSettingsDrafts({});
@@ -623,7 +635,7 @@ export default function App({ account = null, onSignOut }: { account?: Account |
         </main>
       </div>
 
-      {isSetupOpen && setupCheck && (
+      {isSetupOpen && setupCheck && !setupCheck.is_container && (
         <SetupWizard check={setupCheck} onClose={() => setIsSetupOpen(false)} onChanged={checkSetup}
           onMessage={addMessage} />
       )}

@@ -87,7 +87,7 @@ resets and edits, and an `admin` also changes the settings and the accounts.
 | `agent-context/` | What each worker is told, as text and data files, one folder per kind of instruction. |
 | `web/` | The web page: a React app built with Vite, with its unit tests and browser tests. |
 | `tests/` | `cases/` (offline unit tests), `support/`, `resources/` (rendered boards, PDFs and public-domain faces), `integration/` and `run_tests.py`. |
-| `weights/`, `frame-classifier/` | The face and person detectors and the frame classifier phase 2 runs. |
+| `weights/`, `frame-classifier/` | The face and person detectors (OpenCV YuNet and NanoDet, shipped in the image) and the frame classifier phase 2 runs. |
 | `word-lists/` | A German word list the outline check counts as readable. |
 | `tools/` | Helper programs with their own environments: Apple's text reader, a Pandoc filter, a scanned-page reader and a decision model for frames. |
 | `docs/` | This page, the flow, and the usage guides. |
@@ -112,3 +112,9 @@ A test in `tests/cases/` checks names, nesting and layout of every module, so a 
 The program reaches a language model by URL: LM Studio, Ollama, llama.cpp or any OpenAI-style server. Each role
 (`frame`, `document`, `facts`, ...) names its model and host in the settings. Run `i2k probe` to see which hosts
 answer and which of vision, tools and thinking each model offers, and `i2k models` to see which model each phase uses.
+
+Four kinds of model are standard and can be served by any OpenAI-compatible provider: chat, speech, speaker turns
+(diarization) and image embeddings, each set under `providers` in the settings. Tesseract (text on frames) and the two
+OpenCV detectors for faces and people run inside the program, on the processor, with no URL. The decision model d1-2B
+runs inside the program by default, and `providers.decision.url` may point at `i2k serve-models`, a small server that
+runs it natively on the host. [Models](models.md) lists each kind, the providers that answer it, and the settings.

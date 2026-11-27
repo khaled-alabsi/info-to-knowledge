@@ -124,9 +124,9 @@ export default function QueuePanel({
         const laneRunning = running.filter((job) => nameLane(job) === lane);
         const laneWaiting = waiting.filter((job) => nameLane(job) === lane);
         return (
-          <section key={lane} className="queue-lane" aria-label={`worker set ${lane}`}>
+          <section key={lane} className="queue-lane" aria-label={`machine ${lane}`}>
             <h3 className="menu-heading">
-              Worker set {lane} · {laneRunning.length} running · {laneWaiting.length} waiting
+              {lane} · {laneRunning.length} running · {laneWaiting.length} waiting
             </h3>
             <ul className="rows">
               {laneRunning.map((job) => renderRow(job))}
