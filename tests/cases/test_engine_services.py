@@ -1,7 +1,6 @@
 """The engine services the generated suite left untested, and this project's small carriers.
 
-REQUIREMENTS.md R6: no module ships without a test. The retry service is tested with its `sleep`
-replaced, so the pauses it ASKS for are asserted and none is waited out.
+REQUIREMENTS.md R6: no module ships without a test.
 """
 
 import logging
@@ -21,7 +20,6 @@ from schemas import document_contents
 from schemas import document_outline
 from schemas import document_section
 from services import cli_log_service
-from services import model_retry_service
 from services.ignore_list_service import IgnoreList
 
 ENTRIES = [{"id": "E001", "kind": "speech", "text": "89 Prozent wollen billigeren Sprit."},
@@ -69,70 +67,6 @@ def test_an_error_logged_while_the_console_log_is_open_is_saved_with_its_traceba
     saved = Path(handler.baseFilename).read_text(encoding="utf-8")
     harness.check("the line, the traceback and the error are in the file", "the run stopped on an error" in saved
                   and "Traceback" in saved and "ValueError: a setting the host refuses" in saved, saved)
-
-
-def test_a_dropped_connection_is_retried_and_the_pauses_are_the_ones_asked_for():
-    pauses: list[float] = []
-    calls = []
-
-    def fail_twice_then_answer():
-        calls.append(1)
-        if len(calls) < 3:
-            raise RuntimeError("Server disconnected without sending a response")
-
-        return "answered"
-
-    settings = model_retry_service.RetrySettings(attempts=3, backoff_s=5.0, sleep=pauses.append)
-    harness.check("the third try's answer is returned",
-                  model_retry_service.call_with_transport_retry(fail_twice_then_answer, settings) == "answered")
-    harness.check("it paused twice, doubling, and waited for neither", pauses == [5.0, 10.0], str(pauses))
-
-
-def _refuse_the_request():
-    raise ValueError("model does not support tools")
-
-
-def test_an_error_that_is_the_models_own_is_raised_at_once():
-    pauses: list[float] = []
-
-    try:
-        model_retry_service.call_with_transport_retry(
-            _refuse_the_request, model_retry_service.RetrySettings(attempts=3, sleep=pauses.append))
-    except ValueError:
-        harness.check("an answer from the host is never retried", pauses == [], str(pauses))
-    else:
-        harness.check("the model's own error is raised", False)
-
-
-def test_a_host_that_is_not_running_gets_the_long_wait():
-    harness.check("a refused connection reads as a host that is down",
-                  model_retry_service.looks_like_host_down(ConnectionError("[Errno 61] Connection refused")))
-    harness.check("a dropped connection does not",
-                  not model_retry_service.looks_like_host_down(RuntimeError("Server disconnected")))
-    wrapped = RuntimeError("Connection error.")
-    wrapped.__cause__ = ConnectionError("[Errno 61] Connection refused")
-    harness.check("a client error that wraps a refused socket is a host down, so a restarting host is waited out",
-                  model_retry_service.looks_like_host_down(wrapped))
-
-
-def test_a_stopped_ollama_and_a_refused_httpx_connection_are_a_host_that_is_down_and_get_retried():
-    class ConnectError(Exception):
-        """What httpx raises when nothing answers."""
-
-    stopped_ollama = ConnectionError("Failed to connect to Ollama. Please check that Ollama is downloaded, running and "
-                                     "accessible. https://ollama.com/download")
-    refused = ConnectError("All connection attempts failed")
-    for label, error in (("Ollama's own message", stopped_ollama), ("httpx's connect error", refused)):
-        harness.check(f"{label} is a failure of the transport",
-                      model_retry_service.looks_like_transport_failure(error))
-        harness.check(f"{label} is a host that is down", model_retry_service.looks_like_host_down(error))
-
-
-def test_a_message_with_the_letters_eof_inside_a_word_is_not_a_dropped_connection():
-    harness.check("an answer that says 'thereof' is the model's own",
-                  not model_retry_service.looks_like_transport_failure(ValueError("not accepted: the rest thereof")))
-    harness.check("an unexpected EOF still is a dropped connection",
-                  model_retry_service.looks_like_transport_failure(EOFError("unexpected EOF while reading")))
 
 
 def test_the_outline_message_hands_over_every_entry_and_every_contradiction():

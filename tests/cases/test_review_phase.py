@@ -174,20 +174,23 @@ def _load_run_context(paths: RunPaths,
                       log=logging.getLogger("test"), ignore=IgnoreList(), model=model)
 
 
-def _answer_nothing(url: str):
-    raise OSError(f"no host in the test suite: {url}")
+def _answer_nothing(base_url: str,
+                    model: str) -> None:
+    """The window of a host that is not there: no window is known."""
+
+    return None
 
 
 def _run_phase_5(ctx: RunContext,
                  is_dry_run: bool = False) -> dict:
     """Phase 5 alone, the host's window listing answering as a host that is not there, and put back afterwards."""
 
-    previous = host_window_service.set_fetch_json(_answer_nothing)
+    previous = host_window_service.set_window_reader(_answer_nothing)
     try:
         return review_document_node.write_reviewed_document_node(graph_state.new_run_state(6, 6, is_dry_run=is_dry_run),
                                                          {"configurable": {"ctx": ctx}})
     finally:
-        host_window_service.set_fetch_json(previous)
+        host_window_service.set_window_reader(previous)
 
 
 def _submit(name: str,

@@ -15,6 +15,7 @@ from typing import Callable
 
 import config
 from models import output_contract
+from models.endpoint_errors import EndpointError
 from models.input_range_spec import InputRangeSpec
 from models.operation_result import OperationResult
 from models.ui_errors import UnreadableRunTagsError
@@ -24,6 +25,7 @@ from services import chapter_reset_service
 from services import chat_model_service
 from services import cut_tidy_service
 from services import document_file_service
+from services import endpoint_client
 from services import frame_drop_service
 from services import inbox_service
 from services import job_queue_service
@@ -676,15 +678,38 @@ def describe_models() -> OperationResult:
     return OperationResult(0, lines)
 
 
+def _probe_providers() -> tuple[list[str], int]:
+    """One line for each kind of model that has a URL in `providers`: the models its server lists, or why it did not
+    answer; and how many did not. A kind with no URL has no line."""
+
+    lines = []
+    down_count = 0
+    for kind in type(config.settings.providers).model_fields:
+        endpoint = endpoint_client.find_endpoint(kind=kind)
+        if endpoint is None:
+            continue
+        try:
+            names = endpoint_client.list_served_models(endpoint=endpoint)
+        except EndpointError as failed:
+            lines.append(f"  DOWN {kind}: {failed}")
+            down_count += 1
+            continue
+        shown = ", ".join(names[:_PROBE_MODELS_SHOWN]) or "(no models listed)"
+        lines.append(f"  OK   {endpoint.base_url}  [{kind}]  {shown}")
+
+    return lines, down_count
+
+
 def probe_model_hosts() -> OperationResult:
     """Whether each configured host answers, and what it has loaded if it does; 1 when any host is down."""
 
+    provider_lines, provider_down_count = _probe_providers()
     try:
         results = chat_model_service.probe_hosts()
     except ModelUnavailable as exc:
         return OperationResult(2, [f"ERROR: {exc}"])
     if not results:
-        return OperationResult(0, ["no local model hosts are configured"])
+        return OperationResult(1 if provider_down_count else 0, ["no local model hosts are configured", *provider_lines])
     lines = []
     for row in results:
         if row["reachable"]:
@@ -694,4 +719,7 @@ def probe_model_hosts() -> OperationResult:
         else:
             lines.append(f"  DOWN {row['detail']}")
 
-    return OperationResult(1 if any(not row["reachable"] for row in results) else 0, lines)
+    lines.extend(provider_lines)
+    is_any_host_down = provider_down_count > 0 or any(not row["reachable"] for row in results)
+
+    return OperationResult(1 if is_any_host_down else 0, lines)

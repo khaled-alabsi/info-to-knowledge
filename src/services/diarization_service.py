@@ -33,12 +33,18 @@ import numpy
 import config
 from config import DiarizationSettings
 from models.diarization_errors import DiarizationFailed, DiarizationUnavailable
+from models.endpoint_errors import EndpointError
+from models.endpoint_spec import EndpointSpec
+from services import audio_upload_service
+from services import endpoint_client
 
-__all__ = ["PACKAGE", "SAMPLE_RATE", "is_installed", "resolve_device", "set_pipeline_loader", "describe_diarization",
-           "compute_speaker_turns"]
+__all__ = ["PACKAGE", "SAMPLE_RATE", "REMOTE_DEVICE", "is_installed", "resolve_device", "set_pipeline_loader",
+           "describe_diarization", "compute_speaker_turns"]
 
 PACKAGE = "pyannote.audio"
 SAMPLE_RATE = 16000
+# What a result names as its device when a server did the work: the program used none of its own
+REMOTE_DEVICE = "remote"
 NOT_INSTALLED = ("speaker diarization needs the optional package `pyannote.audio`. Install it with: "
                  ".venv/bin/python -m pip install -r requirements-diarization.txt")
 
@@ -155,6 +161,9 @@ def describe_diarization(settings: DiarizationSettings) -> str:
 
     if not settings.is_on:
         return "diarization: off"
+    endpoint = endpoint_client.find_endpoint(kind="diarization")
+    if endpoint is not None:
+        return f"diarization: the diarization server {endpoint.base_url}"
     is_installed_now, why_not = is_installed()
     if not is_installed_now:
         return f"diarization: not installed, the transcript gets no speakers ({why_not})"
@@ -183,11 +192,49 @@ def compute_speaker_turns(parts: list[tuple[Path, float]],
     """`{"turns", "exclusiveTurns", "device"}` for the meeting whose audio is `parts`, each a WAV and its offset in
     seconds on the meeting clock; every turn `{"start", "end", "label"}` in seconds, labelled as pyannote labels it."""
 
+    endpoint = endpoint_client.find_endpoint(kind="diarization")
+    if endpoint is not None:
+        # A server holds the model and its memory: nothing of the program's own is loaded, so nothing is released here
+        return _request_meeting_turns(parts=parts, settings=settings, endpoint=endpoint)
     try:
         return _compute_meeting_turns(parts, settings)
     finally:
         # The pipeline, its waveform and its output are gone once the function returns, so the cache is emptied here
         _release_device_memory()
+
+
+def _list_server_turns(raw_list: list) -> list[dict]:
+    """The server's segments as turns: `speaker` is the label, in seconds on the meeting's clock."""
+
+    turn_list = []
+    for raw in raw_list:
+        if isinstance(raw, dict) and {"speaker", "start", "end"} <= set(raw):
+            turn_list.append({"start": float(raw["start"]), "end": float(raw["end"]), "label": str(raw["speaker"])})
+
+    return turn_list
+
+
+def _request_meeting_turns(parts: list[tuple[Path, float]],
+                           settings: DiarizationSettings,
+                           endpoint: EndpointSpec) -> dict:
+    """The meeting diarized by the server in one request, every part at its offset: the speakers are numbered once for the
+    whole meeting, as the in-process model numbers them. A server that gives no `exclusive_segments` has no overlap to
+    take out, so its turns are the exclusive ones too."""
+
+    pcm = audio_upload_service.join_parts_pcm(parts=parts)
+    audio = audio_upload_service.build_compressed_file(pcm=pcm, file_name="meeting.ogg")
+    try:
+        reply = endpoint_client.request_speaker_turns(endpoint=endpoint, audio=audio, min_speakers=settings.min_speakers,
+                                                      max_speakers=settings.max_speakers)
+    except EndpointError as failed:
+        if failed.status is None:
+            raise DiarizationUnavailable(f"the diarization server gave no answer: {failed}") from failed
+        raise DiarizationFailed(f"the diarization server failed: {failed}") from failed
+    turns = _list_server_turns(raw_list=reply["segments"])
+    exclusive = reply.get("exclusive_segments")
+    exclusive_turns = _list_server_turns(raw_list=exclusive) if isinstance(exclusive, list) else turns
+
+    return {"turns": turns, "exclusiveTurns": exclusive_turns, "device": REMOTE_DEVICE}
 
 
 def _compute_meeting_turns(parts: list[tuple[Path, float]],

@@ -1,5 +1,5 @@
 """A phase 7 part on a model host that lists its model READY and answers every call with LM Studio's "Compute error"
-(made data: a small HTTP server on this machine speaking LM Studio's model list and its error body, the real urllib
+(made data: a small HTTP server on this machine speaking the standard model list and LM Studio's error body, the real
 calls of the wait and the real part call file and parts table). The part waited 23 minutes while its row read "writing
 for 22m 59s, 0 words of thinking"; now the part says it waits for the model host, with the host's error."""
 
@@ -45,22 +45,11 @@ def _start_host(model: str,
             self.wfile.write(data)
 
         def do_GET(self):
-            seen.append("list")
-            if self.path.startswith("/api/v1/models"):
-                self._answer(200, {"models": [{"key": model, "loaded_instances": [{"id": model}]}]})
-                return
-            self._answer(200, {"data": [{"id": model, "state": "loaded", "loaded_context_length": 183_040}]})
+            seen.append(f"list {self.path}")
+            self._answer(200, {"object": "list", "data": [{"id": model, "object": "model"}]})
 
         def do_POST(self):
-            body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
-            if self.path.endswith("/unload"):
-                seen.append(f"unload {body.get('instance_id')}")
-                self._answer(200, {})
-                return
-            if self.path.endswith("/load"):
-                seen.append(f"load {body.get('model')} {body.get('context_length')} {body.get('parallel')}")
-                self._answer(200, {})
-                return
+            self.rfile.read(int(self.headers.get("Content-Length") or 0))
             seen.append("call")
             if seen.count("call") <= broken_calls:
                 self._answer(500, ERROR_BODY)
@@ -117,8 +106,8 @@ def test_a_part_on_a_model_answering_compute_error_says_it_waits_for_the_host_de
         host_return_service.set_clock(*saved_clock)
         server.shutdown()
     harness.check("the host was asked over HTTP until the model answered", seen.count("call") == 3, str(seen))
-    harness.check("the broken copy was unloaded and the model loaded again at its window, one call at a time",
-                  f"unload {model}" in seen and f"load {model} {role.num_ctx} 1" in seen, str(seen))
+    harness.check("the program asked only the standard model list and sent calls, never a load or an unload",
+                  set(seen) == {"list /v1/models", "call"}, str(seen))
     harness.check("the part's call is asked again and answers", reply.content == "done", str(reply))
     harness.check("while it waits, the row names the host's error and no thinking",
                   "Compute error." in shown["row"]["host_wait"] and shown["row"]["thinking"] == "", str(shown["row"]))

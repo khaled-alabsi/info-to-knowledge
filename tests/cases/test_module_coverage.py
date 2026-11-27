@@ -84,9 +84,6 @@ REACHED_THROUGH = {
         "a node of the chain subgraph; every acceptance and rejection goes through it",
     "services.artifact_snapshot_service":
         "snapshot_node takes one on every attempt test_chain_attempt_loop runs",
-    "services.retrying_chat_client":
-        "the two chat model classes chat_model_service builds for a local role; the retry rule they apply is "
-        "model_retry_service, asserted in test_engine_services",
 
     # Nothing in the suite drives these. Each one needs a case file: an entry here is a note that it
     # does not have one yet, never a decision that it does not need a test.

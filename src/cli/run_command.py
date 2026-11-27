@@ -46,7 +46,6 @@ from services import document_pass_service
 from services import diarization_service
 from services import frame_extraction_service
 from services import host_window_service
-from services import mlx_server_service
 from services import inbox_service
 from services import ingesting_profile_service
 from services import input_range_service
@@ -221,7 +220,7 @@ def _select_window_model(phase: str,
 
 def read_phase_windows(log: logging.Logger,
                        is_fast: bool) -> dict[str, int]:
-    """The window each phase's model is loaded with: what LM Studio reports for a loaded model, else the configured
+    """The window each phase's model is loaded with: what the server reports for the model, else the configured
     `num_ctx`. Read once, so every call's context share is measured against the window the host really holds."""
 
     windows = {}
@@ -232,12 +231,12 @@ def read_phase_windows(log: logging.Logger,
         model = config.settings.resolve_model(name)
         provider, served = chat_model_service.split_spec(model.spec)
         loaded = None
-        if provider == "lmstudio":
-            host_url = chat_model_service.resolve_host_url(model)
+        host_url = chat_model_service.resolve_host_url(model)
+        if provider in ("lmstudio", "openai-compatible") and host_url:
             if (host_url, served) not in loaded_by_model:
                 loaded_by_model[(host_url, served)] = host_window_service.read_loaded_window(host_url, served)
                 if not loaded_by_model[(host_url, served)]:
-                    log.warning(f"  {row['phase']}: LM Studio reports no loaded window for {served}; its share of "
+                    log.warning(f"  {row['phase']}: the server reports no loaded window for {served}; its share of "
                                 f"the context is measured against the configured {model.num_ctx or 'none'}")
             loaded = loaded_by_model[(host_url, served)]
         window = loaded or model.num_ctx
@@ -1022,13 +1021,6 @@ def cmd_run(args: argparse.Namespace) -> int:
         # expensive part is already paid for.
         # A PDF is read, never transcribed: its line names its reader, and it has no speakers to tell apart
         is_pdf = pdf_source_service.is_pdf(video)
-        # A model on mlx-vlm at a local address where nothing answers gets its server started before the models are
-        # checked, and stopped when the run ends
-        if not args.is_dry_run:
-            mlx_server_service.start_needed_servers(
-                chat_model_service.describe_phase_models(),
-                lambda name: chat_model_service.resolve_host_url(config.settings.resolve_model(name)),
-                paths.output_root / "logs")
         checks = RunStartChecksResult(
             transcription=("pdf: read by pymupdf4llm" if is_pdf
                            else transcription_service.describe_available_engine(config.settings.audio)),

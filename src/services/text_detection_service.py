@@ -3,7 +3,8 @@
 Phase 4's agent is shown a frame with the program's boxes on it as anchor points; the text blocks are most of them.
 The same words tell the program when a cut's edge runs through a line of text. Tesseract runs locally as a command,
 as the research scripts already run it; a machine without it gets no text boxes, and the tools say so, rather than
-failing the phase.
+failing the phase. With `providers.ocr.url` set, a model server reads the words instead (`POST /v1/ocr`) and the
+program runs no Tesseract; a request that fails gives no words, as a failed Tesseract run does.
 """
 
 from __future__ import annotations
@@ -23,6 +24,9 @@ import cv2
 import numpy
 
 import config
+from models.endpoint_errors import EndpointError
+from models.endpoint_spec import EndpointSpec
+from services import endpoint_client
 from utils import frame_region_utils
 
 __all__ = ["SCREEN_TEXT_MIN_CONFIDENCE", "read_figure_words", "is_same_wording", "count_shared_words",
@@ -76,7 +80,7 @@ def _build_disk_key(frame_path: Path,
     if _WORDS_CACHE_DIR is None:
         return None
     digest = hashlib.sha256(Path(frame_path).read_bytes())
-    digest.update(f"{float(min_confidence)}|{_select_languages()}".encode())
+    digest.update(f"{float(min_confidence)}|{_build_reader_label()}".encode())
 
     return _WORDS_CACHE_DIR / f"{digest.hexdigest()}.json"
 
@@ -155,6 +159,8 @@ def list_missing_languages(languages: list[str] | None = None) -> list[str]:
     setup check reports them, and the reader reads with the rest."""
 
     wanted = config.settings.frames.text_reader_languages if languages is None else languages
+    if endpoint_client.find_endpoint(kind="ocr") is not None:
+        return []    # the server's own models are its business: it is asked for the languages and reads with what it has
 
     return [language for language in wanted if language not in LANGUAGE_LISTER()]
 
@@ -195,6 +201,40 @@ def _select_languages() -> str:
     return "+".join(dict.fromkeys(language for language in wanted if language not in missing))
 
 
+def _build_reader_label() -> str:
+    """Give me what a reading depends on besides the file: the languages, and the server's address when one reads."""
+
+    endpoint = endpoint_client.find_endpoint(kind="ocr")
+
+    return f"{_select_languages()}|{endpoint.base_url if endpoint is not None else ''}"
+
+
+def _read_words_from_server(endpoint: EndpointSpec,
+                            image: numpy.ndarray,
+                            min_confidence: float) -> list[dict] | None:
+    """Give me the words a model server reads on `image`, in its pixels, in the shape `read_tsv_words` gives; None when the
+    request failed. A word the server is less sure of than `min_confidence` is dropped. The server's `block` is the word's
+    text block when it sends one, else its line is its block."""
+
+    is_encoded, png = cv2.imencode(".png", fill_masks_with_background(image))
+    if not is_encoded:
+        return None
+    languages = [language for language in _select_languages().split("+") if language]
+    try:
+        word_list = endpoint_client.request_text_boxes(endpoint=endpoint,
+                                                       image_url=endpoint_client.build_data_url(content=png.tobytes(),
+                                                                                                media_type="image/png"),
+                                                       language_list=languages)
+    except EndpointError as error:
+        _LOG.warning("The text reader at %s did not read a %dx%d image (%s)", endpoint.base_url, image.shape[1], image.shape[0],
+                     error)
+        return None
+
+    return [{"text": str(word["text"]).strip(), "box": [int(value) for value in word["box"]],
+             "block": int(word.get("block", word["line"])), "line": int(word["line"])}
+            for word in word_list if str(word["text"]).strip() and float(word["confidence"]) >= min_confidence]
+
+
 def _run_tesseract(image: numpy.ndarray,
                    scale: int,
                    page_mode: int | None = None) -> str | None:
@@ -228,8 +268,12 @@ def _read_words_in_image(image: numpy.ndarray,
                          min_confidence: float,
                          is_read_larger: bool = False,
                          page_mode: int | None = None) -> list[dict] | None:
-    """The words on `image` in its own pixels: empty when Tesseract is not installed, None when its run failed."""
+    """The words on `image` in its own pixels: empty when Tesseract is not installed, None when its run failed. With
+    `providers.ocr.url` set, the server reads them in one request, at the size the image has."""
 
+    endpoint = endpoint_client.find_endpoint(kind="ocr")
+    if endpoint is not None:
+        return _read_words_from_server(endpoint=endpoint, image=image, min_confidence=min_confidence)
     if not is_available():
         return []
     # A small image is read at twice its size and at the larger scale, and the reading with more words is kept: four
@@ -255,7 +299,7 @@ def _read_cached_words(frame_path: Path,
         stat = Path(frame_path).stat()
     except OSError:
         return None
-    key = (str(Path(frame_path).resolve()), stat.st_size, stat.st_mtime_ns, float(min_confidence), _select_languages())
+    key = (str(Path(frame_path).resolve()), stat.st_size, stat.st_mtime_ns, float(min_confidence), _build_reader_label())
     if key not in _WORDS_BY_FILE:
         disk_key = _build_disk_key(frame_path, min_confidence)
         if disk_key is not None and disk_key.is_file():
@@ -275,7 +319,9 @@ def _read_cached_words(frame_path: Path,
 
 
 def is_available() -> bool:
-    return shutil.which(_TESSERACT) is not None
+    """Whether words can be read here: a model server is set for it, or Tesseract is installed."""
+
+    return endpoint_client.find_endpoint(kind="ocr") is not None or shutil.which(_TESSERACT) is not None
 
 
 def fill_masks_with_background(image: numpy.ndarray) -> numpy.ndarray:

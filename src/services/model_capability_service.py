@@ -11,13 +11,13 @@ this playbook says it needs.
 
 from __future__ import annotations
 
-import json
-import urllib.request
 from typing import Callable
 
 import config
+from models.endpoint_errors import EndpointError
 from models.pipeline_errors import MissingModelCapability
 from services import chat_model_service
+from services import endpoint_client
 
 __all__ = ["REQUIRED_CAPABILITIES", "list_missing_capabilities", "check_phase_capabilities",
            "set_capability_reader"]
@@ -39,23 +39,13 @@ REQUIRED_CAPABILITIES: dict[str, tuple[str, ...]] = {
 
 _TIMEOUT_S = 10
 
+# provider -> (base_url, model) -> capabilities. The standard requests carry no capability list, so no provider has a row
+# until a person registers one (`set_capability_reader`); a phase on a provider with no row is only asked whether its
+# server lists the model, and is reported as unchecked for what the model can do, never as capable.
+CAPABILITY_READERS: dict[str, Callable[[str, str], list[str]]] = {}
 
-def _read_ollama_capabilities(base_url: str,
-                              model: str) -> list[str]:
-    """What an Ollama host says this model can do. Raises when the host cannot be asked."""
-
-    request = urllib.request.Request(f"{base_url.rstrip('/')}/api/show",
-                                     data=json.dumps({"model": model}).encode("utf-8"),
-                                     headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(request, timeout=_TIMEOUT_S) as response:
-        return list(json.loads(response.read().decode("utf-8")).get("capabilities") or [])
-
-
-# provider -> (base_url, model) -> capabilities. Only a provider that can be ASKED has a row; a phase
-# on any other provider is reported as unchecked, never as capable.
-CAPABILITY_READERS: dict[str, Callable[[str, str], list[str]]] = {
-    "ollama": _read_ollama_capabilities,
-}
+# The providers whose server lists its models at `GET /v1/models`
+_LISTING_PROVIDERS = ("lmstudio", "openai-compatible")
 
 
 def set_capability_reader(provider: str,
@@ -73,6 +63,26 @@ def list_missing_capabilities(required: tuple[str, ...],
     return [name for name in required if name not in capabilities]
 
 
+def _check_model_is_listed(phase: str,
+                           described_model: str,
+                           base_url: str,
+                           served_name: str,
+                           unchecked: dict[str, list[str]]) -> None:
+    """Ask the server at `base_url` which models it lists. Raises `MissingModelCapability` when it answers without
+    `served_name`; a server that does not answer, or lists it, adds the phase to `unchecked` under that reason."""
+
+    endpoint = chat_model_service.build_chat_endpoint(base_url=base_url, timeout_s=_TIMEOUT_S)
+    try:
+        listed = endpoint_client.list_served_models(endpoint=endpoint)
+    except EndpointError as exc:
+        unchecked.setdefault(f"the server did not answer ({exc})", []).append(phase)
+        return
+    if served_name not in listed:
+        raise MissingModelCapability(f"phase {phase!r} uses {described_model}, which the server at {base_url} does not "
+                                     f"list. It lists: {', '.join(listed) or 'nothing'}.")
+    unchecked.setdefault("the server lists the model and reports no capabilities", []).append(phase)
+
+
 def check_phase_capabilities() -> list[str]:
     """One line per phase checked. Raises `MissingModelCapability` naming the phase, the model and what
     it lacks. The phases whose host cannot be asked share one line per reason, naming them: the header names each
@@ -88,10 +98,13 @@ def check_phase_capabilities() -> list[str]:
                                          f"config.PHASE_DEFAULT_MODELS")
         model = f"{row['name']} ({row['provider']}:{row['model']})"
         reader = CAPABILITY_READERS.get(row["provider"])
+        base_url = chat_model_service.resolve_host_url(config.settings.resolve_model(row["name"]))
+        if reader is None and row["provider"] in _LISTING_PROVIDERS and base_url:
+            _check_model_is_listed(phase, model, base_url, row["model"], unchecked)
+            continue
         if reader is None:
             unchecked.setdefault("this provider cannot be asked", []).append(phase)
             continue
-        base_url = chat_model_service.resolve_host_url(config.settings.resolve_model(row["name"]))
         try:
             capabilities = reader(base_url, row["model"])
         except (OSError, ValueError) as exc:

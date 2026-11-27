@@ -1,65 +1,51 @@
 """The context window a model host actually loaded, read from the host itself. REQUIREMENTS.md R12.
 
-LM Studio fixes a model's window when it loads it, and lists it at `/api/v0/models` as `loaded_context_length`. The
-OpenAI-compatible path (`/v1`) never says it, and a window typed into the settings can be wrong unnoticed: a prompt
-past the real window is cut at its start without an error.
+A server fixes a model's window when it loads it. The standard `GET /v1/models` reply holds none, but a server may add
+it to the model's entry (LM Studio, vLLM). A window typed into the settings can be wrong unnoticed: a prompt past the
+real window is cut at its start without an error.
 """
 
 from __future__ import annotations
 
-import json
 import logging
-import urllib.request
 from collections.abc import Callable
-from typing import Any
 
 import config as app_config
+from models.endpoint_errors import EndpointError
 from services import chat_model_service
+from services import endpoint_client
 
-__all__ = ["read_loaded_window", "resolve_conversation_window", "resolve_max_output_tokens", "set_fetch_json"]
+__all__ = ["set_window_reader", "read_loaded_window", "resolve_conversation_window", "resolve_max_output_tokens"]
 
 _TIMEOUT_S = 5
 
-
-def _fetch_json(url: str) -> Any:
-    with urllib.request.urlopen(url, timeout=_TIMEOUT_S) as response:  # noqa: S310 (a local host the settings name)
-        return json.loads(response.read().decode("utf-8"))
-
-
-# The seam the tests swap: the one place this module reaches the network.
-_fetch: Callable[[str], Any] = _fetch_json
+# What reads the window instead of the server, for a test: the suite reaches no model host, and the local settings may name
+# one that is running
+_window_reader: Callable[[str, str], int | None] | None = None
 
 
-def set_fetch_json(fetch: Callable[[str], Any]) -> Callable[[str], Any]:
-    """Swap the fetch, for a test; returns the one it replaced."""
+def set_window_reader(reader: Callable[[str, str], int | None] | None) -> Callable[[str, str], int | None] | None:
+    """Swap what reads the loaded window, for a test; returns the one it replaced."""
 
-    global _fetch
-    previous, _fetch = _fetch, fetch
+    global _window_reader
+    previous, _window_reader = _window_reader, reader
 
     return previous
 
 
 def read_loaded_window(base_url: str,
                        model: str) -> int | None:
-    """The window `model` is loaded with on the LM Studio host at `base_url`; None when the host does not answer or
-    the model is not loaded."""
+    """The window `model` is loaded with on the server at `base_url`; None when the server does not answer, does not list
+    the model or reports no window for it."""
 
-    root = base_url.rstrip("/").removesuffix("/v1")
+    if _window_reader is not None:
+        return _window_reader(base_url, model)
+    endpoint = chat_model_service.build_chat_endpoint(base_url=base_url, timeout_s=_TIMEOUT_S)
     try:
-        listing = _fetch(f"{root}/api/v0/models")
-    except (OSError, ValueError):
-        # The host may be down or answer with no JSON: no window is known, and the caller falls back and says so
+        return endpoint_client.read_reported_window(endpoint=endpoint, model=model)
+    except EndpointError:
+        # The server may be down or answer with no model list: no window is known, and the caller falls back and says so
         return None
-    if not isinstance(listing, dict):
-        return None
-    loaded = [entry for entry in listing.get("data") or [] if isinstance(entry, dict)
-              and entry.get("id") == model and entry.get("state") == "loaded"]
-
-    if not loaded:
-        return None
-    length = loaded[0].get("loaded_context_length")
-
-    return length if isinstance(length, int) and length > 0 else None
 
 
 def resolve_max_output_tokens(role: app_config.ModelSettings | None) -> int:
@@ -72,23 +58,24 @@ def resolve_max_output_tokens(role: app_config.ModelSettings | None) -> int:
 def resolve_conversation_window(log: logging.Logger,
                                 role: app_config.ModelSettings | None,
                                 phase_number: int) -> int:
-    """The window a conversation keeps within (phase 4's, R12; phase 5's, R16): the one LM Studio says it loaded, when
+    """The window a conversation keeps within (phase 4's, R12; phase 5's, R16): the one the server says it loaded, when
     it says one, else the configured one. Smaller, a prompt past the real window is cut without an error; larger, the
     configured window put the size limit on the very number that reads as a cut, and a chapter blocked as cut on a host
     that had cut nothing."""
 
     configured = app_config.settings.document.conversation_window_tokens
     provider, _, model = (role.spec if role else "").partition(":")
-    if provider != "lmstudio":
+    host_url = chat_model_service.resolve_host_url(role) if role else None
+    if provider not in ("lmstudio", "openai-compatible") or not host_url:
         return configured
-    loaded = read_loaded_window(chat_model_service.resolve_host_url(role), model)
+    loaded = read_loaded_window(host_url, model)
     if loaded is None:
-        # Not an error: the host may be down or the model not loaded yet, and the typed window is the best there is
-        log.warning(f"phase {phase_number}: LM Studio did not report a loaded window for {model}; using the "
+        # Not an error: the server may be down, or report no window, and the typed window is the best there is
+        log.warning(f"phase {phase_number}: the server did not report a loaded window for {model}; using the "
                     f"configured {configured:,}")
         return configured
     if loaded != configured:
-        log.warning(f"phase {phase_number}: LM Studio loaded {model} with a {loaded:,}-token window, not the "
+        log.warning(f"phase {phase_number}: the server loaded {model} with a {loaded:,}-token window, not the "
                     f"configured {configured:,}; the conversation keeps within {loaded:,}")
 
     return loaded

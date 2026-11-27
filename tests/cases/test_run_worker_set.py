@@ -15,7 +15,6 @@ from support import harness
 import config
 from cli import run_command
 from models import output_contract
-from services import mlx_server_service
 from services import model_capability_service
 from services import run_worker_set_service
 from services import transcription_service
@@ -101,17 +100,14 @@ def test_an_unknown_set_refuses_the_run_and_leaves_no_folder():
                               profile_name="", tags=[], ingesting_profile="", is_run_as_audio=False, phase_models=[],
                               workflow="", speed_preset="", speed_settings=[], worker_set="spare", logger=logger)
     previous = _use_settings(settings_folder, _SETTINGS)
-    saved = (transcription_service.describe_available_engine, model_capability_service.check_phase_capabilities,
-             mlx_server_service.start_needed_servers)
+    saved = (transcription_service.describe_available_engine, model_capability_service.check_phase_capabilities)
     transcription_service.describe_available_engine = lambda settings: "audio: test engine"
     model_capability_service.check_phase_capabilities = lambda: []
-    mlx_server_service.start_needed_servers = lambda models, resolve, logs: None
     try:
         code = run_command.cmd_run(args)
         name_in_force = config.WORKER_SET_NAME
     finally:
-        (transcription_service.describe_available_engine, model_capability_service.check_phase_capabilities,
-         mlx_server_service.start_needed_servers) = saved
+        (transcription_service.describe_available_engine, model_capability_service.check_phase_capabilities) = saved
         _give_back(previous)
     harness.check("the run is refused", code == 2, str(code))
     harness.check("the refusal names the set and the sets that exist",

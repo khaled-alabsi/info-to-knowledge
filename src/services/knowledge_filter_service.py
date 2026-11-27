@@ -23,6 +23,8 @@ from pathlib import Path
 
 import config
 from config import FrameSettings
+from services import endpoint_client
+from services import frame_embedding_service
 
 __all__ = ["DROPPED_DIR_NAME", "PEOPLE", "TAGS_TASK", "filter_frames", "build_relinked_frames", "resolve_playbook_path",
            "resolve_classifier_command", "read_decisions", "read_tags", "move_to_dropped", "DROPPED_LIST_NAME",
@@ -69,11 +71,20 @@ def read_decisions(frames_dir: Path,
                    vectors_path: Path | None = None) -> dict:
     """The classifier's output for every image of `frames_dir` under its `task`: for `tags`, `{"peopleThreshold",
     "cuts", "frames": [{"frame", "tag", "peopleScore", "boardScore", "isPlainText"}]}` with the tag `people`, `text` or `other`. With
-    `vectors_path` (tags only), each frame's SigLIP vectors are saved there too, for the similarity recheck."""
+    `vectors_path` (tags only), each frame's SigLIP vectors are saved there too, for the similarity recheck. When
+    `providers.embeddings.url` is set, the model server gives the frames' vectors (`frame_embedding_service`) and the
+    classifier loads no image model: it reads them from a file the program hands it."""
 
     with tempfile.TemporaryDirectory() as scratch:
         out_path = Path(scratch) / "decisions.json"
         vectors = ["--vectors-out", str(vectors_path)] if vectors_path is not None else []
+        embeddings = endpoint_client.find_endpoint(kind="embeddings")
+        if embeddings is not None:
+            vectors_in_path = Path(scratch) / "vectors-in.npz"
+            frame_embedding_service.write_frame_vectors(endpoint=embeddings,
+                                                        frame_path_list=frame_embedding_service.list_frame_images(frames_dir),
+                                                        out_path=vectors_in_path)
+            vectors += ["--vectors-in", str(vectors_in_path)]
         finished = subprocess.run([str(command), "filter", str(frames_dir), "--out", str(out_path), "--task", task,
                                    *vectors], capture_output=True, text=True, env=_build_classifier_env())
         if finished.returncode != 0 or not out_path.is_file():

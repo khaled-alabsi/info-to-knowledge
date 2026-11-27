@@ -28,8 +28,10 @@ from pathlib import Path
 
 from config import AudioSettings
 from models.pipeline_errors import EngineUnavailable
+from services import endpoint_client
 from services import faster_whisper_client
 from services import mlx_whisper_client
+from services import speech_server_service
 
 __all__ = ["ENGINES", "is_invented_segment", "drop_unheard_words", "produce_transcript", "read_engine", "describe_available_engine"]
 
@@ -54,6 +56,10 @@ def read_engine(name: str) -> types.ModuleType:
 def describe_available_engine(settings: AudioSettings) -> str:
     """One line describing the engine a run will use, or a raise if it cannot run at all."""
 
+    endpoint = endpoint_client.find_endpoint(kind="speech")
+    if endpoint is not None:
+        return f"audio: the speech server {endpoint.base_url} with model {endpoint.model or settings.whisper_model}"
+
     # Asked BEFORE the audio is extracted. An optional package that is missing is a refusal at the
     # start of a run, never a failure after the expensive part is already paid for.
     engine = read_engine(settings.engine)
@@ -71,17 +77,28 @@ INVENTED_ZERO_SHARE = 0.5
 INVENTED_MAX_PROBABILITY = 0.6
 
 
+def _is_known_under(word: dict,
+                    limit: float) -> bool:
+    """Whether the word has a probability and it is under `limit`. A word with none (a speech server that gives none) is
+    unknown, not 0.0: nothing says it was not heard."""
+
+    probability = word.get("probability")
+
+    return probability is not None and probability < limit
+
+
 def is_invented_segment(segment: dict) -> bool:
-    """Whether Whisper made the segment up rather than heard it: half its words or more end where they start and their
-    mean probability is under INVENTED_MAX_PROBABILITY. A segment with no word timings is kept."""
+    """Whether Whisper made the segment up rather than heard it: half its words or more end where they start and the mean
+    probability of the words that have one is under INVENTED_MAX_PROBABILITY. A segment with no word timings, or whose
+    words have no probability at all, is kept."""
 
     words = segment.get("words") or []
-    if not words:
+    known = [word["probability"] for word in words if word.get("probability") is not None]
+    if not words or not known:
         return False
     zero_share = sum(1 for word in words if word["end"] - word["start"] <= 0) / len(words)
-    probability = sum(word.get("probability") or 0.0 for word in words) / len(words)
 
-    return zero_share >= INVENTED_ZERO_SHARE and probability < INVENTED_MAX_PROBABILITY
+    return zero_share >= INVENTED_ZERO_SHARE and sum(known) / len(known) < INVENTED_MAX_PROBABILITY
 
 
 # A run of at least UNHEARD_RUN words each under UNHEARD_MAX_PROBABILITY was not heard: in the middle of an English
@@ -97,7 +114,7 @@ def drop_unheard_words(segment: dict) -> dict:
     from the words left; a segment with no such run, or with no word timings, as it is."""
 
     words = segment.get("words") or []
-    unheard = [(word.get("probability") or 0.0) < UNHEARD_MAX_PROBABILITY for word in words]
+    unheard = [_is_known_under(word=word, limit=UNHEARD_MAX_PROBABILITY) for word in words]
     dropped = set()
     start = None
     for index, is_unheard in enumerate(unheard + [False]):
@@ -119,8 +136,12 @@ def produce_transcript(audio_path: Path,
     """What was said, from the configured engine. Audio with no speech is an empty segment list,
     which is an answer: every frame is still analysed, with nothing said around it."""
 
-    engine = read_engine(settings.engine)
-    reply = engine.produce_transcript(audio_path, settings)
+    endpoint = endpoint_client.find_endpoint(kind="speech")
+    if endpoint is None:
+        engine = read_engine(settings.engine)
+        reply = engine.produce_transcript(audio_path, settings)
+    else:
+        reply = speech_server_service.produce_remote_reply(audio_path=audio_path, settings=settings, endpoint=endpoint)
     # Whisper returns zero-length segments with no text at window edges, and now and then an end a
     # few hundredths before its start; one such segment made the transcript check refuse the file.
     segments = [drop_unheard_words(segment) for segment in reply["segments"] if not is_invented_segment(segment)]

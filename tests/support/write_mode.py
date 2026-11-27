@@ -11,8 +11,11 @@ from graph.nodes import write_document_node
 from services import host_window_service
 
 
-def _answer_nothing(url: str):
-    raise OSError(f"no host in the test suite: {url}")
+def _answer_nothing(base_url: str,
+                    model: str) -> None:
+    """The window of a host that is not there: no window is known."""
+
+    return None
 
 
 def run_phase_4_in_calls_mode(state: dict,
@@ -34,9 +37,9 @@ def run_phase_4_in_conversation_mode(state: dict,
 
     previous_mode = app_config.settings.document.write_mode
     app_config.settings.document.write_mode = "conversation"
-    previous_fetch = host_window_service.set_fetch_json(_answer_nothing)
+    previous_reader = host_window_service.set_window_reader(_answer_nothing)
     try:
         return write_document_node.write_document_node(state, config)
     finally:
         app_config.settings.document.write_mode = previous_mode
-        host_window_service.set_fetch_json(previous_fetch)
+        host_window_service.set_window_reader(previous_reader)

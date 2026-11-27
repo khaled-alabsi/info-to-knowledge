@@ -42,7 +42,7 @@ from utils import frame_group_utils
 from validators import frame_redundancy_validator
 
 __all__ = ["filter_frames", "judge_calls", "build_judging_spec", "list_call_positions", "map_call_of_frames", "set_model_factory", "MODEL_FACTORY", "DROPPED_BY",
-           "MAX_HOLDER_CHANGE", "FILTER_LOAD_SECONDS", "build_filter_model", "list_repeat_copies",
+           "MAX_HOLDER_CHANGE", "build_filter_model", "list_repeat_copies",
            "REPEAT_COPY_DROPPED_BY", "is_nothing_new", "list_new_numbers"]
 
 DROPPED_BY = "redundancy"
@@ -63,20 +63,11 @@ MAX_HOLDER_CHANGE = 0.15
 # from its first rows 12 (DEFECTS 114)
 MAX_ADDED_BLOCKS = 2
 
-# How long LM Studio keeps the filter's model loaded once idle, when it is not phase 3's model: with the 24 hours every
-# other call asks for, 38c3 talk 797's filter model (3.7 GB) stayed loaded beside phase 3's 35B model, memory ran out,
-# and phase 3's first batch of 4 frames ran over an hour (DEFECTS 473). The filter's calls come about 43 s apart, so a
-# stage never waits on a reload
-FILTER_LOAD_SECONDS = 300
-
-
 def build_filter_model(name: str) -> Any:
-    """The filter's model under `name`, LM Studio unloading it `FILTER_LOAD_SECONDS` after its last call, unless it is
-    the model phase 3 calls next, which keeps the usual time."""
+    """The filter's model under `name`. How long the server keeps it loaded is the server's own setting: the program asks
+    no host to hold or unload a model."""
 
-    is_kept = chat_model_service.is_phase_model_spec(name, "frames_processing")
-
-    return chat_model_service.get_named_model(name, chat_model_service.LMSTUDIO_LOAD_SECONDS if is_kept else FILTER_LOAD_SECONDS)
+    return chat_model_service.get_named_model(name)
 
 
 # What builds the filter's model from its name. A module-level name with a setter: the suite runs with no model host,

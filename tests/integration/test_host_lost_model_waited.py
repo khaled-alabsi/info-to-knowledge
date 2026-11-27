@@ -1,8 +1,8 @@
 """A model host that loses its model while a call runs (DEFECTS 317): release test 1's Mac restarted under the second
 pass, the call ended "terminated", and two retries failed in seconds on a host with no model, so the step spent its
-three attempts and phase 3 stopped. Here a local HTTP host made for the test answers as LM Studio does: its listing at
-`/api/v0/models` and its `/v1/chat/completions`, whose first call fails and drops the model. Through the real client,
-the real dispatch and the real listing read; only the pause between two checks is the module's seam."""
+three attempts and phase 3 stopped. Here a local HTTP host made for the test answers the standard requests: its model
+list at `/v1/models` and its `/v1/chat/completions`, whose first call fails and drops the model. Through the real
+client, the real dispatch and the real listing read; only the pause between two checks is the module's seam."""
 
 import json
 import logging
@@ -64,8 +64,8 @@ def _serve(host: _Host) -> ThreadingHTTPServer:
             self.wfile.write(f"data: {json.dumps(piece)}\n\ndata: [DONE]\n\n".encode())
 
         def do_GET(self):
-            state = "loaded" if host.is_loaded else "not-loaded"
-            self._send(200, {"data": [{"id": MODEL, "state": state, "loaded_context_length": 8_192}]})
+            listed = [{"id": MODEL, "object": "model"}] if host.is_loaded else []
+            self._send(200, {"object": "list", "data": listed})
 
         def do_POST(self):
             body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))))

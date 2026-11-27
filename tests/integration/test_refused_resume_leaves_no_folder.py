@@ -11,7 +11,6 @@ from pathlib import Path
 from support import harness
 
 from cli import run_command
-from services import mlx_server_service
 from services import model_capability_service
 from services import transcription_service
 
@@ -35,16 +34,13 @@ def test_a_refused_resume_with_a_speed_leaves_no_folder_of_its_name_defect():
     video.write_bytes(b"<an invented recording>")
     old_name = root / "output" / "Gateway-weekly"
     logger = logging.getLogger("refused-resume")
-    saved = (transcription_service.describe_available_engine, model_capability_service.check_phase_capabilities,
-             mlx_server_service.start_needed_servers)
+    saved = (transcription_service.describe_available_engine, model_capability_service.check_phase_capabilities)
     transcription_service.describe_available_engine = lambda settings: "audio: test engine"
     model_capability_service.check_phase_capabilities = lambda: []
-    mlx_server_service.start_needed_servers = lambda models, resolve, logs: None
     try:
         code = run_command.cmd_run(_build_resume_args(video, old_name, logger))
     finally:
-        (transcription_service.describe_available_engine, model_capability_service.check_phase_capabilities,
-         mlx_server_service.start_needed_servers) = saved
+        (transcription_service.describe_available_engine, model_capability_service.check_phase_capabilities) = saved
     harness.check("the resume is refused", code == 2, str(code))
     harness.check("and no folder of the old name is made", not old_name.exists(),
                   str(sorted(path.name for path in old_name.rglob("*"))) if old_name.exists() else "")

@@ -1,6 +1,7 @@
 """Finding the people a frame shows, with OpenCV's NanoDet-Plus object detector (Apache 2.0, from the OpenCV model zoo,
 as the face detector is), its "person" class only. The side effect is loading its model file, once per path;
-everything runs on this machine.
+everything runs on this machine, unless `providers.detection.url` is set: then a model server finds them
+(`detection_request_service`), the program widens each box by the same margin, and it loads no detector.
 
 A person is never content: phase 2's capture loop leaves the blocks a person covers out of its change, so a lecturer
 walking in front of an unchanged blackboard takes no new frame (DEFECTS 100).
@@ -20,8 +21,10 @@ import numpy
 
 import config
 from models.video_errors import MissingPersonModel
+from services import detection_request_service
+from services import endpoint_client
 
-__all__ = ["detect_people", "find_people_with_nanodet", "set_person_finder", "PERSON_FINDER"]
+__all__ = ["detect_people", "find_people", "find_people_with_nanodet", "set_person_finder", "PERSON_FINDER", "MARGIN"]
 
 INPUT_PX = 416                              # the model reads the frame scaled into this square, its rest left black
 STRIDES = (8, 16, 32)                       # the model's three output levels, each a grid of this many pixels a cell
@@ -85,13 +88,40 @@ def find_people_with_nanodet(frame: numpy.ndarray) -> list[tuple[int, int, int, 
     kept = numpy.ravel(cv2.dnn.NMSBoxes(boxes, scores, PERSON_SCORE, OVERLAP_IOU))
     people = []
     for x, y, box_width, box_height in (boxes[i] for i in kept):
-        people.append((max(0, round(x - MARGIN * box_width)), max(0, round(y - MARGIN * box_height)),
-                       min(width, round(x + (1 + MARGIN) * box_width)), min(height, round(y + (1 + MARGIN) * box_height))))
+        people.append(_build_widened_box(x=x, y=y, box_width=box_width, box_height=box_height, frame_width=width, frame_height=height))
 
     return people
 
 
-PERSON_FINDER: Callable[[numpy.ndarray], list[tuple[int, int, int, int]]] = find_people_with_nanodet
+def _build_widened_box(x: float,
+                       y: float,
+                       box_width: float,
+                       box_height: float,
+                       frame_width: int,
+                       frame_height: int) -> tuple[int, int, int, int]:
+    """Give me the box at `x`, `y` of the size `box_width` by `box_height`, widened by MARGIN on every side, as x0, y0, x1, y1
+    cut at the frame's edges."""
+
+    return (max(0, round(x - MARGIN * box_width)), max(0, round(y - MARGIN * box_height)),
+            min(frame_width, round(x + (1 + MARGIN) * box_width)), min(frame_height, round(y + (1 + MARGIN) * box_height)))
+
+
+def find_people(frame: numpy.ndarray) -> list[tuple[int, int, int, int]]:
+    """Person boxes as x0, y0, x1, y1 in the frame's own pixels: from the model server when `providers.detection.url` is
+    set, its boxes widened by MARGIN here, else from NanoDet on this machine."""
+
+    endpoint = endpoint_client.find_endpoint(kind="detection")
+    if endpoint is None:
+        return find_people_with_nanodet(frame)
+    height, width = frame.shape[:2]
+    box_list = detection_request_service.request_boxes(endpoint=endpoint, image=frame, kind="person", min_score=PERSON_SCORE)
+
+    return [_build_widened_box(x=left, y=top, box_width=right - left, box_height=bottom - top, frame_width=width,
+                               frame_height=height)
+            for left, top, right, bottom in box_list]
+
+
+PERSON_FINDER: Callable[[numpy.ndarray], list[tuple[int, int, int, int]]] = find_people
 
 
 def set_person_finder(finder: Callable[[numpy.ndarray], list[tuple[int, int, int, int]]]) -> None:

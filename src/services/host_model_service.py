@@ -1,13 +1,14 @@
-"""The models a local model host has, asked of the host itself: what the setup wizard reports as installed, and what the
-Settings page offers as a model's spec. Its own module, since both read it and the settings code is read by the
-wizard's.
+"""The models a model host has, asked of the host itself with the standard `GET /v1/models`: what the setup wizard reports
+as installed, and what the Settings page offers as a model's spec. Its own module, since both read it and the settings
+code is read by the wizard's.
 """
 
 from __future__ import annotations
 
-import json
-import urllib.error
-import urllib.request
+import config
+from models.endpoint_errors import EndpointError
+from models.endpoint_spec import EndpointSpec
+from services import endpoint_client
 
 __all__ = ["list_host_models", "HOST_TIMEOUT_S"]
 
@@ -16,16 +17,13 @@ HOST_TIMEOUT_S = 3  # seconds a host may take to list its models before it count
 
 def list_host_models(provider: str,
                      base_url: str) -> list[str] | None:
-    """The model ids the host at `base_url` has, None when it does not answer."""
+    """The model ids the server at `base_url` lists, None when it does not answer. `provider` names the kind of host the
+    caller shows it under; every host is asked the same way."""
 
-    root = base_url.rstrip("/").removesuffix("/v1")
-    url = {"ollama": f"{root}/api/tags", "lmstudio": f"{root}/api/v0/models"}.get(provider, f"{base_url.rstrip('/')}/models")
+    endpoint = EndpointSpec(base_url=base_url, api_key_env=config.settings.providers.chat.api_key_env,
+                            timeout_s=HOST_TIMEOUT_S)
     try:
-        with urllib.request.urlopen(url, timeout=HOST_TIMEOUT_S) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-    except (urllib.error.URLError, OSError, TimeoutError, ValueError):
+        return endpoint_client.list_served_models(endpoint=endpoint)
+    except EndpointError:
         # a host that is off, or answers something else: reported as not answering, which is what its readers show
         return None
-
-    return [entry["model"] for entry in payload.get("models", [])] if provider == "ollama" \
-        else [entry["id"] for entry in payload.get("data", [])]

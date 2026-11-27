@@ -26,7 +26,7 @@ _HEARD_MEAN_PROBABILITY = 0.1
 
 
 def _is_heard(segment: dict[str, Any]) -> bool:
-    probabilities = [float(word["probability"]) for word in segment.get("words") or [] if "probability" in word]
+    probabilities = [float(word["probability"]) for word in segment.get("words") or [] if word.get("probability") is not None]
 
     return not probabilities or sum(probabilities) / len(probabilities) > _HEARD_MEAN_PROBABILITY
 

@@ -182,17 +182,18 @@ MAX_FRAMES_PER_CALL = 300
 class ModelSettings(_OverlaySettings):
     """`spec` is `provider:model`. `structured_method` is per-provider, never the library default."""
 
-    spec: str = Field(default="ollama:qwen3-vl:8b",
+    spec: str = Field(default="lmstudio:qwen3-vl-8b",
                       json_schema_extra={setting_choice_vocabulary.CHOICES_KEY: setting_choice_vocabulary.HOST_MODELS})
     temperature: float = 0.0
-    # Ollama only: the context window it loads the model with
+    # The context window the program measures a call against. The server loads the model with its own window: a server
+    # that reports one at `/v1/models` is read, and this number stands in when it does not
     num_ctx: int | None = 32768
-    # The output limit bounds THINKING PLUS REPLY, and thinking is spent first: `num_predict` on Ollama, `max_tokens`
-    # on LM Studio and other OpenAI-compatible hosts. Measured on this machine: a two-field frame record cost about
+    # The output limit bounds THINKING PLUS REPLY, and thinking is spent first; `max_tokens` is what the request carries,
+    # and this one stands in when `max_tokens` is unset. Measured on this machine: a two-field frame record cost about
     # 930 output tokens on `qwen3-vl:8b`, and the 300 the archived program allowed returned an empty reply on every
     # frame.
     num_predict: int | None = 4096
-    # The same output limit on LM Studio and other OpenAI-compatible hosts; None leaves it to the host
+    # The same output limit as the request carries it; None leaves it to the host
     max_tokens: int | None = None
     # Sampling beyond the temperature, as the model's maker recommends it for the mode and the kind of task (its card
     # names the set). `top_p` is set on the client; `sampling` holds the rest (top_k, min_p, repeat_penalty,
@@ -202,10 +203,9 @@ class ModelSettings(_OverlaySettings):
     top_p: float | None = None
     # The rest of the card's sampling set (top_k, min_p, repeat_penalty, presence_penalty, frequency_penalty, seed)
     sampling: dict[str, float | int] = Field(default_factory=dict)
-    # OLLAMA ONLY. True separates the model's thinking into `additional_kwargs["reasoning_content"]`,
-    # which attempt_log_service writes into messages.jsonl and transcript.md; False drops it; None
-    # leaves `<think>` tags inline in `content`. An OpenAI-compatible host ignores this field
-    # entirely: it decides for itself, and `OpenAICompatibleChatModel` logs whatever it separates.
+    # Read by nothing since the Ollama client was removed: an OpenAI-compatible host decides for itself whether it
+    # separates the model's thinking, and `OpenAICompatibleChatModel` logs whatever it separates into
+    # `additional_kwargs["reasoning_content"]`, which attempt_log_service writes into messages.jsonl and transcript.md.
     #
     # True here, on purpose. Measured on `qwen3-vl:8b`: False does not stop the thinking, it only
     # throws the text away, at the same 930 output tokens. A reply that holds nothing BUT thinking is
@@ -813,6 +813,64 @@ class QueueSettings(_OverlaySettings):
     on_failure: Literal["continue", "block"] = "continue"
 
 
+class ChatProviderSettings(_OverlaySettings):
+    """The server that answers chat and vision requests. The model's name is each phase's own (`models`), so there is no
+    `model` here."""
+
+    # The address up to and including `/v1`; "" keeps the program's own way of reaching the chat models
+    url: str = ""
+    # The NAME of the environment variable that holds the server's key; "" for a server with no key. A key is never in a
+    # settings file
+    api_key_env: str = ""
+    # Seconds one request may take before the program gives up on it
+    timeout_s: int = Field(default=600, gt=0)
+
+
+class ProviderSettings(_OverlaySettings):
+    """A server that answers one kind of model request by URL: speech to text, speaker turns, image vectors, text with
+    boxes, face and person detection, or the frame decision filter."""
+
+    # The address up to and including `/v1`; "" keeps the program's own way of running that model on this machine
+    url: str = ""
+    # The NAME of the environment variable that holds the server's key; "" for a server with no key
+    api_key_env: str = ""
+    # The model's name on that server; "" means the name the program uses for it
+    model: str = ""
+    # Seconds one request may take before the program gives up on it
+    timeout_s: int = Field(default=600, gt=0)
+
+
+class SpeechProviderSettings(ProviderSettings):
+    """Speech to text: a whole meeting is one request, so a request may take an hour."""
+
+    timeout_s: int = Field(default=3600, gt=0)
+
+
+class DiarizationProviderSettings(ProviderSettings):
+    """Speaker turns: a whole meeting is one request, so a request may take an hour."""
+
+    timeout_s: int = Field(default=3600, gt=0)
+
+
+class DetectionProviderSettings(ProviderSettings):
+    """Face and person detection: one request per frame, so a request is short."""
+
+    timeout_s: int = Field(default=120, gt=0)
+
+
+class ProvidersSettings(_OverlaySettings):
+    """Where each kind of model is reached: one server per kind, called by URL with the standard REST requests. Every URL
+    is "" until a person sets it, and a kind with no URL runs the way it always has (`docs/models.md`)."""
+
+    chat: ChatProviderSettings = Field(default_factory=ChatProviderSettings)
+    speech: SpeechProviderSettings = Field(default_factory=SpeechProviderSettings)
+    diarization: DiarizationProviderSettings = Field(default_factory=DiarizationProviderSettings)
+    embeddings: ProviderSettings = Field(default_factory=ProviderSettings)
+    ocr: ProviderSettings = Field(default_factory=ProviderSettings)
+    detection: DetectionProviderSettings = Field(default_factory=DetectionProviderSettings)
+    decision: ProviderSettings = Field(default_factory=ProviderSettings)
+
+
 def _describe_validation_issues(error: ValidationError) -> str:
     """Each refused key of a settings check with the reason, as `audio.mlx.model: Input should be a valid string`."""
 
@@ -853,6 +911,8 @@ class Settings(BaseSettings):
     pdf: PdfSettings = Field(default_factory=PdfSettings)
     tags: TagSettings = Field(default_factory=TagSettings)
     queue: QueueSettings = Field(default_factory=QueueSettings)
+    # The server each kind of model is reached at, by URL. Read by `services/endpoint_client.py`; every URL is "" by default
+    providers: ProvidersSettings = Field(default_factory=ProvidersSettings)
     # The Workflow speed menu's presets: each a name and the settings it sets, by their playbook names (the keys
     # `models.speed_setting_vocabulary.SPEED_KEYS` lists). A run keeps the preset chosen for it, and any value changed
     # by hand, in `run-speed.json`; a setting a preset leaves out keeps the settings' own value

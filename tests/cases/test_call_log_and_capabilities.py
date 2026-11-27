@@ -1,9 +1,11 @@
 """The run's cost line, and the check that a role's model can do what the role needs."""
 
+import json
 import tempfile
 from pathlib import Path
 
 from support import harness
+from support import fake_model_server
 
 import config
 from models.pipeline_errors import MissingModelCapability
@@ -63,12 +65,14 @@ def _read_vision_and_tools(base_url: str,
 
 
 def test_a_phase_whose_model_lacks_a_capability_is_refused_by_name():
-    phase = "frames_processing"
+    # The first phase checked: a reader answers for every phase on its provider, so each phase's model is the fixture
+    phase = next(iter(model_capability_service.REQUIRED_CAPABILITIES))
     previous_required = dict(model_capability_service.REQUIRED_CAPABILITIES)
     previous_models = dict(config.settings.models)
-    previous_reader = model_capability_service.set_capability_reader("ollama", _read_vision_only)
+    previous_reader = model_capability_service.set_capability_reader("lmstudio", _read_vision_only)
     try:
-        config.settings.models[config.PHASE_DEFAULT_MODELS[phase]] = config.ModelSettings(spec="ollama:fixture-vision:1b")
+        for name in set(config.PHASE_DEFAULT_MODELS.values()):
+            config.settings.models[name] = config.ModelSettings(spec="lmstudio:fixture-vision:1b")
         model_capability_service.REQUIRED_CAPABILITIES[phase] = ("vision", "tools")
         try:
             model_capability_service.check_phase_capabilities()
@@ -80,32 +84,57 @@ def test_a_phase_whose_model_lacks_a_capability_is_refused_by_name():
             harness.check("a model lacking a capability is refused", False)
 
         # The other side: the same phase on a model that lists both is reported, not refused.
-        model_capability_service.set_capability_reader("ollama", _read_vision_and_tools)
+        model_capability_service.set_capability_reader("lmstudio", _read_vision_and_tools)
         lines = model_capability_service.check_phase_capabilities()
         harness.check("a capable model is reported in a line of its own",
                       any(line.startswith(f"{phase}:") and "has vision, tools" in line for line in lines), str(lines))
     finally:
-        model_capability_service.set_capability_reader("ollama", previous_reader)
+        model_capability_service.set_capability_reader("lmstudio", previous_reader)
         model_capability_service.REQUIRED_CAPABILITIES.clear()
         model_capability_service.REQUIRED_CAPABILITIES.update(previous_required)
         config.settings.models.clear()
         config.settings.models.update(previous_models)
 
 
-def test_the_phases_whose_host_cannot_be_asked_share_one_line_naming_them():
+def _check_with_models_served(served_model: str,
+                              listed: str):
+    """The lines `check_phase_capabilities` gives (or the refusal it raises) when every phase's model is `served_model`
+    on a stand-in server whose model list holds `listed`."""
+
+    server = fake_model_server.FakeModelServer()
+    server.set_reply("/v1/models", 200, json.dumps({"object": "list", "data": [{"id": listed, "object": "model"}]}).encode("utf-8"))
     previous_models = dict(config.settings.models)
+    previous_phase_models = config.settings.phase_models
     try:
         for name in set(config.PHASE_DEFAULT_MODELS.values()):
-            config.settings.models[name] = config.ModelSettings(spec="lmstudio:fixture-vision:1b")
-        config.settings.phase_models, previous_phase_models = {}, config.settings.phase_models
-        lines = model_capability_service.check_phase_capabilities()
+            config.settings.models[name] = config.ModelSettings(spec=f"openai-compatible:{served_model}",
+                                                                base_url=server.build_url())
+        config.settings.phase_models = {}
+        with fake_model_server.serving(server):
+            try:
+                return model_capability_service.check_phase_capabilities()
+            except MissingModelCapability as refused:
+                return refused
     finally:
         config.settings.phase_models = previous_phase_models
         config.settings.models.clear()
         config.settings.models.update(previous_models)
+
+
+def test_the_phases_whose_server_reports_no_capabilities_share_one_line_naming_them():
+    lines = _check_with_models_served("fixture-vision:1b", "fixture-vision:1b")
     harness.check("one line, naming every phase in order",
-                  lines == ["capabilities not checked, this provider cannot be asked: "
+                  lines == ["capabilities not checked, the server lists the model and reports no capabilities: "
                             + ", ".join(config.PHASE_DEFAULT_MODELS)], str(lines))
+
+
+def test_a_phase_whose_model_the_server_does_not_list_is_refused_by_name_defect():
+    # Defect: a run named a model its server did not have, and failed at its first call, after the audio was extracted.
+    # Fix: the start of the run asks the server's model list and names the phase, the model and what the server lists
+    refused = _check_with_models_served("fixture-vision:1b", "another-model")
+    harness.check("the refusal names the model, the phase and what the server lists",
+                  isinstance(refused, MissingModelCapability) and "fixture-vision:1b" in str(refused)
+                  and "another-model" in str(refused) and "phase" in str(refused), str(refused))
 
 
 def test_the_shipped_table_declares_every_model_phase_and_only_those():

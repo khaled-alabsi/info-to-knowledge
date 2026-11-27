@@ -58,7 +58,7 @@ def test_every_overlaid_value_binds_and_every_other_default_survives():
 def test_the_defaults_are_the_ones_the_requirements_state():
     settings = config.Settings()
     harness.check("interval stays the default frame mode", settings.frames.selection_mode == "interval")
-    harness.check("the default frame model is local", settings.resolve_model("frame").spec.startswith("ollama:"))
+    harness.check("the default frame model is local", settings.resolve_model("frame").spec.startswith("lmstudio:"))
     harness.check("the frame model keeps the model's thinking, so a thinking-only reply can be read",
                   settings.resolve_model("frame").reasoning is True)
     harness.check("phase 3 calls the frame model and every other model phase the document model",
