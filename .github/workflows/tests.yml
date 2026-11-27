@@ -23,12 +23,23 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - name: System tools
         run: sudo apt-get update && sudo apt-get install -y ffmpeg tesseract-ocr tesseract-ocr-eng tesseract-ocr-deu pandoc
-      - name: Python packages and the i2k command
+      - name: The text reader's fast language data, as Homebrew ships it
+        # Ubuntu's language packages are the larger standard data, which read the tests' rendered slides differently
         run: |
-          python -m pip install --extra-index-url https://download.pytorch.org/whl/cpu -r requirements.txt
-          python -m pip install --no-deps -e .
+          mkdir -p "$RUNNER_TEMP/tessdata"
+          for language in eng deu osd; do
+            curl -sSfL -o "$RUNNER_TEMP/tessdata/$language.traineddata" \
+              "https://github.com/tesseract-ocr/tessdata_fast/raw/4.1.0/$language.traineddata"
+          done
+          echo "TESSDATA_PREFIX=$RUNNER_TEMP/tessdata" >> "$GITHUB_ENV"
+      - name: Python packages and the i2k command
+        # In .venv at the root, as on a contributor's machine: the frame classifier's launcher runs that environment.
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install --extra-index-url https://download.pytorch.org/whl/cpu -r requirements.txt
+          .venv/bin/python -m pip install --no-deps -e .
       - name: Offline program tests
-        run: python tests/run_tests.py
+        run: .venv/bin/python tests/run_tests.py
       - name: Web page unit tests
         working-directory: web
         run: |
