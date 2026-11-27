@@ -7,7 +7,7 @@ test("shows how many jobs run and wait, and the sidebar's tabs with their counts
   await page.goto("/");
 
   const topBar = page.getByRole("banner");
-  await expect(topBar.getByText("video-to-knowledge")).toBeVisible();
+  await expect(topBar.getByText("info-to-knowledge")).toBeVisible();
   await expect(topBar.getByText("0 running")).toBeVisible();
   await expect(topBar.getByText("1 queued")).toBeVisible();
   // one new video in the inbox, one job waiting in the queue

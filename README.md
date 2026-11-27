@@ -83,8 +83,6 @@ or a password never goes in a settings file: the settings name an environment va
 - [Architecture](docs/ARCHITECTURE.md): the phases, the run folder and the code layers.
 - [Flow](docs/FLOW.md): what each phase reads and writes, file by file.
 - [Command line](docs/cli-usage.md) and [web page](docs/ui-usage.md).
-- [Full guide](docs/GUIDE.md): install, every run option, the settings and troubleshooting.
-- [Workflow](docs/WORKFLOW.md), and how the [command line](docs/cli-context.md) and the [web page](docs/ui-context.md) are built.
 - [Running in a container](docs/container.md).
 - [Third-party models and data](NOTICE).
 

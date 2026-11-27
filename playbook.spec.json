@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "language": "python",
   "profile": "chain-pipeline",
-  "name": "video-to-knowledge",
+  "name": "info-to-knowledge",
   "target": {
     "dest": "video"
   },

@@ -253,8 +253,8 @@ def run_from_command_line(argv: list[str]) -> int:
 def build_mcp_server() -> MCPServer:
     """The MCP server with every tool registered."""
 
-    server = MCPServer(name="video-to-knowledge", instructions=(
-        "Controls video-to-knowledge through its running `i2k serve`: the inbox, the queue, each run folder's phases, "
+    server = MCPServer(name="info-to-knowledge", instructions=(
+        "Controls info-to-knowledge through its running `i2k serve`: the inbox, the queue, each run folder's phases, "
         "resets, recordings and settings. A run folder is named by `root` and `name`, as `list_runs` gives them. "
         "No tool returns what a meeting said."))
     for function, annotations in _TOOLS:

@@ -409,7 +409,7 @@ export default function App({ account = null, onSignOut }: { account?: Account |
       <header className="topbar">
         <div className="brand">
           <span className="logo">i2k</span>
-          <span className="brand-name">video-to-knowledge</span>
+          <span className="brand-name">info-to-knowledge</span>
         {/* the project the lists show, beside the app's name: what the whole page is looking at */}
         {projects.length > 1 && (
           <Dropdown label={projectTitle} icon="archive" title="the project the lists show" popup="menu">

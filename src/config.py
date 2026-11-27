@@ -29,7 +29,7 @@ from models import output_contract
 from models import setting_choice_vocabulary
 from models import speed_setting_vocabulary
 
-PLAYBOOK_NAME = "video-to-knowledge"
+PLAYBOOK_NAME = "info-to-knowledge"
 # The command's first name was `v2k`: a setup that still sets `V2K_<NAME>` is read as `I2K_<NAME>` (the new one wins).
 for _name in ("WORKSPACE", "PROFILE", "SIGN_IN", "TOKEN", "SERVER_URL", "PIPES"):
     if f"V2K_{_name}" in os.environ:
