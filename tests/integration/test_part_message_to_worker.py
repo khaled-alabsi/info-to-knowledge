@@ -11,6 +11,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from support import fakes, harness
 
 import config
+from models.batch_run_request import BatchRunRequest
 from models.run_paths import RunPaths
 from services import document_folder_service
 from services import document_knowledge_service
@@ -46,8 +47,8 @@ def test_a_question_to_a_running_part_is_answered_and_the_part_goes_on():
     budget = config.settings.document_reshaping.batch_calls
     config.settings.document_reshaping.batch_calls = 1
     try:
-        is_closed, calls, reason = document_knowledge_service.run_batch(paths=paths, state=state, number=1, model=model,
-                                                                        log=logging.getLogger("test"))
+        request = BatchRunRequest(paths=paths, state=state, number=1, model=model, log=logging.getLogger("test"))
+        is_closed, calls, reason = document_knowledge_service.run_batch(request=request)
     finally:
         config.settings.document_reshaping.batch_calls = budget
     harness.check("an answer in words does not close the part", is_closed and calls == 2, f"{is_closed} {calls} {reason}")
@@ -81,8 +82,8 @@ def test_a_message_written_during_a_part_reaches_its_next_call_once():
 
     document_knowledge_service.document_reshaping_service.stream_reply = stream_and_write
     try:
-        is_closed, _calls, reason = document_knowledge_service.run_batch(paths=paths, state=state, number=1, model=model,
-                                                                         log=logging.getLogger("test"))
+        request = BatchRunRequest(paths=paths, state=state, number=1, model=model, log=logging.getLogger("test"))
+        is_closed, _calls, reason = document_knowledge_service.run_batch(request=request)
     finally:
         document_knowledge_service.document_reshaping_service.stream_reply = real_stream
     harness.check("the part closes", is_closed, reason)

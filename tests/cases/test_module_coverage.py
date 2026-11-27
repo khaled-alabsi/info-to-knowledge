@@ -44,6 +44,12 @@ REACHED_THROUGH = {
     "models.worker_feedback_outcome":
         "what record_report gives its two callers, the worker's reply and the console lines; checked in "
         "test_worker_feedback and test_write_follow_up_loop",
+    "models.setting_choice_vocabulary":
+        "the names of the lists a setting's choices come from, read by settings_service.describe_settings; checked in "
+        "test_settings_files (every model selection is offered as a list)",
+    "models.speed_setting_vocabulary":
+        "the Workflow speed settings and their keys, read by run_speed_service and config's preset check; checked in "
+        "test_workflow_speed",
     "models.reading_errors":
         "the reading tools' argument error, raised by reading_tool_utils.read_whole_number and answered in words by "
         "both reading services; checked in test_review_phase and test_write_follow_up_loop",

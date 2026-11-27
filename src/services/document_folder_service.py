@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any
 
 from models import output_contract
+from models.front_matter_request import FrontMatterRequest
 from models.run_paths import RunPaths
 from services import document_file_service
 from services import input_range_service
@@ -132,9 +133,14 @@ def render_published_front_matter(paths: RunPaths) -> str:
     input_range = input_range_service.read_range(folder=paths.output_root)
     part = input_range_service.describe_range(input_range=input_range) if input_range is not None else ""
 
-    return document_name_utils.render_front_matter(str(parts.get("topic") or ""), str(parts.get("event_name") or ""),
-                                                   speakers, document_name_utils.find_date_in_name(_read_video_name(paths)),
-                                                   run_tags_service.read_tags(paths.output_root), part)
+    request = FrontMatterRequest(topic=str(parts.get("topic") or ""),
+                                 event=str(parts.get("event_name") or ""),
+                                 speakers=speakers,
+                                 meeting_date=document_name_utils.find_date_in_name(_read_video_name(paths)),
+                                 tags=run_tags_service.read_tags(paths.output_root),
+                                 part=part)
+
+    return document_name_utils.render_front_matter(request=request)
 
 
 def build_document_dir(paths: RunPaths) -> Path:

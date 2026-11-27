@@ -337,11 +337,12 @@ def test_a_step_may_not_be_given_no_attempts():
 
 def test_both_default_settings_files_send_four_frames_a_call_defect():
     # At two frames a call the follow-ups took 3.4 times the reading (release test 1), at 8 to 10 2.1 times. The default
-    # settings now send four, one step of two from the owner's two, both files alike
+    # settings now send four, one step of two from the owner's two. The owner's local file is git-ignored and absent
+    # in a fresh clone, so only the default file is checked
     root = Path(__file__).resolve().parents[2]
-    values = [json.loads((root / name).read_text(encoding="utf-8"))["framesProcessing"]["framesPerCall"]
-              for name in ("playbook.default.json", "playbook.local.json")]
-    harness.check("both files hold 4", values == [4, 4], str(values))
+    settings = json.loads((root / "playbook.default.json").read_text(encoding="utf-8"))
+    frames_per_call = settings["framesProcessing"]["framesPerCall"]
+    harness.check("the default file holds 4", frames_per_call == 4, str(frames_per_call))
 
 
 def _list_models_of_made_hosts(provider: str,

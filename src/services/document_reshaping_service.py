@@ -26,7 +26,6 @@ from typing import Any
 
 import openai
 from PIL import Image, UnidentifiedImageError
-from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import (AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage,
                                      messages_from_dict, messages_to_dict)
 
@@ -35,6 +34,7 @@ from agent_client import finish_reason_utils
 from agent_client.agent_errors import ControlStop
 from chains import chain_runner
 from models import output_contract
+from models.batch_run_request import BatchRunRequest
 from models.run_paths import RunPaths
 from prompts import system_prompt_builder
 from services import control_signal_service
@@ -764,16 +764,18 @@ def _render_content(content: Any) -> str:
     return "\n\n".join(pieces)
 
 
-def run_batch(paths: RunPaths,
-              state: dict[str, Any],
-              number: int,
-              model: BaseChatModel,
-              log: Any,
-              control_check: Callable[[], str | None] | None = None) -> tuple[bool, int, str]:
-    """Batch `number`'s conversation, until the worker closes it or spends `documentCleanup.batchCalls` calls: whether
-    it was closed, the calls it made, and why not. Every edit is written into the published document at once. The
-    worker is told the pass and the person's wishes the state holds. A stop asked for ends it before its next call."""
+def run_batch(request: BatchRunRequest) -> tuple[bool, int, str]:
+    """Batch `request.number`'s conversation, until the worker closes it or spends `documentCleanup.batchCalls` calls:
+    whether it was closed, the calls it made, and why not. Every edit is written into the published document at once.
+    The worker is told the pass and the person's wishes the state holds. A stop asked for ends it before its next
+    call."""
 
+    paths = request.paths
+    state = request.state
+    number = request.number
+    model = request.model
+    log = request.log
+    control_check = request.control_check
     log_path = build_batch_log_path(paths, number)
     messages: list[BaseMessage] = [SystemMessage(content=_build_system_text(state["pass"], state.get("wishes", ""))),
                                    HumanMessage(content=_build_batch_text(state, number))]

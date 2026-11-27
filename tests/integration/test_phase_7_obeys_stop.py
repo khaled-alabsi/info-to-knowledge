@@ -9,6 +9,7 @@ from pathlib import Path
 from agent_client.agent_errors import ControlStop
 from support import fakes, harness
 
+from models.batch_run_request import BatchRunRequest
 from models.run_paths import RunPaths
 from services import control_signal_service
 from services import document_folder_service
@@ -47,8 +48,13 @@ def test_the_page_s_stop_ends_a_phase_7_part_between_two_calls_and_a_resume_goes
         return control_signal_service.check(run_dir)
 
     try:
-        document_knowledge_service.run_batch(paths=paths, state=state, number=1, model=model, log=logging.getLogger("test"),
-                                             control_check=check_and_stop_after_first_call)
+        request = BatchRunRequest(paths=paths,
+                                  state=state,
+                                  number=1,
+                                  model=model,
+                                  log=logging.getLogger("test"),
+                                  control_check=check_and_stop_after_first_call)
+        document_knowledge_service.run_batch(request=request)
         stopped = ""
     except ControlStop as stop:
         stopped = str(stop)
@@ -60,8 +66,12 @@ def test_the_page_s_stop_ends_a_phase_7_part_between_two_calls_and_a_resume_goes
 
     control_signal_service.clear(run_dir)
     resumed = fakes.scripted(fakes.tool_call("finish_batch", summary="shards written"))
-    is_closed, _, _ = document_knowledge_service.run_batch(paths=paths, state=state, number=1, model=resumed,
-                                                           log=logging.getLogger("test"),
-                                                           control_check=lambda: control_signal_service.check(run_dir))
+    resumed_request = BatchRunRequest(paths=paths,
+                                      state=state,
+                                      number=1,
+                                      model=resumed,
+                                      log=logging.getLogger("test"),
+                                      control_check=lambda: control_signal_service.check(run_dir))
+    is_closed, _, _ = document_knowledge_service.run_batch(request=resumed_request)
     harness.check("a second start goes on from the saved turn and closes the part", is_closed
                   and document_reshaping_service.count_calls(resumed.calls[0]) == 1, str(resumed.calls))

@@ -12,7 +12,7 @@ import collections
 import re
 import time
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 from urllib.parse import quote
 
 from fastapi import APIRouter, FastAPI, Form, HTTPException, Query, Request, UploadFile
@@ -31,7 +31,7 @@ from models.web_api_request import (JobItemRequest, WorkerSetRequest, AccountCha
                                     InboxTagsRequest, RenameRequest, MergeRequest, MoveRequest, ZipRequest,
                                     MarkdownWriteRequest, ProjectRequest, GrantRequest, GroupRequest, GroupAccountsRequest,
                                     RunListsRequest, InstructionSaveRequest, InstructionResetRequest,
-                                    InstructionPreviewRequest)
+                                    InstructionPreviewRequest, PhaseFlowRequest)
 from models.input_range_spec import InputRangeSpec
 from models.instruction_errors import InstructionRefusedError, UnknownInstructionFileError
 from models.run_errors import PromptBuildError
@@ -439,19 +439,21 @@ def list_tags() -> dict:
 
 
 @router.get("/phases")
-def list_phases(medium: str = "",
-                workflow: str = "",
-                ingesting_profile: str = "",
-                document_pass: str = "",
-                review: str = "",
-                critique_collection: str = "") -> list[dict]:
+def list_phases(flow: Annotated[PhaseFlowRequest, Query()]) -> list[dict]:
     """The numbered phases, as `--phase`, `--from` and `--to` take them, each with what it does and whether its switch
     is on (`review.isOn`, `critiqueCollection.isOn`; a phase with no switch is always on). The switches are read from the playbook
     files now, not from the server's start, since the next queued job reads them at its own start. Given the run's
     flow, each phase is titled for it and a phase that flow never runs is off: an audio recording's (`medium` "audio",
     or the one-call profile `takeaway`) and a fast-processing video's review and critique collection; a PDF's (`medium`
-    "pdf-pages" or "pdf-text-only") phases are titled by its pages or its figures."""
+    "pdf-pages" or "pdf-text-only") phases are titled by its pages or its figures. `flow` is read from the query's `medium`, `workflow`,
+    `ingesting_profile`, `document_pass`, `review` and `critique_collection`."""
 
+    medium = flow.medium
+    workflow = flow.workflow
+    ingesting_profile = flow.ingesting_profile
+    document_pass = flow.document_pass
+    review = flow.review
+    critique_collection = flow.critique_collection
     next_job_settings = settings_service.read_next_job_settings(config.PROFILE_NAME)
     switches = {"review": next_job_settings.review.is_on,
                 "critique_collection": next_job_settings.critique_collection.is_on}

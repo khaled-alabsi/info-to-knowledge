@@ -12,6 +12,7 @@ from support import harness
 import cli
 from cli import run_command
 from models import output_contract
+from models.front_matter_request import FrontMatterRequest
 from models.input_range_spec import InputRangeSpec
 from models.run_errors import BadTarget
 from models.run_job import RunJobRequest
@@ -171,10 +172,13 @@ def test_the_page_is_told_a_recording_s_length_and_a_run_s_part():
 
 
 def test_the_published_document_names_the_part_it_covers():
-    front = document_name_utils.render_front_matter("Refunds", "", [], "", ["acme"], part="12:30 to 1:05:00")
+    with_part = FrontMatterRequest(topic="Refunds", event="", speakers=[], meeting_date="", tags=["acme"],
+                                   part="12:30 to 1:05:00")
+    front = document_name_utils.render_front_matter(request=with_part)
     harness.check("the part stands before the tags", 'part: "12:30 to 1:05:00"\ntags: ["acme"]' in front, front)
-    harness.check("no part: the block as it was", "part:" not in document_name_utils.render_front_matter(
-        "Refunds", "", [], "", ["acme"]))
+    without_part = FrontMatterRequest(topic="Refunds", event="", speakers=[], meeting_date="", tags=["acme"])
+    harness.check("no part: the block as it was",
+                  "part:" not in document_name_utils.render_front_matter(request=without_part))
 
 
 class _RunsIn:

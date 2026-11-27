@@ -11,6 +11,7 @@ from langchain_core.messages import ToolMessage
 
 from support import fakes, harness
 
+from models.batch_run_request import BatchRunRequest
 from models.run_paths import RunPaths
 from services import document_folder_service
 from services import document_knowledge_service
@@ -46,7 +47,8 @@ def test_a_figure_placed_under_the_worker_s_own_caption_reaches_the_document_wit
     model = fakes.scripted(fakes.tool_call("write_sections", edits=[{"action": "new_section", "heading": "Shards",
         "text": "The router picks the ledger shard.\n![Figure on page 1024](resources/figure-266.png)"}]),
                            fakes.tool_call("finish_batch", summary="shards written"))
-    document_knowledge_service.run_batch(paths=paths, state=state, number=1, model=model, log=logging.getLogger("test"))
+    request = BatchRunRequest(paths=paths, state=state, number=1, model=model, log=logging.getLogger("test"))
+    document_knowledge_service.run_batch(request=request)
     written = document_knowledge_service.render_knowledge(state)
     answers = [str(message.content) for message in model.calls[-1] if isinstance(message, ToolMessage)]
     harness.check("the write is not refused", not any("in no block" in answer for answer in answers), str(answers))
@@ -63,7 +65,8 @@ def test_a_diagram_with_a_bracket_in_a_box_label_reaches_the_document_drawable_d
     model = fakes.scripted(fakes.tool_call("write_sections", edits=[{"action": "new_section", "heading": "Routing", "text": diagram}]),
                            fakes.tool_call("write_sections", edits=[{"action": "new_section", "heading": "Other", "text": broken}]),
                            fakes.tool_call("finish_batch", summary="routing written"))
-    document_knowledge_service.run_batch(paths=paths, state=state, number=1, model=model, log=logging.getLogger("test"))
+    request = BatchRunRequest(paths=paths, state=state, number=1, model=model, log=logging.getLogger("test"))
+    document_knowledge_service.run_batch(request=request)
     written = document_knowledge_service.render_knowledge(state)
     harness.check("the label is quoted, once", 'K["Info page (conditional)"]' in written, written)
     harness.check("a quoted label stays as it was", 'L["Kept (quoted)"]' in written, written)
@@ -85,8 +88,8 @@ def test_a_part_that_repeats_itself_is_told_so_and_goes_on_after_a_stop_defect()
         fakes.tool_call("write_sections", edits=[{"action": "remove", "block": "K1.9"},
                                                  {"action": "replace", "block": "K1.1", "text": ""}]),
         fakes.tool_call("finish_batch", summary="routing written"))
-    is_closed, calls, reason = document_knowledge_service.run_batch(paths=paths, state=state, number=1, model=model,
-                                                                    log=logging.getLogger("test"))
+    request = BatchRunRequest(paths=paths, state=state, number=1, model=model, log=logging.getLogger("test"))
+    is_closed, calls, reason = document_knowledge_service.run_batch(request=request)
     harness.check("the part closes", is_closed and calls == 6, f"{calls} {reason}")
     # each result opens with its mark, `[M<n>] `, which the worker names to prune it
     answers = [re.sub(r"^\[M\d+\] ", "", str(message.content)) for message in model.calls[-1]
@@ -99,8 +102,8 @@ def test_a_part_that_repeats_itself_is_told_so_and_goes_on_after_a_stop_defect()
 
     # the same part started again goes on from its saved conversation, its section's reads remembered
     resumed = fakes.scripted(read_section, fakes.tool_call("finish_batch", summary="closed again"))
-    is_closed, calls, reason = document_knowledge_service.run_batch(paths=paths, state=state, number=1, model=resumed,
-                                                                    log=logging.getLogger("test"))
+    resumed_request = BatchRunRequest(paths=paths, state=state, number=1, model=resumed, log=logging.getLogger("test"))
+    is_closed, calls, reason = document_knowledge_service.run_batch(request=resumed_request)
     first_call = resumed.calls[0]
     harness.check("the resume sends the saved conversation, not the first message alone",
                   is_closed and len(first_call) > 2 and calls == 8, f"{len(first_call)} {calls} {reason}")

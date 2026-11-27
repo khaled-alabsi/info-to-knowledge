@@ -13,7 +13,7 @@ __all__ = ["JobItemRequest", "RunSelectionRequest", "StartJobsRequest", "QueueRu
            "ConvertRequest", "BranchRequest", "RunTagsRequest", "RunRef", "BatchDownloadRequest", "RunNamesRequest",
            "InboxTagsRequest", "RenameRequest", "MergeRequest", "MarkdownWriteRequest", "SettingRequest", "ModelsDownloadRequest",
            "ModelsConfigureRequest", "SignInRequest", "AccountRequest", "AccountChangeRequest",
-           "InstructionSaveRequest", "InstructionResetRequest", "InstructionPreviewRequest"]
+           "InstructionSaveRequest", "InstructionResetRequest", "InstructionPreviewRequest", "PhaseFlowRequest"]
 
 
 class JobItemRequest(BaseModel):
@@ -388,3 +388,16 @@ class GroupAccountsRequest(BaseModel):
     """The accounts a group holds, exactly."""
 
     accounts: list[str]
+
+
+class PhaseFlowRequest(BaseModel):
+    """The flow a run goes through, as the phase list takes it: the recording's medium, its workflow and ingesting
+    profile, the document pass, and the speed's choice of `"off"` for the review and the critique collection. All
+    empty reads the phases with no flow."""
+
+    medium: str = ""
+    workflow: str = ""
+    ingesting_profile: str = ""
+    document_pass: str = ""
+    review: str = ""
+    critique_collection: str = ""

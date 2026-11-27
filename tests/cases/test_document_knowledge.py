@@ -16,6 +16,7 @@ from support import fakes, harness
 
 import config as app_config
 from models import output_contract as output_model_contract
+from models.batch_run_request import BatchRunRequest
 from models.run_paths import RunPaths
 from models.web_api_request import StartJobsRequest
 from prompts import system_prompt_builder
@@ -308,8 +309,8 @@ def test_the_worker_gets_its_part_in_its_first_message_and_closes_it_without_rea
     document.write_text(DOCUMENT, encoding="utf-8")
     state = document_knowledge_service.start_knowledge(paths=paths, asked={"pass": "knowledge", "wishes": ""})
     model = fakes.scripted(fakes.tool_call("finish_batch", summary="nothing to write"))
-    is_closed, calls, reason = document_knowledge_service.run_batch(paths=paths, state=state, number=1, model=model,
-                                                                    log=logging.getLogger("test"))
+    request = BatchRunRequest(paths=paths, state=state, number=1, model=model, log=logging.getLogger("test"))
+    is_closed, calls, reason = document_knowledge_service.run_batch(request=request)
     first = str(model.calls[0][1].content)
     harness.check("the part's text is in the worker's first message",
                   "the account opens after the identity check" in first and "{B1}" in first, first[-400:])
@@ -333,10 +334,9 @@ def test_a_stopped_part_goes_on_with_its_saved_conversation_defect():
                                                                                              "args": {}, "id": "c1"}]),
                                                           ToolMessage(content="(no section)", tool_call_id="c1")],
                                                {"blocks": set(), "sections": set()})
-    is_closed, calls, reason = document_knowledge_service.run_batch(paths=paths, state=state, number=1,
-                                                                    model=fakes.scripted(fakes.tool_call(
-                                                                        "finish_batch", summary="x")),
-                                                                    log=logging.getLogger("test"))
+    finishing_model = fakes.scripted(fakes.tool_call("finish_batch", summary="x"))
+    request = BatchRunRequest(paths=paths, state=state, number=1, model=finishing_model, log=logging.getLogger("test"))
+    is_closed, calls, reason = document_knowledge_service.run_batch(request=request)
     saved =document_reshaping_service.read_conversation(paths, 1)
     harness.check("the part closes on its second call, going on from the saved turn",
                   is_closed and calls == 2 and str(saved[0][1].content) == "the part", f"{calls} {reason}")
@@ -366,8 +366,8 @@ def test_a_document_pass_worker_reports_an_instruction_to_improve_at_no_cost_of_
     saved = settings.document_reshaping
     settings.document_reshaping = saved.model_copy(update={"batch_calls": 1})
     try:
-        is_closed, calls, reason = document_knowledge_service.run_batch(paths=paths, state=state, number=1, model=model,
-                                                                        log=logging.getLogger("test"))
+        request = BatchRunRequest(paths=paths, state=state, number=1, model=model, log=logging.getLogger("test"))
+        is_closed, calls, reason = document_knowledge_service.run_batch(request=request)
     finally:
         settings.document_reshaping = saved
     feedback = (folder / output_model_contract.WORKER_FEEDBACK_FILE).read_text(encoding="utf-8")

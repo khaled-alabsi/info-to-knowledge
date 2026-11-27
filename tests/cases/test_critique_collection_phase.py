@@ -129,8 +129,8 @@ def test_the_phase_is_held_by_its_switch_and_by_anything_blocked_before_it():
         state = collect_critiques_node.collect_critiques_node({"phases": {}}, {"configurable": {"ctx": ctx}})
     finally:
         app_config.settings.critique_collection.is_on = previous
-    harness.check("switched off the phase is held, which no resume treats as done",
-                  state["phases"]["critique_collection"] == "held" and not critique_collection_service.build_rule_set_path(ctx.paths).is_file(),
+    harness.check("switched off the phase is off and writes no rule set, so a Balanced run ends without it",
+                  state["phases"]["critique_collection"] == "off" and not critique_collection_service.build_rule_set_path(ctx.paths).is_file(),
                   str(state))
     ctx.store.set_phase("frames_processing", "blocked")
     held = collect_critiques_node.collect_critiques_node({"phases": {}}, {"configurable": {"ctx": ctx}})

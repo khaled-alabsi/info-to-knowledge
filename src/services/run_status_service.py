@@ -527,11 +527,12 @@ def _is_derived_folder(folder: Path) -> bool:
 def _holds_settings_alone(folder: Path) -> bool:
     """Whether a folder holds only the settings a run line chose before phase 1 (`run-*.json`, `ingesting-profile.json`)
     and nothing a run made: a refused start left such a folder, which the run list showed as an unfinished run at phase
-    1 though no run ever ran there (DEFECTS 720)."""
+    1 though no run ever ran there (DEFECTS 720). Its tags (`run-tags.json`) are the person's own and make it a run."""
 
     entries = list(folder.iterdir())
 
     return bool(entries) and all(entry.is_file() and entry.suffix == ".json"
+                                 and entry.name != output_contract.RUN_TAGS_FILE
                                  and (entry.name.startswith("run-") or entry.name == "ingesting-profile.json")
                                  for entry in entries)
 

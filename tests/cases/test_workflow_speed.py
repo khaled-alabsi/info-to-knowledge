@@ -24,22 +24,22 @@ from services import web_api_service
 
 def test_balanced_keeps_the_large_model_and_drops_the_critique_repairs_and_rule_set():
     balanced = config.settings.speed_presets["balanced"]
-    harness.check("Balanced takes the quality workflow, with no critique, fix, repair round or rule set, and the review",
+    harness.check("Balanced takes the quality workflow, with no critique, fix, repair round, rule set or review",
                   balanced["video.workflow"] == "quality" and not balanced["framesProcessing.isCritiqueOn"]
                   and not balanced["framesProcessing.isCritiqueRepairOn"] and balanced["framesProcessing.repairCalls"] == 0
-                  and balanced["framesProcessing.singleFrameAttempts"] == 0 and balanced["review.isOn"]
+                  and balanced["framesProcessing.singleFrameAttempts"] == 0 and not balanced["review.isOn"]
                   and not balanced["critiqueCollection.isOn"], json.dumps(balanced))
     options = run_speed_service.describe_speed_options()
-    harness.check("the menu lists the three presets and every setting, and the settings in force are Quality",
+    harness.check("the menu lists the three presets and every setting, and a run nobody chose a speed for takes Balanced",
                   list(options["presets"]) == ["quality", "balanced", "fast"] and len(options["settings"]) == 10
-                  and options["default_preset"] == "quality", str(options["default_preset"]))
+                  and options["default_preset"] == "balanced", str(options["default_preset"]))
 
 
 def test_a_value_changed_from_a_preset_makes_the_speed_custom():
-    same = run_speed_service.resolve_speed("balanced", {"review.isOn": True})
-    changed = run_speed_service.resolve_speed("balanced", {"review.isOn": False})
+    same = run_speed_service.resolve_speed("balanced", {"review.isOn": False})
+    changed = run_speed_service.resolve_speed("balanced", {"review.isOn": True})
     harness.check("a value the preset holds keeps its name; another makes it custom",
-                  same["name"] == "balanced" and changed["name"] == "custom" and changed["values"]["review.isOn"] is False)
+                  same["name"] == "balanced" and changed["name"] == "custom" and changed["values"]["review.isOn"] is True)
     for preset, changes in (("turbo", {}), ("balanced", {"frames.mode": "change"})):
         try:
             run_speed_service.resolve_speed(preset, changes)
@@ -69,7 +69,7 @@ def test_a_run_keeps_its_speed_and_every_start_lays_it_over_the_settings():
     harness.check("applied, the critique, its fix, the repairs and the rule set are off and 6 frames go per call",
                   not applied.frames_processing.is_critique_on and not applied.frames_processing.is_critique_repair_on
                   and applied.frames_processing.repair_calls == 0 and applied.frames_processing.frames_per_call == 6
-                  and not applied.critique_collection.is_on and applied.review.is_on)
+                  and not applied.critique_collection.is_on and not applied.review.is_on)
 
 
 def test_a_balanced_run_kept_before_the_open_questions_setting_runs_without_them_defect():
@@ -124,7 +124,7 @@ def test_a_job_with_a_speed_names_it_on_its_run_line_and_keeps_it_in_its_folder_
         client = TestClient(web_api_service.build_app())
         answer = client.post("/api/jobs", json={"items": [{"video": "inbox/Gateway-demo.mp4", "output": "output/Gateway-demo"}],
                                                 "from_phase": 3, "speed_preset": "balanced",
-                                                "speed_settings": {"review.isOn": False}})
+                                                "speed_settings": {"review.isOn": True}})
         kept = run_speed_service.read_chosen_speed(run) or {}
         refused = client.post("/api/jobs", json={"items": [{"video": "inbox/x.mp4", "output": "output/x"}],
                                                  "speed_preset": "turbo"})
@@ -139,7 +139,7 @@ def test_a_job_with_a_speed_names_it_on_its_run_line_and_keeps_it_in_its_folder_
     harness.check("queued, the run folder already holds its speed", answer.status_code == 200
                   and kept.get("preset") == "balanced" and kept.get("name") == "custom", answer.text[:300])
     harness.check("the job records the changed value as the run line takes it",
-                  answer.json()[0]["request"]["speed_settings"] == ["review.isOn=false"], answer.text[:300])
+                  answer.json()[0]["request"]["speed_settings"] == ["review.isOn=true"], answer.text[:300])
     harness.check("an unknown preset is refused by name", refused.status_code == 400 and "turbo" in refused.text, refused.text)
     harness.check("a run folder sent by its full path keeps its speed at once too (defect: it was kept only for output/<name>)",
                   by_full_path.status_code == 200

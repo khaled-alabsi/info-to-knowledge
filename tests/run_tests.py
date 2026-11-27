@@ -63,6 +63,26 @@ def discover(wanted: list[str] = (),
     return [found[n] for n in ordered + [n for n in names if n not in ordered]]
 
 
+def run_case(func,
+             name: str) -> None:
+    """One test function, its crash a failing check, with the process's settings given back as they were before it.
+
+    A case that starts a new video run in this process makes the run lay its default speed (Balanced) over the settings,
+    which switches the review off: every case file after it read phase 5 as off, and 22 review checks failed whenever
+    the whole suite ran in one process, never when their file ran alone."""
+
+    settings = config.settings.model_copy(deep=True)
+    profile_name, worker_set_name = config.PROFILE_NAME, config.WORKER_SET_NAME
+    try:
+        func()
+    except Exception:
+        # A crash is a failing test, not a stop: the other cases still have information.
+        harness.check(name, False, traceback.format_exc().strip().splitlines()[-1])
+    finally:
+        config.settings = settings
+        config.PROFILE_NAME, config.WORKER_SET_NAME = profile_name, worker_set_name
+
+
 def main() -> int:
     verbose = "-v" in sys.argv
     wanted = [argument for argument in sys.argv[1:] if not argument.startswith("-")]
@@ -103,12 +123,7 @@ def main() -> int:
             func = getattr(module, attr)
             if not callable(func):
                 continue
-            try:
-                func()
-            except Exception:
-                # A crash is a failing test, not a stop: the other cases still have information.
-                harness.check(f"{module_name}.{attr}", False,
-                              traceback.format_exc().strip().splitlines()[-1])
+            run_case(func, f"{module_name}.{attr}")
     if verbose:
         for name, _ in harness.PASSED:
             print(f"  pass  {name}")

@@ -10,6 +10,7 @@ from support import harness
 
 import config
 from graph.nodes import write_document_node
+from models.web_api_request import PhaseFlowRequest
 from services import audio_extraction_service
 from services import inbox_rename_service
 from services import inbox_service
@@ -363,7 +364,7 @@ def test_the_phases_route_lists_the_phases_of_the_flow_asked_defect():
 
     def read(**flow):
         return {row["number"]: (row.get("title"), row["is_on"])
-                for row in web_api_service.list_phases(**{"medium": "", "workflow": "", "ingesting_profile": "", **flow})}
+                for row in web_api_service.list_phases(flow=PhaseFlowRequest(**flow))}
 
     audio = read(medium="audio")
     harness.check("an audio run's phases 2 and 3 are its own and it has no review or critique collection",
@@ -382,6 +383,6 @@ def test_a_markdown_conversion_shows_no_phase_3_defect():
     from services import web_api_service
 
     flow = {row["number"]: row["is_on"] for row in web_api_service.list_phases(
-        medium="pdf-markdown-conversion", workflow="", ingesting_profile="")}
+        flow=PhaseFlowRequest(medium="pdf-markdown-conversion"))}
     harness.check("phases 3, 5 and 6 off, 1, 2 and 4 on",
                   [number for number, is_on in sorted(flow.items()) if is_on] == [1, 2, 4], str(flow))

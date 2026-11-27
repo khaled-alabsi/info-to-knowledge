@@ -16,9 +16,11 @@ provider to support twice.
 from __future__ import annotations
 
 import re
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from langchain_core.messages import BaseMessage
+# Read for the type hints alone: imported at run time, it brought LangChain into `i2k mcp`'s start
+if TYPE_CHECKING:
+    from langchain_core.messages import BaseMessage
 
 __all__ = ["read_reasoning", "read_message_text"]
 

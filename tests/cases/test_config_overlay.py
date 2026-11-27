@@ -85,13 +85,11 @@ def test_a_phase_calls_the_configured_model_phase_models_names():
     except ValueError as refused:
         harness.check("a name no model is configured under is refused by name, never the default model",
                       "missing" in str(refused) and "small" in str(refused), str(refused))
+    # An empty name is what the Settings page writes for a phase left on its default, so it reads as that default
     empty = config.Settings(models=models, phase_models={"review": ""})
-    try:
-        named = empty.resolve_phase_model_name("review")
-    except ValueError as refused:
-        named = f"refused: {refused}"
-    harness.check("an empty name is refused, never read as the phase's default model",
-                  named.startswith("refused: phaseModels.review"), named)
+    harness.check("an empty name reads as the phase's default model, as the Settings page writes it",
+                  empty.resolve_phase_model_name("review") == config.PHASE_DEFAULT_MODELS["review"],
+                  empty.resolve_phase_model_name("review"))
 
 
 def test_phase_3_takes_its_models_own_frames_a_call_when_the_entry_sets_one():

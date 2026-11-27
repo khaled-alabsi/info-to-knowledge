@@ -14,6 +14,7 @@ from langchain_core.runnables import RunnableConfig
 from agent_client.agent_errors import ControlStop
 from graph.graph_state import RunState
 from models import output_contract
+from models.batch_run_request import BatchRunRequest
 from models.run_context import RunContext
 from services import chat_model_service
 from services import control_signal_service
@@ -89,8 +90,13 @@ def reshape_document_node(state: RunState,
         if ctx.control_check is not None and ctx.control_check() in (control_signal_service.DRAIN,
                                                                      control_signal_service.STOP):
             raise ControlStop(f"stopped before part {number} of phase {PHASE_NUMBER}")
-        is_closed, calls, reason = pass_service.run_batch(paths=ctx.paths, state=pass_state, number=number, model=model,
-                                                          log=ctx.log, control_check=ctx.control_check)
+        request = BatchRunRequest(paths=ctx.paths,
+                                  state=pass_state,
+                                  number=number,
+                                  model=model,
+                                  log=ctx.log,
+                                  control_check=ctx.control_check)
+        is_closed, calls, reason = pass_service.run_batch(request=request)
         if not is_closed:
             ctx.log.info(f"phase {PHASE_NUMBER}: blocked, {reason}")
 

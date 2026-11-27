@@ -11,6 +11,7 @@ from support import fixtures as fx
 from support import harness
 
 from models.attempt_request import AttemptRequest
+from models.front_matter_request import FrontMatterRequest
 from prompts import document_messages
 from schemas import document_parts
 from services import document_folder_service
@@ -59,8 +60,11 @@ def test_the_parts_answer_carries_the_event_and_the_speakers_and_may_leave_them_
 
 
 def test_the_metadata_block_is_yaml_front_matter_with_five_keys_always_present():
-    block = document_name_utils.render_front_matter("Single sign-on for the partner portal", "Payment API onboarding",
-                                                    ["Dana", "Lee Park"], "2026-03-03")
+    request = FrontMatterRequest(topic="Single sign-on for the partner portal",
+                                 event="Payment API onboarding",
+                                 speakers=["Dana", "Lee Park"],
+                                 meeting_date="2026-03-03")
+    block = document_name_utils.render_front_matter(request=request)
     harness.check("it opens and closes with three dashes", block.startswith("---\n") and block.endswith("---\n\n"), block)
     harness.check("topic, event, speakers, date and the run's tags, in that order",
                   [line.split(":")[0] for line in block.strip().splitlines()[1:-1]] == ["topic", "event", "speakers", "date", "tags"],
@@ -68,7 +72,8 @@ def test_the_metadata_block_is_yaml_front_matter_with_five_keys_always_present()
     harness.check("strings are quoted so a colon in them stays YAML",
                   'topic: "Single sign-on for the partner portal"' in block and 'speakers: ["Dana", "Lee Park"]' in block,
                   block)
-    empty = document_name_utils.render_front_matter("", "", [], "")
+    empty = document_name_utils.render_front_matter(request=FrontMatterRequest(topic="", event="", speakers=[],
+                                                                               meeting_date=""))
     harness.check("a part nobody established is an empty value, never a guess",
                   'event: ""' in empty and "speakers: []" in empty and 'date: ""' in empty and "tags: []" in empty, empty)
 

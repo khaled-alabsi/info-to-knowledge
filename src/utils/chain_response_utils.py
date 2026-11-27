@@ -7,11 +7,13 @@ reports "nothing there" against every other host, which looks exactly like the f
 
 from __future__ import annotations
 
-from typing import Any
-
-from langchain_core.messages import BaseMessage
+from typing import TYPE_CHECKING, Any
 
 from utils import message_content_utils
+
+# Read for the type hints alone: imported at run time, it brought LangChain into `i2k mcp`'s start
+if TYPE_CHECKING:
+    from langchain_core.messages import BaseMessage
 
 __all__ = ["read_token_usage", "render_message_as_text", "render_prompt_as_text"]
 

@@ -12,15 +12,14 @@ from __future__ import annotations
 
 import re
 import zlib
-from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
 from PIL import Image
 
 import config as app_config
+from models.batch_run_request import BatchRunRequest
 from models.run_paths import RunPaths
 from prompts import system_prompt_builder
 from services import document_reshaping_service
@@ -654,16 +653,17 @@ def render_knowledge(state: dict[str, Any]) -> str:
     return mermaid_text_utils.repair_fenced_blocks("\n\n".join(parts) + "\n")
 
 
-def run_batch(paths: RunPaths,
-              state: dict[str, Any],
-              number: int,
-              model: BaseChatModel,
-              log: Any,
-              control_check: Callable[[], str | None] | None = None) -> tuple[bool, int, str]:
-    """Part `number`'s conversation, until the worker closes it or spends `documentCleanup.batchCalls` calls: whether
-    it was closed, the calls it made, and why not. Every write reaches the published document at once. A stop asked for
-    ends it before its next call."""
+def run_batch(request: BatchRunRequest) -> tuple[bool, int, str]:
+    """Part `request.number`'s conversation, until the worker closes it or spends `documentCleanup.batchCalls` calls:
+    whether it was closed, the calls it made, and why not. Every write reaches the published document at once. A stop
+    asked for ends it before its next call."""
 
+    paths = request.paths
+    state = request.state
+    number = request.number
+    model = request.model
+    log = request.log
+    control_check = request.control_check
     log_path = document_reshaping_service.build_batch_log_path(paths, number)
     messages: list[BaseMessage] = [SystemMessage(content=_build_system_text(state.get("wishes", ""))),
                                    _build_batch_message(paths=paths, state=state, number=number)]

@@ -21,6 +21,7 @@ from agent_client.agent_errors import ControlStop
 import config
 from graph.nodes import reshape_document_node
 from models import output_contract
+from models.batch_run_request import BatchRunRequest
 from models.run_paths import RunPaths
 from services import document_reshaping_service
 from services import document_folder_service
@@ -596,13 +597,23 @@ def test_a_clean_up_part_ends_at_the_page_s_stop_before_its_next_call_defect():
     state = document_reshaping_service.start_pass(paths=paths, asked={"pass": "cleanup", "wishes": ""})
     model = fakes.scripted(fakes.tool_call("finish_batch", summary="nothing to remove"))
     try:
-        document_reshaping_service.run_batch(paths=paths, state=state, number=1, model=model, log=logging.getLogger("t"),
-                                             control_check=lambda: "stop")
+        stopping_request = BatchRunRequest(paths=paths,
+                                           state=state,
+                                           number=1,
+                                           model=model,
+                                           log=logging.getLogger("t"),
+                                           control_check=lambda: "stop")
+        document_reshaping_service.run_batch(request=stopping_request)
         stopped = ""
     except ControlStop as stop:
         stopped = str(stop)
     harness.check("Stop ends the part before its first call", stopped == "stopped before call 1 of batch 1"
                   and model.calls == [], stopped)
-    document_reshaping_service.run_batch(paths=paths, state=state, number=1, model=model, log=logging.getLogger("t"),
-                                         control_check=lambda: None)
+    quiet_request = BatchRunRequest(paths=paths,
+                                    state=state,
+                                    number=1,
+                                    model=model,
+                                    log=logging.getLogger("t"),
+                                    control_check=lambda: None)
+    document_reshaping_service.run_batch(request=quiet_request)
     harness.check("with nothing asked the part calls its model", len(model.calls) >= 1, str(model.calls))

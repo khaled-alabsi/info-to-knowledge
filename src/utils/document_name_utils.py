@@ -12,6 +12,8 @@ import re
 import unicodedata
 from datetime import date
 
+from models.front_matter_request import FrontMatterRequest
+
 __all__ = ["build_slug", "build_document_name", "find_date_in_name", "render_front_matter", "EVENT_WORDS",
            "MAX_SPEAKERS"]
 
@@ -68,23 +70,18 @@ def find_date_in_name(name: str) -> str:
     return ""
 
 
-def render_front_matter(topic: str,
-                        event: str,
-                        speakers: list[str],
-                        meeting_date: str,
-                        tags: list[str] = (),
-                        part: str = "") -> str:
+def render_front_matter(request: FrontMatterRequest) -> str:
     """The document's metadata as YAML front matter: topic, event, speakers, date and the run's tags, always all five, an empty value
     for one nobody established, and `part`, the part of the recording processed ("12:30 to 1:05:00 of 1:32:10"), only
     when the run processed a part. Every string is written JSON-quoted, which YAML reads as a
     string, so a colon or a quote in a name stays data; the date, always `find_date_in_name`'s `YYYY-MM-DD` or empty, is
     left bare, so YAML reads it as a date."""
 
-    lines = [f"topic: {json.dumps(topic.strip(), ensure_ascii=False)}",
-             f"event: {json.dumps(event.strip(), ensure_ascii=False)}",
-             f"speakers: {json.dumps([speaker.strip() for speaker in speakers if speaker.strip()], ensure_ascii=False)}",
-             f"date: {meeting_date if meeting_date else json.dumps('')}",
-             *([f"part: {json.dumps(part, ensure_ascii=False)}"] if part else []),
-             f"tags: {json.dumps(list(tags), ensure_ascii=False)}"]
+    lines = [f"topic: {json.dumps(request.topic.strip(), ensure_ascii=False)}",
+             f"event: {json.dumps(request.event.strip(), ensure_ascii=False)}",
+             f"speakers: {json.dumps([speaker.strip() for speaker in request.speakers if speaker.strip()], ensure_ascii=False)}",
+             f"date: {request.meeting_date if request.meeting_date else json.dumps('')}",
+             *([f"part: {json.dumps(request.part, ensure_ascii=False)}"] if request.part else []),
+             f"tags: {json.dumps(list(request.tags), ensure_ascii=False)}"]
 
     return "---\n" + "\n".join(lines) + "\n---\n\n"

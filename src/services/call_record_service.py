@@ -13,13 +13,15 @@ from __future__ import annotations
 import contextvars
 import time
 from pathlib import Path
-from typing import Any
-
-from langchain_core.messages import BaseMessage
+from typing import TYPE_CHECKING, Any
 
 from agent_client import finish_reason_utils
 from services import call_log_service
 from utils import chain_response_utils
+
+# Read for the type hints alone: imported at run time, it brought LangChain into `i2k mcp`'s start through the run list
+if TYPE_CHECKING:
+    from langchain_core.messages import BaseMessage
 
 __all__ = ["set_place", "update_place", "read_place", "clear_place", "record_call"]
 

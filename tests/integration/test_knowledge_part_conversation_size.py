@@ -14,6 +14,7 @@ from PIL import Image
 from support import fakes, harness
 
 import config as app_config
+from models.batch_run_request import BatchRunRequest
 from models.run_paths import RunPaths
 from services import document_folder_service
 from services import document_knowledge_service
@@ -63,8 +64,8 @@ def test_a_part_at_its_size_limit_is_compacted_into_the_worker_s_summary_defect(
     _grow_saved_conversation(paths=paths, state=state, reads=reads)
     model = fakes.scripted(AIMessage(content="Written: routing into K1. Left: nothing of the part."),
                            fakes.tool_call("finish_batch", summary="closed"))
-    is_closed, _calls, reason = document_knowledge_service.run_batch(paths=paths, state=state, number=1, model=model,
-                                                                     log=logging.getLogger("test"))
+    request = BatchRunRequest(paths=paths, state=state, number=1, model=model, log=logging.getLogger("test"))
+    is_closed, _calls, reason = document_knowledge_service.run_batch(request=request)
     harness.check("the part closes after its compaction", is_closed, reason)
     asked = model.calls[0]
     harness.check("the summary is asked of the whole conversation, nothing cleared first",
@@ -94,8 +95,8 @@ def test_a_part_with_many_small_figures_is_not_compacted_while_it_fits_defect():
     messages.append(ToolMessage(content=read_text, tool_call_id="r0"))
     document_reshaping_service.save_conversation(paths, 1, messages, {"blocks": {1}, "sections": {1}})
     model = fakes.scripted(fakes.tool_call("finish_batch", summary="closed"))
-    is_closed, _calls, reason = document_knowledge_service.run_batch(paths=paths, state=state, number=1, model=model,
-                                                                     log=logging.getLogger("test"))
+    request = BatchRunRequest(paths=paths, state=state, number=1, model=model, log=logging.getLogger("test"))
+    is_closed, _calls, reason = document_knowledge_service.run_batch(request=request)
     parts = document_pass_service.describe_parts(output_root=paths.output_root, is_live=False, now=1.0)
     harness.check("the part closes with no compaction, its one call sent the whole conversation",
                   is_closed and parts[0]["compactions"] == 0 and len(model.calls[0]) == len(messages),
@@ -111,7 +112,8 @@ def test_the_parts_table_counts_a_part_s_compactions_defect():
     _grow_saved_conversation(paths=paths, state=state, reads=reads)
     model = fakes.scripted(AIMessage(content="Written: routing into K1. Left: nothing of the part."),
                            fakes.tool_call("finish_batch", summary="closed"))
-    document_knowledge_service.run_batch(paths=paths, state=state, number=1, model=model, log=logging.getLogger("test"))
+    request = BatchRunRequest(paths=paths, state=state, number=1, model=model, log=logging.getLogger("test"))
+    document_knowledge_service.run_batch(request=request)
     parts = document_pass_service.describe_parts(output_root=paths.output_root, is_live=False, now=1.0)
     harness.check("part 1 counts its one compaction and its one model call",
                   (parts[0]["compactions"], parts[0]["calls"]) == (1, 1), str(parts[0]))
