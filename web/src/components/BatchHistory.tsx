@@ -94,8 +94,8 @@ export default function BatchHistory({ runBase, refreshKey, unitTitle = "Frames"
             {groupRows(orderNewestBatchFirst(batches)).map(({ batch, group, isFirst }) => (
               <tr key={`${batch.slug}-${batch.started_at}`}
                 className={[batch.rejections.length ? "refused" : "", group % 2 ? "alt" : "", isFirst ? "batch-start" : ""].join(" ").trim()}>
-                <td>{isFirst ? batch.frames : ""}</td>
-                <td>{onOpenSession && isFastSession(batch) ? (
+                <td data-label={unitTitle} className={isFirst ? "" : "empty-cell"}>{isFirst ? batch.frames : ""}</td>
+                <td data-label="Step">{onOpenSession && isFastSession(batch) ? (
                   <button type="button" className="link-button session-link" title={`what the worker thought and wrote for frames ${batch.frames}`}
                     onClick={() => onOpenSession(batch.slug)}>
                     <Icon name="eye" size={13} /> {batch.step}
@@ -108,10 +108,10 @@ export default function BatchHistory({ runBase, refreshKey, unitTitle = "Frames"
                     </button>
                   )}
                 </td>
-                <td title={formatDateTime(batch.started_at, { withYear: true, withSeconds: true })}>{formatDuration(batch.duration_s)}</td>
-                <td>{batch.prompt_tokens.toLocaleString("en")} / {batch.output_tokens.toLocaleString("en")}</td>
-                <td>{batch.status}{batch.attempts > 1 ? ` (${batch.attempts} attempts)` : ""}</td>
-                {hasRejectionColumn && <td>
+                <td data-label="Took" title={formatDateTime(batch.started_at, { withYear: true, withSeconds: true })}>{formatDuration(batch.duration_s)}</td>
+                <td data-label="Tokens in / out">{batch.prompt_tokens.toLocaleString("en")} / {batch.output_tokens.toLocaleString("en")}</td>
+                <td data-label="Result">{batch.status}{batch.attempts > 1 ? ` (${batch.attempts} attempts)` : ""}</td>
+                {hasRejectionColumn && <td data-label={`Rejections (${rejectionCount})`}>
                   <span className={batch.rejections.length ? "refused-count" : "muted"}>
                     {batch.rejections.length ? `${batch.rejections.length} of ${batch.attempts || batch.rejections.length + 1} attempts` : "0"}
                   </span>

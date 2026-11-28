@@ -68,6 +68,8 @@
 
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; }
+/* a phone's browser never enlarges text by itself: a wide box's text grew past the screen */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 body { margin: 0; background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; }
 h1, h2, h3 { margin: 0; font-weight: 600; }
 h2 { font-size: 17px; }
@@ -1585,11 +1587,27 @@ summary.provider-set-head::-webkit-details-marker, summary.server-card-head::-we
 .batch-history table { width: 100%; border-collapse: collapse; }
 .batch-history th, .batch-history td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
 .batch-history th { position: sticky; top: 0; background: var(--surface); font-weight: 600; }
-.batch-history th:nth-child(-n+5), .batch-history td:nth-child(-n+5), .batch-history .nowrap { white-space: nowrap; }
-.batch-history th:last-child, .batch-history td:last-child { width: 100%; min-width: 240px; }
+.batch-history th:nth-child(-n+4), .batch-history td:nth-child(-n+4), .batch-history .nowrap { white-space: nowrap; }
+/* a step's result can name many frames: it wraps in its column, never widening the table past its box */
+.batch-history td:nth-child(5) { min-width: 120px; overflow-wrap: anywhere; }
+.batch-history th:last-child, .batch-history td:last-child { width: 100%; min-width: 140px; overflow-wrap: anywhere; }
 /* a fast run's table has no rejections: its result is the last column, and no column is held wider than its text */
 .batch-history table.no-rejections th:last-child, .batch-history table.no-rejections td:last-child { min-width: 0; }
 .batch-history .session-link { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+/* on a phone each step is a card: every value under its column's name, long results wrapped to the screen's width */
+@media (max-width: 640px) {
+  .batch-history .table-scroll > table:not(.stage-table), .batch-history .table-scroll > table:not(.stage-table) tbody { display: block; width: 100%; }
+  .batch-history .table-scroll > table:not(.stage-table) thead { display: none; }
+  .batch-history .table-scroll > table:not(.stage-table) tr { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 6px 10px; padding: 8px; border-bottom: 1px solid var(--border); }
+  .batch-history .table-scroll > table:not(.stage-table) td { display: block; width: auto; min-width: 0; padding: 0; border: none;
+    white-space: normal; overflow-wrap: anywhere; }
+  .batch-history .table-scroll > table:not(.stage-table) td[data-label]::before { content: attr(data-label); display: block;
+    color: var(--muted); font-size: 11px; margin-bottom: 1px; }
+  .batch-history .table-scroll > table:not(.stage-table) td.empty-cell { display: none; }
+  .batch-history .table-scroll > table:not(.stage-table) td:nth-child(5),
+  .batch-history .table-scroll > table:not(.stage-table) td:nth-child(6) { grid-column: 1 / -1; }
+}
 /* a stage table's step names wrap and its last column takes no extra room, so its six columns fit the card */
 .batch-history .stage-table th, .batch-history .stage-table td { white-space: normal; }
 .batch-history .stage-table .nowrap { white-space: nowrap; }

@@ -479,6 +479,26 @@ test("a click on phase 3's card shows its frames bar, and a second click hides i
   await expect(frames).toHaveCount(0);
 });
 
+for (const size of SCREEN_WIDTHS) {
+  test(`phase 3's steps table fits the screen, a long result wrapped, on a ${size.width} px screen defect`, async ({ page, api }) => {
+    // Defect: on a phone the steps table ran past the screen, a refused step's result cut at both sides over an empty box
+    // Fix: on a phone each step is a card with every value under its column's name, a long result wrapped
+    await page.setViewportSize(size);
+    const result = "frames 17, 18 accepted; frames 19, 20, 21, 22 refused";
+    api.answer("GET /runs/output/gateway-review/batches", { json: [
+      { slug: "frames-019-022-reading", frames: "19–22", step: "reading", started_at: "2026-11-28T17:40:00", duration_s: 250,
+        status: result, attempts: 3, prompt_tokens: 35630, output_tokens: 1160,
+        rejections: [{ attempt: 1, findings: [{ code: "FRAME_FACTS_MISSING", detail: "frame 21 has no facts" }] }] }] });
+    await openDoneRun(page);
+    await page.getByRole("button", { name: /frames processing/ }).first().click();
+    await page.getByRole("button", { name: "show batch details" }).click();
+    const cell = page.locator(".batch-history td", { hasText: result });
+    await expect(cell).toBeVisible();
+    await expectInsideScreen(page, cell);
+    await expectInsideScreen(page, page.locator(".batch-history .table-scroll"));
+  });
+}
+
 test("the ? on a phase card says what the phase reads and writes", async ({ page }) => {
   await openDoneRun(page);
 
