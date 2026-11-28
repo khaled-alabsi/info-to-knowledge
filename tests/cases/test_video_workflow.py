@@ -363,6 +363,16 @@ def test_phases_5_and_6_are_off_for_a_fast_processing_run():
 
 
 def test_the_run_line_and_the_header_carry_the_workflow():
+    # the shipped Fast frame model is empty (it takes the provider set's frame job), so the test names one of its own
+    fast = config.settings.video.fast_processing
+    previous_frame_model, fast.frame_model = fast.frame_model, "qwen3.5-4b"
+    try:
+        _check_the_run_line_and_the_header()
+    finally:
+        fast.frame_model = previous_frame_model
+
+
+def _check_the_run_line_and_the_header():
     command = job_queue_service.build_run_command(RunJobRequest(video=Path("/in/a.mp4"), output_root=Path("/out/a"),
                                                                 workflow="fast-processing"))
     folder = Path(tempfile.mkdtemp())
@@ -398,11 +408,15 @@ def test_a_fast_runs_phase_3_and_4_windows_are_their_fast_models():
     original = run_command.host_window_service.read_loaded_window
     run_command.host_window_service.read_loaded_window = lambda url, model: seen.append(model) or {
         "qwen3.5-4b": 131072}.get(model, 183040)
+    # the shipped Fast frame model is empty (it takes the provider set's frame job), so the test names one of its own
+    fast_settings = config.settings.video.fast_processing
+    previous_frame_model, fast_settings.frame_model = fast_settings.frame_model, "qwen3.5-4b"
     try:
         fast = run_command.read_phase_windows(logging.getLogger("test"), is_fast=True)
         quality = run_command.read_phase_windows(logging.getLogger("test"), is_fast=False)
     finally:
         run_command.host_window_service.read_loaded_window = original
+        fast_settings.frame_model = previous_frame_model
     harness.check("a fast run measures phase 3 against the 4B's loaded window, a quality run against its own model's",
                   fast.get("frames_processing") == 131072 and quality.get("frames_processing") == 183040,
                   f"{fast} {quality} {seen}")
