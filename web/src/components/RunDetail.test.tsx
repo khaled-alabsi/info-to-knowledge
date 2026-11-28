@@ -211,8 +211,8 @@ describe("RunDetail action bar", () => {
     renderRun();
     sendUpdate({ phases: makePhaseRows(["complete", "complete", "complete", "blocked", "not run"]) });
     await userEvent.click(within(toolbar()).getByRole("button", { name: "Unblock phase 4 · document writing…" }));
-    await userEvent.click(await screen.findByRole("radio", { name: "gpu-box" }));
-    expect(screen.getByRole("radio", { name: "default · main machine (default)" })).toBeInTheDocument();
+    await userEvent.selectOptions(await screen.findByRole("combobox", { name: "Provider set" }), "gpu-box");
+    expect(screen.getByRole("option", { name: "default · main machine (default)" })).toBeInTheDocument();
     expect(lastJobRequest(calls)).toBeUndefined();
     await userEvent.click(screen.getByRole("button", { name: "Run it now" }));
     expect(lastJobRequest(calls)).toMatchObject({ is_resuming: true, provider_set: "gpu-box" });

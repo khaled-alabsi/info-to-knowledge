@@ -25,7 +25,9 @@ describe("DocumentSteps", () => {
     expect(within(rows[0]).getByText("23,000 / 2,500")).toBeInTheDocument();
     expect(within(rows[1]).queryByText("table of contents")).not.toBeInTheDocument();
     expect(within(rows[1]).getByText("AGENDA_POINT_EMPTY")).toBeInTheDocument();
-    expect(within(rows[1]).getByText(/point 2 holds nothing/)).toBeInTheDocument();
+    // the reason's name alone in the cell, its fix text kept for Copy (the owner: the long text is "too big and not needed")
+    expect(within(rows[1]).queryByText(/point 2 holds nothing/)).not.toBeInTheDocument();
+    expect(within(rows[1]).getByText("AGENDA_POINT_EMPTY")).toBeInTheDocument();
     expect(within(rows[2]).getByText("chapters")).toBeInTheDocument();
     expect(within(rows[2]).getByText("waiting")).toBeInTheDocument();
     expect(screen.getByText(/2 of 3 steps accepted/)).toHaveTextContent("1 rejection");

@@ -24,7 +24,8 @@ function listRunWith(selection: PhaseSelection, phaseModels: PhaseModels, form: 
   const tags = selection.tags ?? [];
   if (form === "counted") {
     const parts = [selection.profile ? `profile: ${selection.profile}` : "default settings", describeModels(selection)];
-    if (selection.provider_set) parts.push(`provider set: ${selection.provider_set}`);
+    // first, so a narrow tab title still shows which machines the run goes to
+    if (selection.provider_set) parts.unshift(`provider set: ${selection.provider_set}`);
     if (selection.is_dry_run) parts.unshift("dry run");
     if (isTagsShown && tags.length) parts.push(`tags: ${tags.length}`);
     return parts;
@@ -244,7 +245,7 @@ export default function PhaseSelector({
       { key: "settings", label: "Settings", summary: [settingsExtraSummary,
           ...listRunWith(selection, phaseModels, "counted", isTagsShown).filter((part) => part !== describeModels(selection))]
           .filter(Boolean).join(", "),
-        body: <>{settingsExtra}{providerSetField}{dryRunSwitch}{tagsField}</> },
+        body: <>{providerSetField}{settingsExtra}{dryRunSwitch}{tagsField}</> },
       ...(modelRows ? [{ key: "models", label: "Models", summary: describeModels(selection), body: modelRows }] : []),
       ...extraTabs,
     ];

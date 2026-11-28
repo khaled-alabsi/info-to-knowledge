@@ -678,7 +678,7 @@ export default function RunDetail({
             <div className="run-choices">
               <p className="muted">The blocked step is asked again, then the run goes on. Nothing runs until you press Run it now.</p>
               <ProviderSetChoice sets={providerSets} selection={{ ...NO_SELECTION, provider_set: unblockSet }}
-                onChange={(next) => setUnblockSet(next.provider_set ?? "")} />
+                onChange={(next) => setUnblockSet(next.provider_set ?? "")} isDropdown />
               <button className="btn primary block" onClick={() => {
                 setIsUnblockOpen(false);
                 void queue({ ...runChoice, is_resuming: true, ...(unblockSet ? { provider_set: unblockSet } : {}) }, "an unblock");

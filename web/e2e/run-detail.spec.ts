@@ -520,6 +520,53 @@ test("shows the critique card and the run's log", async ({ page }) => {
   await expect(page.getByText("phase 6 lessons complete")).toBeVisible();
 });
 
+for (const size of SCREEN_WIDTHS) {
+  test(`phase 4's steps table names each value and shows each rejection's reason by name, on a ${size.width} px screen defect`,
+    async ({ page, api }) => {
+      // Defect: on a phone phase 4's steps took the frames table's cards without their column names, and a rejection's
+      // whole fix text ran down the screen
+      // Fix: each value under its column's name, a rejection one line of its reasons' names
+      await page.setViewportSize(size);
+      const fixText = "Fix: state the fact about the subject, and never describe the recording";
+      api.answer("GET /runs/output/gateway-review/document-steps", { json: [
+        { slug: "summary-draft", stage: "table of contents", step: "executive summary draft", status: "accepted", calls: 3,
+          seconds: 110, prompt_tokens: 90355, output_tokens: 6715,
+          rejections: [{ findings: [{ code: "DOCUMENT_BANNED_PHRASE", text: fixText }] },
+            { findings: [{ code: "DOCUMENT_BANNED_PHRASE", text: fixText }] }] }] });
+      const detail = { ...RUN_DETAILS["gateway-review"],
+        document_stages: [{ name: "table of contents", counts: { accepted: 1 } }] };
+      api.answer("GET /runs/output/gateway-review/update", { json: { offset: 0, text: "", run: detail } });
+      await openDoneRun(page);
+      await page.locator("li.step", { hasText: "document writing" }).locator(".step-choose").click();
+      await page.getByRole("button", { name: /^show .* details$/ }).first().click();
+      const cell = page.locator(".batch-history td", { hasText: "DOCUMENT_BANNED_PHRASE" });
+      await expect(cell).toBeVisible();
+      await expect(cell).not.toContainText(fixText);
+      await expectInsideScreen(page, page.locator(".batch-history .table-scroll"));
+      if (size.width <= 640) await expect(page.locator(".batch-history td[data-label='Tokens in / out']")).toBeVisible();
+    });
+}
+
+for (const size of SCREEN_WIDTHS) {
+  test(`the Unblock dialog picks the provider set from a drop-down, on a ${size.width} px screen`, async ({ page, api }) => {
+    // the owner: "Make this provider selection a drop down"; it was a column of buttons, one per set
+    await page.setViewportSize(size);
+    api.answer("GET /provider-sets", { json: { default_set: "default", sets: [{ name: "default", machine: "main machine", changes: [] },
+      { name: "Office", changes: [] }, { name: "gpu-box", changes: [] }] } });
+    await page.goto("/");
+    await page.getByRole("button", { name: "phase 3 ›" }).click();
+    await page.getByRole("button", { name: "Unblock phase 3 · frames processing…" }).click();
+    const choice = page.getByRole("combobox", { name: "Provider set" });
+    await expect(choice).toHaveValue("");
+    await expect(page.getByRole("radiogroup", { name: "Provider set" })).toHaveCount(0);
+    await expectInsideScreen(page, choice);
+    await choice.selectOption("gpu-box");
+    await page.getByRole("button", { name: "Run it now" }).click();
+    await expect.poll(() => api.sentTo("POST /jobs").length).toBe(1);
+    expect(api.sentTo("POST /jobs")[0].body).toMatchObject({ is_resuming: true, provider_set: "gpu-box" });
+  });
+}
+
 test("a blocked run offers to unblock its phase and queues the resume", async ({ page, api }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "phase 3 ›" }).click();

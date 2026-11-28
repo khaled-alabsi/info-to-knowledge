@@ -3,6 +3,7 @@ import { describeError, fetchJson, formatDuration } from "../api";
 import type { DocumentStep } from "../api";
 import Icon from "./Icon";
 import { formatMarkdownCell } from "../markdownTable";
+import { countFindingCodes } from "../findingCounts";
 import CopyButton from "./CopyButton";
 import Spinner from "./Spinner";
 
@@ -79,7 +80,7 @@ export default function DocumentSteps({ runBase, refreshKey, isLive = false, sou
         <CopyButton title="Copy the table as markdown" getText={() => formatStepsAsMarkdown(steps, rejectionCount)} />
       </div>
       <div className="table-scroll">
-        <table>
+        <table className="document-steps">
           <thead>
             <tr><th>Stage</th><th>Step</th><th>Status</th><th>Calls</th><th>Took</th><th>Tokens in / out</th><th>Rejections ({rejectionCount})</th></tr>
           </thead>
@@ -88,8 +89,8 @@ export default function DocumentSteps({ runBase, refreshKey, isLive = false, sou
               const isFirst = index === 0 || steps[index - 1].stage !== step.stage;
               return (
                 <tr key={step.slug} className={[step.rejections.length ? "refused" : "", isFirst ? "batch-start" : ""].join(" ").trim()}>
-                  <td>{isFirst ? step.stage : ""}</td>
-                  <td>{step.step}
+                  <td data-label="Stage" className={isFirst ? "" : "empty-cell"}>{isFirst ? step.stage : ""}</td>
+                  <td data-label="Step">{step.step}
                     {onOpenStep && step.rejections.length > 0 && (
                       <button type="button" className="btn ghost icon-only tiny" aria-label={`see what the worker saw for ${step.step}`}
                         title="what the worker was sent for this step, and why it was rejected" onClick={() => onOpenStep(step.slug)}>
@@ -97,16 +98,17 @@ export default function DocumentSteps({ runBase, refreshKey, isLive = false, sou
                       </button>
                     )}
                   </td>
-                  <td>{isLive && index === workedAt && step.status === "waiting" ? "running" : step.status}</td>
-                  <td>{step.calls}</td>
-                  <td className="nowrap">{step.calls ? formatDuration(step.seconds) : ""}</td>
-                  <td className="nowrap">{step.calls ? `${step.prompt_tokens.toLocaleString("en")} / ${step.output_tokens.toLocaleString("en")}` : ""}</td>
-                  <td>
+                  <td data-label="Status">{isLive && index === workedAt && step.status === "waiting" ? "running" : step.status}</td>
+                  <td data-label="Calls">{step.calls}</td>
+                  <td data-label="Took" className="nowrap">{step.calls ? formatDuration(step.seconds) : ""}</td>
+                  <td data-label="Tokens in / out" className="nowrap">{step.calls ? `${step.prompt_tokens.toLocaleString("en")} / ${step.output_tokens.toLocaleString("en")}` : ""}</td>
+                  <td data-label={`Rejections (${rejectionCount})`} className="wide-cell">
                     <span className={step.rejections.length ? "refused-count" : "muted"}>{step.rejections.length}</span>
                     {step.rejections.map((rejection, number) => (
-                      <div key={number} className="rejection">
-                        {number + 1}: {rejection.findings.map((finding) => (
-                          <span key={finding.code + finding.text}><code>{finding.code}</code> {finding.text} </span>
+                      <div key={number} className="rejection"
+                        title={rejection.findings.map((finding) => `${finding.code} ${finding.text}`).join("\n")}>
+                        {number + 1}: {countFindingCodes(rejection.findings).map(({ code, count }) => (
+                          <span key={code}><code>{code}</code>{count > 1 ? ` ×${count}` : ""} </span>
                         ))}
                       </div>
                     ))}

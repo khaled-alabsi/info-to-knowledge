@@ -3,6 +3,7 @@ import { describeError, fetchJson, formatDateTime, formatDuration } from "../api
 import type { BatchHistoryEntry } from "../api";
 import Icon from "./Icon";
 import { formatMarkdownCell } from "../markdownTable";
+import { countFindingCodes } from "../findingCounts";
 import CopyButton from "./CopyButton";
 import Spinner from "./Spinner";
 
@@ -44,14 +45,6 @@ function formatTableAsMarkdown(batches: BatchHistoryEntry[], rejectionCount: num
       batch.rejections.length ? rejections : "0"].map(formatMarkdownCell).join(" | ") + " |");
   }
   return lines.join("\n");
-}
-
-// A rejection's findings as their codes, each once with how often it came ("MODEL_CALL_FAILED ×5"): one frame's failure
-// repeated for each frame of its batch filled a phone's screen (the owner: "too big and not needed"); Copy keeps them whole
-function countFindingCodes(findings: { code: string }[]) {
-  const counts = new Map<string, number>();
-  for (const finding of findings) counts.set(finding.code, (counts.get(finding.code) ?? 0) + 1);
-  return [...counts].map(([code, count]) => ({ code, count }));
 }
 
 // "2 of 3 attempts": a step stopped by a failed call records its rejections with no attempt counted, which read "2 of 1"
@@ -123,8 +116,8 @@ export default function BatchHistory({ runBase, refreshKey, unitTitle = "Frames"
                 </td>
                 <td data-label="Took" title={formatDateTime(batch.started_at, { withYear: true, withSeconds: true })}>{formatDuration(batch.duration_s)}</td>
                 <td data-label="Tokens in / out">{batch.prompt_tokens.toLocaleString("en")} / {batch.output_tokens.toLocaleString("en")}</td>
-                <td data-label="Result">{batch.status}{batch.attempts > 1 ? ` (${batch.attempts} attempts)` : ""}</td>
-                {hasRejectionColumn && <td data-label={`Rejections (${rejectionCount})`}>
+                <td data-label="Result" className="wide-cell">{batch.status}{batch.attempts > 1 ? ` (${batch.attempts} attempts)` : ""}</td>
+                {hasRejectionColumn && <td data-label={`Rejections (${rejectionCount})`} className="wide-cell">
                   <span className={batch.rejections.length ? "refused-count" : "muted"}>
                     {batch.rejections.length ? formatRejectedAttempts(batch) : "0"}
                   </span>

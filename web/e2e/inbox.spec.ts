@@ -8,6 +8,24 @@ import { expect, test } from "./fixtures/mockApi";
 const CHANGE_REQUEST = { ...JOBS[0].request, document_pass: "knowledge", from_phase: 7 };
 
 for (const size of SCREEN_WIDTHS) {
+  test(`the run settings for new recordings pick a provider set first in their Settings tab, named on the tab, at ${size.width} px`,
+    async ({ page, api }) => {
+      // the owner: "add provider selection for batch run config"; it sat under the tab's other fields, its name cut off
+      await page.setViewportSize(size);
+      api.answer("GET /provider-sets", { json: { default_set: "default", sets: [{ name: "default", changes: [] },
+        { name: "gpu-box", changes: [] }] } });
+      await page.goto("/");
+      await page.getByRole("button", { name: "run settings" }).click();
+      const settingsTab = page.getByRole("tab", { name: /Settings/ });
+      await settingsTab.click();
+      const choice = page.getByRole("combobox", { name: "Provider set" });
+      await expectInsideScreen(page, choice);
+      await choice.selectOption("gpu-box");
+      await expect(settingsTab).toContainText(/^Settings\s*provider set: gpu-box/);
+    });
+}
+
+for (const size of SCREEN_WIDTHS) {
   test(`the run settings' Video tab starts every new video fast, and a video's own page starts from it, at ${size.width} px defect`,
     async ({ page, api }) => {
       // Defect: the fast settings chosen in the inbox's run settings never reached a video's page, which read "Default:

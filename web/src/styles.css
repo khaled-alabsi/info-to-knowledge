@@ -1589,7 +1589,10 @@ summary.provider-set-head::-webkit-details-marker, summary.server-card-head::-we
 .batch-history th { position: sticky; top: 0; background: var(--surface); font-weight: 600; }
 .batch-history th:nth-child(-n+4), .batch-history td:nth-child(-n+4), .batch-history .nowrap { white-space: nowrap; }
 /* a step's result can name many frames: it wraps in its column, never widening the table past its box */
-.batch-history td:nth-child(5) { min-width: 120px; overflow-wrap: anywhere; }
+/* phase 4's stage and step names wrap, so its seven columns fit beside the run's cards */
+.batch-history table.document-steps td:nth-child(-n+2) { white-space: normal; min-width: 70px; }
+.batch-history table.document-steps td.wide-cell { min-width: 110px; }
+.batch-history table:not(.stage-table) td.wide-cell { min-width: 120px; white-space: normal; overflow-wrap: anywhere; }
 .batch-history th:last-child, .batch-history td:last-child { width: 100%; min-width: 140px; overflow-wrap: anywhere; }
 /* a fast run's table has no rejections: its result is the last column, and no column is held wider than its text */
 .batch-history table.no-rejections th:last-child, .batch-history table.no-rejections td:last-child { min-width: 0; }
@@ -1605,8 +1608,7 @@ summary.provider-set-head::-webkit-details-marker, summary.server-card-head::-we
   .batch-history .table-scroll > table:not(.stage-table) td[data-label]::before { content: attr(data-label); display: block;
     color: var(--muted); font-size: 11px; margin-bottom: 1px; }
   .batch-history .table-scroll > table:not(.stage-table) td.empty-cell { display: none; }
-  .batch-history .table-scroll > table:not(.stage-table) td:nth-child(5),
-  .batch-history .table-scroll > table:not(.stage-table) td:nth-child(6) { grid-column: 1 / -1; }
+  .batch-history .table-scroll > table:not(.stage-table) td.wide-cell { grid-column: 1 / -1; }
 }
 /* a stage table's step names wrap and its last column takes no extra room, so its six columns fit the card */
 .batch-history .stage-table th, .batch-history .stage-table td { white-space: normal; }
