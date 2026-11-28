@@ -671,6 +671,25 @@ for (const size of SCREEN_WIDTHS) {
     });
 }
 
+for (const size of SCREEN_WIDTHS) {
+  test(`Fast chosen on a done Quality run says phase 3 on runs again, inside the screen, at ${size.width} px defect`,
+    async ({ page, api }) => {
+      // Defect: the header's speed moved a run made on Quality to Fast with no word, and the next resume went on with
+      // no draft; now the page says the next resume runs phase 3 and every phase after it again
+      api.answer("POST /runs/output/gateway-review/speed", { json: { preset: "fast", values: {}, name: "fast", changes: {} } });
+      await page.setViewportSize(size);
+      await openDoneRun(page);
+      const header = page.locator("header", { has: page.getByRole("heading", { name: "gateway-review" }) });
+      await header.getByRole("button", { name: "workflow speed: Quality" }).click();
+      await page.locator(".speed-panel").getByRole("radio", { name: /^Fast/ }).click();
+      const note = page.getByText("This speed takes another workflow. The next resume runs phase 3 and every phase after it again.",
+        { exact: false });
+      await expect(note).toBeVisible();
+      await expectInsideScreen(page, note);
+      await expect.poll(() => api.sentTo("POST /runs/output/gateway-review/speed").length).toBe(1);
+    });
+}
+
 test("a done PDF run queues a rewrite by a model as phase 7, with the extra wishes typed", async ({ page, api }) => {
   const detail = { ...RUN_DETAILS["gateway-review"], pdf_mode: "markdown-conversion" as const };
   api.answer("GET /runs/output/gateway-review/update", { json: { run: detail, offset: 0, text: "" } });

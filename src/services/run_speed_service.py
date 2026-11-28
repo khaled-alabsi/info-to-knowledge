@@ -13,13 +13,15 @@ from services import video_workflow_service
 from utils import json_store_utils
 
 __all__ = ["read_chosen_speed", "resolve_speed", "write_chosen_speed", "apply_chosen_speed", "list_speed_values",
-           "describe_speed_options", "parse_speed_setting"]
+           "describe_speed_options", "parse_speed_setting", "resolve_next_workflow", "CHOSEN_BY_SPEED"]
 
 # The preset a new video run takes when nobody chose a speed for it (the owner)
 DEFAULT_PRESET = "balanced"
 
-# Who chose a run's workflow when its speed set it, as `run-workflow.json` records it
-_CHOSEN_BY = "workflow speed"
+# Who chose a run's workflow when its speed set it, and when the person set it on the run line, as `run-workflow.json`
+# records it
+CHOSEN_BY_SPEED = "workflow speed"
+_CHOSEN_BY_USER = "user"
 
 
 def read_chosen_speed(folder: Path) -> dict | None:
@@ -67,7 +69,7 @@ def write_chosen_speed(folder: Path,
     json_store_utils.write_json(folder / output_contract.RUN_SPEED_FILE, speed)
     workflow = speed["values"].get("video.workflow")
     if workflow and is_workflow_kept:
-        video_workflow_service.write_chosen_workflow(folder, str(workflow), _CHOSEN_BY)
+        video_workflow_service.write_chosen_workflow(folder, str(workflow), CHOSEN_BY_SPEED)
 
 
 def list_speed_values(speed: dict) -> dict:
@@ -82,6 +84,24 @@ def list_speed_values(speed: dict) -> dict:
     # the preset as it is now, so a setting added to the menu after the run chose its speed takes the preset's value,
     # never the program's
     return {**preset_values, **(speed["changes"] if "changes" in speed else stored)}
+
+
+def resolve_next_workflow(folder: Path,
+                          workflow_flag: str,
+                          chosen_speed: dict | None) -> str:
+    """The workflow the run's next start takes: the run line's `--workflow`, else the speed the run line chose, else the
+    speed the folder kept unless the person chose the folder's workflow by hand, else the folder's workflow."""
+
+    if workflow_flag:
+        return workflow_flag
+    kept_workflow = video_workflow_service.read_chosen_workflow(folder)
+    is_chosen_by_hand = kept_workflow is not None and kept_workflow.get("chosenBy") == _CHOSEN_BY_USER
+    speed = chosen_speed or (None if is_chosen_by_hand else read_chosen_speed(folder))
+    # the values the speed was chosen with, never its preset as it is now: a run that chose the Fast speed when Fast
+    # meant the earlier fast workflow keeps that workflow
+    speed_workflow = (speed or {}).get("values", {}).get("video.workflow")
+
+    return str(speed_workflow) if speed_workflow else video_workflow_service.resolve_workflow(folder)
 
 
 def apply_chosen_speed(folder: Path) -> dict | None:

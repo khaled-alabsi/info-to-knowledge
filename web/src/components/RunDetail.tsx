@@ -24,7 +24,7 @@ import type { ResetKind } from "./ResetDialog";
 import { DocumentPassPanel, isProfileGone, useIngestingProfiles, usePhaseModels, useRunDefaults, useSettingsProfiles }
   from "./RunChoices";
 import { ProviderSetChoice, nameProviderSet, useProviderSets } from "./ProviderSetChoice";
-import WorkflowSpeedChoice, { describeSpeed } from "./WorkflowSpeedChoice";
+import WorkflowSpeedChoice, { describeSpeed, readSpeedWorkflow } from "./WorkflowSpeedChoice";
 import { nameSpeedPreset } from "../speed";
 import { chooseProgress, describeUnit, listStages } from "./runProgress";
 import PassPartsTable from "./PassPartsTable";
@@ -117,6 +117,16 @@ const RETIRED_FEEDBACK_PREFIX = "feedbackSeen:";
 // A run made on either fast workflow, the earlier one or the direct draft, is a Fast run
 function isFastWorkflow(workflow: string | undefined): boolean {
   return workflow === "fast-processing" || workflow === "direct-draft";
+}
+
+// The note a speed change gives when it moves a run whose frames were already processed to another workflow (Fast after
+// Quality or Balanced, or back): phases 1 and 2 are the only ones every workflow shares (the owner), so the next start
+// runs phase 3 on again; "" when the workflow stays or phase 3 has not run
+export function describeWorkflowSwitch(runWorkflow: string | undefined,
+                                       nextWorkflow: string,
+                                       hasFramesProcessed: boolean): string {
+  if (!runWorkflow || !nextWorkflow || nextWorkflow === runWorkflow || !hasFramesProcessed) return "";
+  return "This speed takes another workflow. The next resume runs phase 3 and every phase after it again. Phases 1 and 2 stay.";
 }
 
 function readCompression(recorded: Detail["recording_compression"]): RecordingCompression | null {
@@ -254,6 +264,7 @@ export default function RunDetail({
   // A phase has run when its record says so, or when time was spent in it: a run that died mid-phase leaves it "not run"
   const hasPhaseRun = (phase: { name: string; status: string }) => phase.status !== "not run"
     || (detail?.timing.phases[phase.name] ?? 0) > 0;
+  const hasFramesProcessed = phaseRows.some((phase) => phase.number === 3 && hasPhaseRun(phase));
   const firstOpen = phaseRows.find((phase) => phase.status !== "complete" && !isPhaseOff(phase));
   const isAllComplete = phaseRows.length > 0 && !firstOpen;
   // a chapter can be taken back once phase 4 has started writing
@@ -293,6 +304,11 @@ export default function RunDetail({
 
   // 5. The actions; a refusal names the run and what was not done
   const reportFailure = (what: string, error: unknown) => onMessage(`${run.name}: ${what}: ${describeError(error)}`, true);
+  // a speed that moves the run to another workflow after its frames were processed says what the next resume runs again
+  const warnOfWorkflowSwitch = (next: PhaseSelection) => {
+    const note = describeWorkflowSwitch(detail?.workflow, readSpeedWorkflow(next, runDefaults), hasFramesProcessed);
+    if (note) onMessage(note);
+  };
 
   // A copy of this run in a new run folder beside it (another profile, a PDF read again, a branch): the server names
   // the folder it made, the message says it, and the page opens it, which reads the lists again
@@ -702,7 +718,10 @@ export default function RunDetail({
                 settingsExtra={detail?.workflow && runDefaults?.speed ? <div className="field">
                     <span>Workflow speed</span>
                     <WorkflowSpeedChoice selection={runChoice} defaults={runDefaults}
-                      onChange={(next) => setSpeedChoice({ speed_preset: next.speed_preset, speed_settings: next.speed_settings })} />
+                      onChange={(next) => {
+                        setSpeedChoice({ speed_preset: next.speed_preset, speed_settings: next.speed_settings });
+                        warnOfWorkflowSwitch(next);
+                      }} />
                   </div> : null} />
               {isRecordingLocked && <p className="muted">{lockReason}</p>}
               <button className="btn primary block" onClick={() => {
@@ -807,6 +826,7 @@ export default function RunDetail({
                   // the choice is kept in the run's folder at once: held on the page alone, a reload gave the old speed back
                   saveRunSpeed(base, next.speed_preset ?? "", next.speed_settings ?? {}).then(onChanged)
                     .catch((error) => reportFailure("the speed was not kept", error));
+                  warnOfWorkflowSwitch(next);
                 }} />
                 : nameSpeedPreset(detail.speed?.name ?? (isFastWorkflow(detail.workflow) ? "fast" : "quality"))}
             </span>

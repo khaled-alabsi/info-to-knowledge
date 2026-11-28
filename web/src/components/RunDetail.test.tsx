@@ -5,7 +5,7 @@ import type { Job, RunDetail as Detail } from "../api";
 import { FakeUpdateSource, PHASES, answerJson, answerText, installServer, makeJob, makePhaseRows, makeRun, makeRunDetail } from "../test/fakeServer";
 import { SPEED_OPTIONS } from "../test/speedOptions";
 import { readViewState } from "../viewState";
-import RunDetail from "./RunDetail";
+import RunDetail, { describeWorkflowSwitch } from "./RunDetail";
 
 const RUN_BASE = "/api/runs/knowledge/AcmeSync-demo";
 
@@ -1432,6 +1432,30 @@ describe("RunDetail branch", () => {
     const saved = calls.find((call) => call.method === "POST" && call.url === `${RUN_BASE}/speed`);
     expect(saved?.body).toEqual({ speed_preset: "balanced", speed_settings: {} });
     expect(screen.getByRole("button", { name: "workflow speed: Balanced" })).toBeInTheDocument();
+  });
+
+  it("a speed that moves a run past phase 3 to another workflow says the next resume runs phase 3 on again defect", async () => {
+    // The defect: Fast chosen on a Quality run whose frames were processed gave no word, and the resume went on with no
+    // draft; now the page says phase 3 on runs again, and a speed on the same workflow says nothing
+    const calls = installServer({ "GET /api/run-defaults?profile=": { pdf_mode: "text-only", pdf_ocr_engine: "tesseract",
+      knowledge_filter_model: "", workflow: "quality", speed: SPEED_OPTIONS },
+      [`POST ${RUN_BASE}/speed`]: { preset: "fast", values: {}, name: "fast", changes: {} } });
+    const { onMessage } = renderRun();
+    sendUpdate({ workflow: "quality", speed: { preset: "quality", values: SPEED_OPTIONS.presets.quality, name: "quality", changes: {} },
+      phases: makePhaseRows(["complete", "complete", "complete", "complete", "not run", "not run"]) });
+    await userEvent.click(await screen.findByRole("button", { name: "workflow speed: Quality" }));
+    await userEvent.click(screen.getByRole("radio", { name: /^Balanced/ }));
+    expect(onMessage).not.toHaveBeenCalledWith(expect.stringContaining("another workflow"));
+    await userEvent.click(screen.getByRole("radio", { name: /^Fast/ }));
+    expect(onMessage).toHaveBeenCalledWith(
+      "This speed takes another workflow. The next resume runs phase 3 and every phase after it again. Phases 1 and 2 stay.");
+    expect(calls.some((call) => call.method === "POST" && call.url === `${RUN_BASE}/speed`)).toBe(true);
+  });
+
+  it("a speed that moves a run to another workflow before phase 3 ran says nothing", () => {
+    expect(describeWorkflowSwitch("quality", "direct-draft", false)).toBe("");
+    expect(describeWorkflowSwitch("direct-draft", "direct-draft", true)).toBe("");
+    expect(describeWorkflowSwitch("direct-draft", "quality", true)).toContain("phase 3 and every phase after it again");
   });
 
   it("a branched run's header names the run and phase it came from", () => {

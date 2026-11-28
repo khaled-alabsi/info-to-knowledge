@@ -73,6 +73,7 @@ from services import slides_source_service
 from services import text_detection_service
 from services import transcription_service
 from services import video_workflow_service
+from services import workflow_switch_service
 from utils import display_path_utils
 from utils import frame_slug_utils
 from utils import json_store_utils
@@ -934,6 +935,17 @@ def _read_default_pdf_mode(paths: RunPaths,
     return pdf_default_mode_service.choose_mode_for_pages(page_count=len(page_indexes), settings=config.settings.pdf)
 
 
+def _is_video_workflow_run(args: argparse.Namespace,
+                           paths: RunPaths,
+                           video: Path) -> bool:
+    """Whether the run takes a video workflow: a video's frames, never a document's pages or an audio recording's
+    speech, which have no video workflow."""
+
+    return not (args.is_run_as_audio or args.ingesting_profile in ingesting_profile_vocabulary.ONE_CALL_PROFILES
+                or inbox_service.is_audio_recording(video) or inbox_service.is_document(video)
+                or recording_medium_service.is_audio_run_recording(paths.output_root, video))
+
+
 def _is_new_video_run(paths: RunPaths,
                       video: Path) -> bool:
     """Whether this is a video run that chose no speed and has not transcribed yet, which takes the default speed; a
@@ -1071,6 +1083,15 @@ def cmd_run(args: argparse.Namespace) -> int:
             diarization=("no speakers" if is_pdf
                          else diarization_service.describe_diarization(config.settings.audio.diarization)),
             capabilities=[] if args.is_dry_run else model_capability_service.check_phase_capabilities())
+        # A video run started on another workflow than its phase 3 was made under goes back to phase 2 first (the
+        # owner: phases 1 and 2 are the only ones every workflow shares), before its run store is opened, so the store
+        # reads the reset progress
+        next_workflow = run_speed_service.resolve_next_workflow(paths.output_root, args.workflow, chosen_speed)
+        is_video_run = _is_video_workflow_run(args, paths, video)
+        if is_video_run:
+            switch_warning = workflow_switch_service.reset_for_workflow(paths, next_workflow, args.is_dry_run)
+            if switch_warning:
+                args.logger.warning(switch_warning)
         store = _open_run(paths, args.is_resuming, args.is_dry_run, args.logger)
     except (BadTarget, ModelUnavailable, MissingModelCapability, EngineUnavailable, FileNotFoundError,
             RuntimeError) as exc:
@@ -1117,6 +1138,9 @@ def cmd_run(args: argparse.Namespace) -> int:
         if chosen_speed and not args.is_dry_run:
             run_speed_service.write_chosen_speed(paths.output_root, chosen_speed)
         write_chosen_workflow(paths.output_root, args.workflow, args.is_dry_run)
+        # a speed changed while the run worked kept only the speed: its workflow is written now, at the next start
+        if is_video_run and not args.is_dry_run:
+            workflow_switch_service.keep_next_workflow(paths.output_root, next_workflow)
         # A takeaway always takes the audio workflow; said here too, since a dry run writes no profile file to read.
         # `--as-audio` itself as well as its file: a dry run writes no file and still rehearses the audio workflow
         is_audio = (args.is_run_as_audio or pdf_mode in output_contract.PDF_MODE_MEDIUMS

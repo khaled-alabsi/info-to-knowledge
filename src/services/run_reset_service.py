@@ -45,9 +45,13 @@ PHASE_OUTPUTS: dict[int, PhaseOutputsSpec] = {
     # without them here, a reset to 3 took phase 2's call log as phase 4's
     2: PhaseOutputsSpec(files=(output_contract.LOOP_ITEMS_FILE, output_contract.SPEECH_FILE),
                     dirs=(output_contract.FRAME_IMAGES_DIR_NAME,), call_prefixes=(output_contract.SPEECH_SLUG,)),
-    3: PhaseOutputsSpec(files=(output_contract.BATCH_SUMMARIES_FILE, output_contract.NOTES_FILE),
+    # Each video workflow's phase 3 writes its own file: the quality workflow's notes, the Fast speed's draft, the older
+    # fast workflow's frame descriptions; without the last two here, a reset to 2 kept a Fast run's draft
+    3: PhaseOutputsSpec(files=(output_contract.BATCH_SUMMARIES_FILE, output_contract.NOTES_FILE,
+                               output_contract.DRAFT_FILE, output_contract.FRAME_DESCRIPTIONS_FILE),
                     dirs=(output_contract.ITEMS_DIR_NAME, output_contract.PREPARED_DIR),
-                    call_prefixes=("frame-", "frames-", f"{output_contract.PREPARED_CALL_SLUG_PREFIX}-"),
+                    call_prefixes=("frame-", "frames-", f"{output_contract.PREPARED_CALL_SLUG_PREFIX}-",
+                                   output_contract.FAST_NOTE_SLUG_PREFIX),
                     special_targets=(_FRAME_NOTES_TARGET,)),
     4: PhaseOutputsSpec(files=(output_contract.SUMMARY_FILE, output_contract.DRAFT_PROVENANCE_FILE),
                     dirs=(output_contract.WRITING_DIR_NAME,), call_prefixes=("",),

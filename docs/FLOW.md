@@ -15,6 +15,13 @@ PHASE 1  transcribe
                                          `run --speed-preset/--speed-setting` (the Workflow speed menu): the preset and
                                          the values it sets, laid over the settings at every start; it writes
                                          run-workflow.json too. Every later phase reads the settings it changed
+  program  writes   run-workflow.json    at every start of a video run, the workflow of the speed kept in run-speed.json
+                                         (a speed changed on the page while the run worked kept only the speed), unless
+                                         `run --workflow` or a workflow chosen by hand says otherwise
+  program  removes  phase 3 and later    at every start of a video run whose phase 3 files (03_notes.md and
+                                         03_processed-frames/, 03_draft.md, or 03_frame-descriptions.md) belong to
+                                         another workflow than the one it starts on: the run goes back to phase 2, as
+                                         reset-to 2 does, and the console prints a warning naming both workflows
   program  writes   run-input-range.json  before phase 1, from `run --start/--end` or `run --pages` (the run form's
                                          Range): the part of the input the run processes; none: the whole input
   program  reads    run-input-range.json  a time window: only the window's audio is cut out of each part it crosses
