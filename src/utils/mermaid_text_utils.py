@@ -280,10 +280,29 @@ def _describe_empty_box(line: str) -> str | None:
     return None
 
 
+def _has_an_unclosed_bracket(text: str) -> bool:
+    return any(text.count(opener) != text.count(closer) for opener, closer in _CLOSERS.items())
+
+
+def _drop_asymmetric_boxes(line: str) -> str:
+    # An asymmetric box `A>"Flag"]` opens with `>` and closes with `]`. A word before a `>` inside another box's label
+    # (`PAC[<<Component>> check]`) is no such box: taking it out ate the label's own `]`, and a diagram Mermaid draws
+    # was refused (job 317fc92c's frame 24)
+    kept_list = []
+    position = 0
+    for found in _ASYMMETRIC_BOX.finditer(line):
+        if _has_an_unclosed_bracket(text=line[:found.start()]):
+            continue
+        kept_list.append(line[position:found.start()] + found.group(1))
+        position = found.end()
+    kept_list.append(line[position:])
+
+    return "".join(kept_list)
+
+
 def _describe_unclosed_bracket(line: str) -> str | None:
-    # An asymmetric box `A>"Flag"]` opens with `>` and closes with `]`: that pair is taken out before counting
-    outside = _ASYMMETRIC_BOX.sub(r"\1", _clear_quotes(line))
-    if any(outside.count(opener) != outside.count(closer) for opener, closer in _CLOSERS.items()):
+    outside = _drop_asymmetric_boxes(line=_clear_quotes(line))
+    if _has_an_unclosed_bracket(text=outside):
         return f"a bracket is not closed: `{line.strip()}`"
 
     return None

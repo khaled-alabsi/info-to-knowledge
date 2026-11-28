@@ -288,6 +288,21 @@ def test_an_asymmetric_box_is_no_unclosed_bracket():
                   mermaid_text_utils.find_syntax_problems('flowchart LR\n    A["Flag" --> B\n') != [])
 
 
+def test_a_word_before_a_greater_sign_inside_a_box_label_is_no_asymmetric_box_defect():
+    # A box written `PAC[<<Component>> check]` draws in Mermaid and was refused as "a bracket is not closed": the word
+    # before `>>` was read as an asymmetric box that ate the label's `]`. Now a `>` inside a box's label opens nothing.
+    from utils import mermaid_text_utils
+
+    problems = mermaid_text_utils.find_syntax_problems("flowchart LR\n    PAC[<<Component>> check] --> B\n")
+    harness.check("PAC[<<Component>> check] draws", problems == [], str(problems))
+    problems = mermaid_text_utils.find_syntax_problems("flowchart LR\n    A[x > y] --> B\n")
+    harness.check("A[x > y] draws", problems == [], str(problems))
+    harness.check("a stereotype box left open is still named",
+                  mermaid_text_utils.find_syntax_problems("flowchart LR\n    PAC[<<Component>> check --> B\n") != [])
+    harness.check("an asymmetric box after an arrow still draws",
+                  mermaid_text_utils.find_syntax_problems('flowchart LR\n    A --> F>"Flag"]\n') == [])
+
+
 def test_class_er_and_circle_links_are_counted_as_arrows():
     from utils import mermaid_text_utils
 
