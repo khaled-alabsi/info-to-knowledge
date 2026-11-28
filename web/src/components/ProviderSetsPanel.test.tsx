@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { SettingRow } from "../api";
 import { describeHost, describeRunValue, describeValue } from "../settingRunValue";
-import ProviderSetsPanel from "./ProviderSetsPanel";
+import ProviderSetsPanel, { describeBuiltInTool, describeJobLine } from "./ProviderSetsPanel";
 
 const ROWS: SettingRow[] = [
   { key: "providerSets", path: ["providerSets"], kind: "json", source: "local", comment: "",
@@ -34,7 +34,7 @@ describe("ProviderSetsPanel", () => {
     renderPanel();
     const fallback = screen.getByRole("group", { name: "provider set default" });
     expect(within(fallback).getByRole("button", { name: /^default: Frames processing/ })).toBeInTheDocument();
-    expect(within(fallback).getAllByText("Runs on lmstudio")).toHaveLength(2);
+    expect(within(fallback).getAllByRole("button", { name: /on lmstudio$/ })).toHaveLength(2);
     const office = screen.getByRole("group", { name: "provider set Office" });
     expect(within(office).getByRole("button", { name: /^Office: Frames processing/ })).toBeInTheDocument();
     expect(within(office).getByText("Runs on gpu-box")).toBeInTheDocument();
@@ -179,9 +179,20 @@ describe("ProviderSetsPanel", () => {
     expect(cards).toHaveLength(2);
     for (const card of Array.from(cards)) {
       expect(within(card as HTMLElement).getAllByRole("button")).toHaveLength(1);
-      expect(card.textContent).toMatch(/Runs on/);
+      expect(card.textContent).toMatch(/lmstudio/);
     }
     expect(document.body.textContent).not.toMatch(/Fast workflow/);
+  });
+
+  it("names a job's server once, never again under a choice that already names it defect", () => {
+    // Defect as shown: "qwen3.6-35b-a3b-mtp on lmstudio" then "Runs on lmstudio" under it, the server said twice on
+    // every job. The fix: the grey line says where the job runs only when the chosen option does not
+    renderPanel();
+    const fallback = screen.getByRole("group", { name: "provider set default" });
+    expect(within(fallback).queryByText(/Runs on lmstudio/)).toBeNull();
+    const tool = describeBuiltInTool(ROWS, "providers.speech.model");
+    expect(describeJobLine(ROWS, "", "providers.speech.model", tool)).not.toMatch(/Runs on/);
+    expect(describeJobLine(ROWS, "", "providers.speech.model", "another choice")).toMatch(/^Runs on this computer/);
   });
 });
 

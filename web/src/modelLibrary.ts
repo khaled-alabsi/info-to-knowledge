@@ -90,13 +90,13 @@ export function describeModelWait(rows: SettingRow[], name: string): string {
 }
 
 // The two values that tell apart models running the same model on the same server: how long a reply may be and the
-// repeat penalty; empty when the model sets neither
+// presence penalty, named as its field under More model options names it; empty when the model sets neither
 export function describeModelReplies(rows: SettingRow[], name: string, drafted?: Tree): string {
   const fields = readModelRows(rows, name);
   const reply = readFieldValue(fields, "maxTokens", drafted);
   const penalty = asTree(readFieldValue(fields, "sampling", drafted)).presence_penalty;
   const parts = [typeof reply === "number" ? `writes up to ${describePages(reply)}` : "",
-    typeof penalty === "number" ? `repeat penalty ${penalty.toFixed(1)}` : ""];
+    typeof penalty === "number" ? `presence penalty ${penalty.toFixed(1)}` : ""];
   return parts.filter((part) => part !== "").join(" · ");
 }
 

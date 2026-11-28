@@ -126,6 +126,15 @@ function describeRun(rows: SettingRow[], model: string, jobKey = ""): string {
   return describeModelRun(rows, model).host;
 }
 
+// The grey line under a job: where it runs, left out when the chosen option already names that server ("... on
+// lmstudio", then "Runs on lmstudio" said it twice), and how long it waits for a reply
+export function describeJobLine(rows: SettingRow[], model: string, jobKey: string, shownLabel: string): string {
+  const place = describeRun(rows, model, jobKey);
+  const isPlaceShown = shownLabel.endsWith(` on ${place}`) || place.endsWith(`: ${shownLabel}`);
+  const wait = model ? describeModelWait(rows, model) : "";
+  return [isPlaceShown ? "" : `Runs on ${place}`, wait].filter((part) => part !== "").join(" · ");
+}
+
 const PROVIDER_KIND = /^providers\.([a-z]+)\./;
 
 // The name the model has on its server, when it is not the name the models list gives it
@@ -295,8 +304,8 @@ export default function ProviderSetsPanel({ rows, drafts, onEdit }: {
                       // a job nothing else can do has no menu to open: it says what it runs on
                       <span className="job-fixed">{readOptionLabel(choices[0]?.label ?? "")}</span>
                     )}
-                    <small className="muted job-runs">Runs on {describeRun(rows, effective, job.key)}
-                      {effective && describeModelWait(rows, effective) ? ` · ${describeModelWait(rows, effective)}` : ""}</small>
+                    <small className="muted job-runs">{describeJobLine(rows, effective, job.key,
+                      readOptionLabel(choices.find((choice) => choice.value === current)?.label ?? choices[0]?.label ?? ""))}</small>
                   </div>
                 );
               })}

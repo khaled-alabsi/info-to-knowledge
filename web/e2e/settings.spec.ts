@@ -219,7 +219,8 @@ for (const size of SCREEN_WIDTHS) {
       // the default set shows each job with the library model it runs and where; another set shows what it leaves as the default's
       const fallback = page.getByRole("group", { name: "provider set default" });
       await expectInsideScreen(page, fallback);
-      await expect(fallback.getByText("Runs on lmstudio", { exact: false }).first()).toBeVisible();
+      // the server is named once, in the choice, never again in a "Runs on" line under it
+      await expect(fallback.getByText("Runs on lmstudio", { exact: false })).toHaveCount(0);
       // the fallback names the model it picks, never a word like "usual" (the owner: "Usual word make no sense")
       await expect(fallback.getByRole("button", { name: "default: Frames processing: acme-vision-35b on lmstudio" })).toBeVisible();
       await expect(fallback.getByText(/usual/i)).toHaveCount(0);

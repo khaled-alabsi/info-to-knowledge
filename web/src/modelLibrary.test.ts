@@ -41,8 +41,9 @@ describe("model library", () => {
   it("shows the longest reply and the presence penalty that tell two models on one server apart", () => {
     const rows = [row("models.a.maxTokens", 40960), row("models.a.sampling", { presence_penalty: 1 }, "code", { kind: "json" }),
       row("models.b.maxTokens", 32768), row("models.b.sampling", { presence_penalty: 0 }, "code", { kind: "json" }), row("models.c.spec", "x:y")];
-    expect(describeModelReplies(rows, "a")).toBe("writes up to about 61 pages · repeat penalty 1.0");
-    expect(describeModelReplies(rows, "b")).toBe("writes up to about 49 pages · repeat penalty 0.0");
+    // the summary called the presence penalty a "repeat penalty", another setting of the model with another value
+    expect(describeModelReplies(rows, "a")).toBe("writes up to about 61 pages · presence penalty 1.0");
+    expect(describeModelReplies(rows, "b")).toBe("writes up to about 49 pages · presence penalty 0.0");
     expect(describeModelReplies(rows, "c")).toBe("");
   });
 
