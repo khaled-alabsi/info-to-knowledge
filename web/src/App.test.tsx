@@ -24,10 +24,11 @@ function serveLists({ inbox = [makeInboxItem("AcmeSync-demo.mp4", "done"), makeI
 }
 
 describe("App", () => {
-  it("opens the running run from the top bar's running count", async () => {
+  it("opens the running run from the top bar's running count menu", async () => {
     serveLists();
     render(<App />);
     await userEvent.click(await screen.findByRole("button", { name: /1 running/ }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: /Jonas-call/ }));
     expect(await screen.findByRole("heading", { level: 2, name: "Jonas-call" })).toBeInTheDocument();
   });
 

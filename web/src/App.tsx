@@ -328,23 +328,18 @@ export default function App({ account = null, onSignOut }: { account?: Account |
   // the queue's pause is offered once two jobs or more are in it (one running and the next waiting): stopping the
   // running one then starts the next at once, unless the queue is paused
   const isQueuePaused = queuePause.is_until_resumed || Boolean(queuePause.until);
-  // the pause menu's switch: the running run stopped at once, as Ctrl-C stops it, by the pause chosen next
-  const [isStoppingNow, setIsStoppingNow] = useState(false);
-  const isJobRunning = jobs.some((job) => job.status === "running");
-  const stopNowItem = { label: "Stop the running run now (Ctrl+C)", icon: "stop", isChecked: isStoppingNow,
-    isKeptOpen: true, hint: "it runs again first, resumed, once the pause ends",
-    onSelect: () => setIsStoppingNow(!isStoppingNow) };
   const pendingCount = jobs.filter((job) => ["queued", "retrying", "running", "blocked"].includes(job.status)).length;
-  // "resume" ends the pause, "hold" pauses until resumed, a number pauses that many minutes
-  const changeQueuePause = async (choice: number | "resume" | "hold") => {
+  // "resume" ends the pause, "hold" pauses until resumed, a number pauses that many minutes; `isStopping` stops every
+  // running run at once, as Ctrl+C does, and each goes on first, where it stopped, once the pause ends
+  const changeQueuePause = async (choice: number | "resume" | "hold", isStopping = false) => {
     try {
       const body = { ...(typeof choice === "number" ? { minutes: choice } : {}),
-        ...(isStoppingNow ? { is_stopping_now: true } : {}) };
+        ...(isStopping ? { is_stopping_now: true } : {}) };
       const pause = await sendJson<QueuePause>(choice === "resume" ? "/queue/resume" : "/queue/pause",
         choice === "resume" ? {} : body);
-      setIsStoppingNow(false);
       setQueuePause(pause);
-      addMessage(pause.is_until_resumed ? "Queue paused until you resume it"
+      addMessage(isStopping ? "Every running run is stopped: they go on when you resume the queue"
+        : pause.is_until_resumed ? "Queue paused until you resume it"
         : pause.until ? `Queue paused: no job starts before ${pause.until.slice(11, 16)}` : "Queue resumed");
     } catch (error) {
       addMessage(`The queue's pause could not be changed: ${describeError(error)}`, true);
@@ -438,27 +433,29 @@ export default function App({ account = null, onSignOut }: { account?: Account |
             <span className="pill failed" title={listsError}>server not answering</span>
           ) : (
             <>
-              {/* the running count opens the running run when one runs; with several, a menu names each one with its
-                  phase and worker set, so the owner picks the run (it once opened whichever came first) */}
-              {liveRuns.length > 1 ? (
+              {/* the running count is a menu: each running run by name with its phase and worker set, so the owner
+                  picks the run (it once opened whichever came first), then Pause all and Stop all for every run at
+                  once (the owner: "buttons in the UI: kill all or stop all, pause all") */}
+              {liveRun ? (
                 <Menu label={<><span className="dot running" /> {liveRuns.length} running</>}
-                  variant="ghost stat stat-link" title="open one of the running runs"
-                  items={liveRuns.map((run) => ({
-                    label: run.display_name || run.name,
-                    hint: [run.live_phase ? `phase ${run.live_phase}` : "", `worker set ${run.worker_set || "default"}`]
-                      .filter(Boolean).join(" · "),
-                    onSelect: () => {
-                      if (isSettingsOpen) closeSettings();
-                      setOpened({ kind: "run", run });
-                    },
-                  }))} />
-              ) : liveRun ? (
-                <button className="btn ghost stat stat-link" title="open the running run" onClick={() => {
-                  if (isSettingsOpen) closeSettings();
-                  setOpened({ kind: "run", run: liveRun });
-                }}>
-                  <span className="dot running" /> {liveRuns.length} running
-                </button>
+                  variant="ghost stat stat-link" title="open a running run, or pause or stop them all"
+                  items={[
+                    ...liveRuns.map((run) => ({
+                      label: run.display_name || run.name, icon: "eye", group: "Open a run",
+                      hint: [run.live_phase ? `phase ${run.live_phase}` : "", `worker set ${run.worker_set || "default"}`]
+                        .filter(Boolean).join(" · "),
+                      onSelect: () => {
+                        if (isSettingsOpen) closeSettings();
+                        setOpened({ kind: "run", run });
+                      },
+                    })),
+                    ...(isQueuePaused ? [] : [{ label: "Pause all runs", icon: "pause", group: "Every run",
+                      hint: "each run waits at its next step, and no waiting job starts, until you resume the queue",
+                      onSelect: () => void changeQueuePause("hold") }]),
+                    { label: "Stop all runs now", icon: "stop", group: "Every run", isDanger: true,
+                      hint: "each run ends now, as Ctrl+C does, and goes on where it stopped when you resume the queue",
+                      onSelect: () => void changeQueuePause("hold", true) },
+                  ]} />
               ) : (
                 <span className="stat"><span className="dot" /> 0 running</span>
               )}
@@ -472,7 +469,6 @@ export default function App({ account = null, onSignOut }: { account?: Account |
                   items={[
                     { label: "Resume now", icon: "play", hint: "the paused run goes on, then the waiting jobs",
                       onSelect: () => void changeQueuePause("resume") },
-                    ...(isJobRunning ? [stopNowItem] : []),
                     ...(queuePause.is_until_resumed ? [] : [{ label: "Pause until I resume", icon: "pause",
                       onSelect: () => void changeQueuePause("hold") }]),
                     ...QUEUE_PAUSE_MINUTES.map((minutes) => ({ label: `Pause ${describePauseLength(minutes)} from now`, icon: "pause",
@@ -482,7 +478,6 @@ export default function App({ account = null, onSignOut }: { account?: Account |
                 <Menu label={<><span className={`dot ${queuedCount ? "queued" : ""}`} /> {queuedCount} queued</>}
                   variant="ghost stat queue-pause" title="pause the queue" note={QUEUE_PAUSE_NOTE}
                   items={[
-                    ...(isJobRunning ? [stopNowItem] : []),
                     { label: "Pause until I resume", icon: "pause", onSelect: () => void changeQueuePause("hold") },
                     ...QUEUE_PAUSE_MINUTES.map((minutes) => ({ label: `Pause ${describePauseLength(minutes)}`, icon: "pause",
                       onSelect: () => void changeQueuePause(minutes) })),
