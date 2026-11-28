@@ -391,6 +391,19 @@ describe("InboxPanel list", () => {
     expect(screen.getByRole("button", { name: /^running · Mac › open the run of Refunds/ })).toBeInTheDocument();
   });
 
+  it("names the provider set on a done video's pill when its run was not made on the default set", async () => {
+    // The owner: "If done was not on the default provider set, it should show it"; a done run on the default set keeps
+    // its plain "done ›"
+    const doneOn = (name: string, providerSet: string) => makeInboxItem(`${name}.mp4`, "done", { runs: [
+      { root: "output", name, status: "complete", is_live: false, has_document: true, topic: "", display_name: "",
+        stopped_phase: 0, provider_set: providerSet }] });
+    renderInbox([doneOn("Gateway", "gpu-box"), doneOn("Weekly", ""), doneOn("Refunds", "default")], []);
+    await openDone();
+    expect(screen.getByRole("button", { name: /^done · gpu-box › open the run of Gateway/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^done › open the run of Weekly/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^done › open the run of Refunds/ })).toBeInTheDocument();
+  });
+
   it("a blocked run queued again says queued in its row, as its own page does defect", () => {
     // Defect: a run blocked in phase 3 and queued again showed "blocked in phase 3" in the Inbox while its page said
     // "Queued as job ...": the row looked at a waiting job only for a run with a document. Fix: a waiting job wins.

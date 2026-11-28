@@ -351,6 +351,23 @@ for (const size of SCREEN_WIDTHS) {
 }
 
 for (const size of SCREEN_WIDTHS) {
+  test(`a done run made on another provider set than the default names it on its pill, at ${size.width} px`,
+    async ({ page, api }) => {
+      // the owner: "If done was not on the default provider set, it should show it"
+      await page.setViewportSize(size);
+      api.answer("GET /runs", { json: data.RUNS.map((run) => run.name === "gateway-review" ? { ...run, provider_set: "gpu-box" } : run) });
+      api.answer("GET /inbox", { json: data.INBOX.map((item) => item.video !== "inbox/Gateway review.mp4" ? item
+        : { ...item, runs: item.runs.map((run) => ({ ...run, provider_set: "gpu-box" })) }) });
+      await page.goto("/");
+      await page.getByRole("button", { name: /^Done\s*\d/ }).click();
+      const pill = page.locator(".pill", { hasText: "done · gpu-box" });
+      await expect(pill).toBeVisible();
+      await expectInsideScreen(page, pill);
+      await page.screenshot({ path: `../temp/paused-pill/done-${size.width}.png`, fullPage: true });
+    });
+}
+
+for (const size of SCREEN_WIDTHS) {
   test(`a list's rows stand by their status, a queued change first and done at the bottom, at ${size.width} px`, async ({ page, api }) => {
     await page.setViewportSize(size);
     api.answer("GET /lists", { json: { lists: [{ id: "a", name: "Review later",

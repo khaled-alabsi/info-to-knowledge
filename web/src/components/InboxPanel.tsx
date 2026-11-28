@@ -53,14 +53,14 @@ export function rankPill(pillClass: string): number {
 }
 
 // A started run's pill names the phase it stopped in ("phase 3 ›"), and its title the phase's name; any other state
-// names the state; a running run's pill names its provider set when one is given ("running · Mac ›"), and a running run
+// names the state; a running or done run's pill names its provider set when one is given ("running · Mac ›"), and a running run
 // held at its pause says "paused" ("pausing" while its model call still ends) in place of "running" (the owner paused a
 // run and its pill went on saying running)
 function labelStatePill(state: InboxItem["state"], stoppedPhase: number, isBlocked = false, providerSet = "",
   pause: RunSummary["pause"] = ""): string {
   if (state === "started" && stoppedPhase > 0) return `${isBlocked ? "blocked in phase" : "phase"} ${stoppedPhase} ›`;
   const word = state === "running" && pause ? pause : formatRunState(state);
-  if (state === "running" && providerSet) return `${word} · ${providerSet} ›`;
+  if ((state === "running" || state === "done") && providerSet) return `${word} · ${providerSet} ›`;
 
   return `${word} ›`;
 }
@@ -985,6 +985,12 @@ export default function InboxPanel({
   // which machine runs which recording; with one set the name tells nothing
   const isSeveralSetsRunning = new Set(runs.filter((run) => run.is_live).map((run) => run.provider_set || "default")).size > 1;
   const nameRunningSet = (run: { provider_set?: string }) => (isSeveralSetsRunning ? run.provider_set || "default" : "");
+  // the set a pill names: a running run's while several sets run, a done run's whenever it is not the default set (the
+  // owner: "If done was not on the default provider set, it should show it")
+  const nameShownSet = (run: { provider_set?: string }, state: InboxItem["state"]) => {
+    if (state === "running") return nameRunningSet(run);
+    return state === "done" && run.provider_set && run.provider_set !== "default" ? run.provider_set : "";
+  };
   // the class of the pill a row shows, as its row renders it below, which also orders the rows of each section
   const classifyItemPill = (item: InboxItem) => {
     const lead = leadRun(item);
@@ -1161,7 +1167,8 @@ export default function InboxPanel({
                     title={describeRunState(run) === "started" ? titleStoppedPhase(run.stopped_phase, phases, run.phase_titles) : undefined}>
                     {(findWaitingJobOfRun(run) && `${labelWaitingJob(findWaitingJobOfRun(run)!)} ›`)
                       || describeChangePill(lastJobsOfFolders.get(run.folder), run.has_document, run.status)?.label.concat(" ›")
-                      || labelStatePill(describeRunState(run), run.stopped_phase, run.is_blocked, nameRunningSet(run), run.pause)}
+                      || labelStatePill(describeRunState(run), run.stopped_phase, run.is_blocked,
+                        nameShownSet(run, describeRunState(run)), run.pause)}
                   </span>
                 </button>
               </li>
@@ -1226,7 +1233,7 @@ export default function InboxPanel({
                   {lead && !findPendingJob(item) ? (
                     <button className={`pill link ${classifyItemPill(item)}`}
                       aria-label={`${describeChangePill(lastJobsOfVideos.get(item.video), lead.has_document, lead.status)?.label.concat(" ›")
-                        ?? labelStatePill(item.state, lead.stopped_phase, lead.is_blocked, nameRunningSet(lead), lead.pause)} open the run of ${item.display_name || item.name}`}
+                        ?? labelStatePill(item.state, lead.stopped_phase, lead.is_blocked, nameShownSet(lead, item.state), lead.pause)} open the run of ${item.display_name || item.name}`}
                       aria-description={item.state === "started" ? titleStoppedPhase(lead.stopped_phase, phases, lead.phase_titles) || undefined : undefined}
                       title={[item.state === "started" ? titleStoppedPhase(lead.stopped_phase, phases, lead.phase_titles) : "",
                         `open its run: ${item.runs.map((run) => `${buildRunPath(run)} (${run.status})`).join(", ")}`]
@@ -1236,7 +1243,7 @@ export default function InboxPanel({
                         onOpenRun(lead.root, lead.name);
                       }}>
                       {describeChangePill(lastJobsOfVideos.get(item.video), lead.has_document, lead.status)?.label.concat(" ›")
-                        ?? labelStatePill(item.state, lead.stopped_phase, lead.is_blocked, nameRunningSet(lead), lead.pause)}
+                        ?? labelStatePill(item.state, lead.stopped_phase, lead.is_blocked, nameShownSet(lead, item.state), lead.pause)}
                     </button>
                   ) : (
                     <NewItemPill job={findPendingJob(item)} name={item.display_name || item.name} onOpenJob={onOpenJob}
