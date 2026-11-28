@@ -3,7 +3,7 @@ import type { SettingRow } from "../api";
 import { asTree, isTree, listModelNames, readModelProvider, readPath } from "../modelLibrary";
 import type { Tree } from "../modelLibrary";
 import { describeHost } from "../settingRunValue";
-import { PROVIDER_KINDS } from "../settingsLabels";
+import { PROVIDER_JOB_CHOICES } from "../settingsLabels";
 import Icon from "./Icon";
 import ModelLibrary from "./ModelLibrary";
 import type { SettingEditContext } from "./SettingRowItem";
@@ -16,9 +16,7 @@ import type { SettingEditContext } from "./SettingRowItem";
 
 export const HOSTS_KEY = "hosts";
 
-// What a server's job is called on the page; a server doing chat runs the models that write and read pictures
-const JOB_CHOICES: { value: string; label: string }[] = Object.entries(PROVIDER_KINDS)
-  .map(([value, label]) => ({ value, label: value === "chat" ? "Language and picture models" : label }));
+const JOB_CHOICES = PROVIDER_JOB_CHOICES;
 
 function readHosts(rows: SettingRow[], context: SettingEditContext): Tree {
   const hostsRow = rows.find((row) => row.key === HOSTS_KEY);

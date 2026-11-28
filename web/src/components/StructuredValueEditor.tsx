@@ -1,6 +1,6 @@
 import { useState } from "react";
 import Icon from "./Icon";
-import { readSettingLabel } from "../settingsLabels";
+import { PROVIDER_JOB_CHOICES, readSettingLabel } from "../settingsLabels";
 
 // A setting whose value is a list or a map, edited as a small table: a row a name or an item, a box for each value, a
 // button to take a row out and one to add a row. Nobody types JSON: the draft the page keeps is the table's value, which
@@ -11,12 +11,12 @@ type Tree = Record<string, unknown>;
 // The columns of a table of objects when the value is empty and shows none, and what each column is called
 const COLUMN_HINTS: Record<string, string[]> = { hosts: ["url", "apiKeyEnv", "kinds"], "tags.nameRules": ["prefix", "tag"] };
 const COLUMN_TITLES: Record<string, string> = {
-  url: "Address", apiKeyEnv: "Token (environment variable name)", kinds: "Jobs", prefix: "Name starts with", tag: "Tag",
+  url: "Address", apiKeyEnv: "Token (environment variable name)", kinds: "Jobs it can do", prefix: "Name starts with", tag: "Tag",
   name: "Name", value: "Value",
 };
 // What an empty box of a column shows as its example
-const COLUMN_EXAMPLES: Record<string, string> = { apiKeyEnv: "e.g. OPENROUTER_API_KEY; empty: no login", kinds: "chat, speech" };
-// The columns whose value is a list of words, typed as words with commas between them
+const COLUMN_EXAMPLES: Record<string, string> = { apiKeyEnv: "e.g. OPENROUTER_API_KEY; empty: no login" };
+// The columns whose value is a server's jobs, picked by tick boxes
 const LIST_COLUMNS = new Set(["kinds"]);
 
 function isTree(value: unknown): value is Tree {
@@ -57,19 +57,21 @@ function ScalarBox({ value, label, example, onChange }: {
     onChange={(event) => onChange(parseTyped(event.target.value, value))} />;
 }
 
-// A list of words shown as "chat, speech" and written back as ["chat", "speech"]; the typed text is kept while the box
-// is in use, so a comma or a space just typed is not removed under the cursor
-function WordListBox({ value, label, example, onChange }: {
-  value: unknown; label: string; example?: string; onChange: (next: string[]) => void;
-}) {
-  const words = Array.isArray(value) ? value.map(String) : [];
-  const [typed, setTyped] = useState<string | null>(null);
-  return <input type="text" aria-label={label} placeholder={example} value={typed ?? words.join(", ")}
-    onChange={(event) => {
-      setTyped(event.target.value);
-      onChange(event.target.value.split(",").map((word) => word.trim()).filter(Boolean));
-    }}
-    onBlur={() => setTyped(null)} />;
+// The jobs a server can do, one tick box a job with its plain name; written back as the ticked jobs' stored words
+function JobTicks({ value, label, onChange }: { value: unknown; label: string; onChange: (next: string[]) => void }) {
+  const ticked = Array.isArray(value) ? value.map(String) : [];
+  return (
+    <div className="suits">
+      {PROVIDER_JOB_CHOICES.map((choice) => (
+        <label key={choice.value} className="suit-choice">
+          <input type="checkbox" aria-label={`${label}: ${choice.label}`} checked={ticked.includes(choice.value)}
+            onChange={(event) => onChange(PROVIDER_JOB_CHOICES.map((each) => each.value).filter((each) =>
+              each === choice.value ? event.target.checked : ticked.includes(each)))} />
+          {choice.label}
+        </label>
+      ))}
+    </div>
+  );
 }
 
 // A red square trash icon that takes one row out; its title and accessible name say what it takes out
@@ -230,8 +232,8 @@ function ObjectMapTable({ value, label, hint, onChange }: {
               <th scope="row">{each}</th>
               {columns.map((column) => (
                 <td key={column} data-label={readColumnTitle(column)} className={`col-${column}`}>
-                  {LIST_COLUMNS.has(column) || Array.isArray(value[each][column])
-                    ? <WordListBox value={value[each][column]} example={COLUMN_EXAMPLES[column]} label={`${label}: ${each} ${readColumnTitle(column)}`}
+                  {LIST_COLUMNS.has(column)
+                    ? <JobTicks value={value[each][column]} label={`${label}: ${each} ${readColumnTitle(column)}`}
                       onChange={(next) => onChange({ ...value, [each]: { ...value[each], [column]: next } })} />
                     : <ScalarBox value={value[each][column] ?? ""} example={COLUMN_EXAMPLES[column]} label={`${label}: ${each} ${readColumnTitle(column)}`}
                       onChange={(next) => onChange({ ...value, [each]: { ...value[each], [column]: next } })} />}

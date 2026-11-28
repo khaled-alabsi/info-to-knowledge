@@ -39,14 +39,16 @@ describe("StructuredValueEditor", () => {
     expect(onChange).toHaveBeenLastCalledWith({ lmstudio: { url: "http://localhost:1234/v1" } });
   });
 
-  it("edits a provider's jobs as words with commas and gives back a list of words, never one string", async () => {
+  it("picks a server's jobs by tick boxes with plain names, never a typing box of code words defect", async () => {
+    // The jobs column was a typing box holding "chat", and the owner had to guess which words the program accepts.
+    // It is now one tick box a job, named in plain words, written back as the stored words.
     const onChange = vi.fn();
     render(<StructuredValueEditor settingKey="hosts" label="hosts" onChange={onChange}
       value={{ lmstudio: { url: "http://localhost:1234/v1", apiKeyEnv: "", kinds: ["chat"] } }} />);
-    expect(screen.getByRole("columnheader", { name: "Jobs" })).toBeInTheDocument();
-    const box = screen.getByRole("textbox", { name: "hosts: lmstudio Jobs" });
-    expect(box).toHaveValue("chat");
-    await userEvent.type(box, ", speech");
+    expect(screen.getByRole("columnheader", { name: "Jobs it can do" })).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: /Jobs/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "hosts: lmstudio Jobs it can do: Language and picture models" })).toBeChecked();
+    await userEvent.click(screen.getByRole("checkbox", { name: "hosts: lmstudio Jobs it can do: Speech to text" }));
     expect(onChange).toHaveBeenLastCalledWith({ lmstudio: { url: "http://localhost:1234/v1", apiKeyEnv: "", kinds: ["chat", "speech"] } });
     await userEvent.type(screen.getByRole("textbox", { name: "hosts: new name" }), "gpu-box");
     await userEvent.click(screen.getByRole("button", { name: "Add row" }));

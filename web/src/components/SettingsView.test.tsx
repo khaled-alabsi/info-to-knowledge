@@ -324,8 +324,8 @@ describe("Settings", () => {
     // the help comes from the page's own words, never the program's comment
     expect(screen.getByText("How many times a step may be tried before a rejection blocks it.")).toBeInTheDocument();
     expect(screen.queryByText("Answers a step may give")).not.toBeInTheDocument();
-    expect(within(field.closest(".setting-row") as HTMLElement).getByText("changed")).toBeInTheDocument();
-    // a value the program's own code or the shipped default settings give shows no mark at all
+    // a saved value carries no mark, whichever file set it; only an unsaved change is marked
+    expect(within(field.closest(".setting-row") as HTMLElement).queryByText("changed")).not.toBeInTheDocument();
     expect(within(screen.getByRole("checkbox", { name: "review.isOn" }).closest(".setting-row") as HTMLElement)
       .queryByText("changed")).not.toBeInTheDocument();
     await userEvent.clear(field);
@@ -404,20 +404,19 @@ describe("Settings", () => {
     await userEvent.click(screen.getByRole("button", { name: "Edit: default settings" }));
     await userEvent.click(screen.getByRole("menuitemradio", { name: "profile: strict" }));
     await userEvent.click(screen.getByRole("button", { name: "Discard the changes and switch" }));
-    expect(await screen.findByTitle("set by profile strict")).toBeInTheDocument();
+    expect(await screen.findByText(/Profile strict sets 1 setting:/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Save settings/ })).not.toBeInTheDocument();
   });
 
   it("names what a chosen profile sets, so a switch that changes only those rows is seen defect", async () => {
     // Choosing a profile that sets two model addresses left every row in view as it was, and the owner read it as the
-    // switch changing nothing. The page now names the settings the profile sets and marks their rows "changed", by profile
+    // switch changing nothing. The page now names the settings the profile sets in one line above the groups
     serveSettings();
     await openSettings();
     await userEvent.click(screen.getByRole("button", { name: "Edit: default settings" }));
     await userEvent.click(screen.getByRole("menuitemradio", { name: "profile: strict" }));
     expect(await screen.findByText(/Profile strict sets 1 setting:/)).toHaveTextContent(
       "Profile strict sets 1 setting: Tries per step. Every other value is the default settings'.");
-    expect(screen.getByTitle("set by profile strict")).toBeInTheDocument();
   });
 
   it("asks before a switch drops unsaved changes, and switches at once with none", async () => {

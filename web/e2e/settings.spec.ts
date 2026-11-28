@@ -41,8 +41,8 @@ test("lists every setting under its section and card, each closed until opened",
   await expect(framesPerCall).toHaveValue("7");
   // the help text comes from the page's own labels, not the settings file's comment
   await expect(page.getByText("How many consecutive frames the model reads in one call; 1 means one call for each frame.")).toBeVisible();
-  // a value set in the owner's own settings file is marked, in the open card
-  await expect(page.getByText("changed", { exact: true }).locator("visible=true").first()).toBeVisible();
+  // a saved value carries no "changed" mark, whichever file set it
+  await expect(page.getByText("changed", { exact: true })).toHaveCount(0);
 });
 
 test("a change is a draft until Save settings writes it", async ({ page, api }) => {

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import type { SettingRow } from "../api";
-import { describeRunValue, isOwnerChange } from "../settingRunValue";
+import { describeRunValue } from "../settingRunValue";
 import { readChoiceLabel, readSettingHelp, readSettingLabel } from "../settingsLabels";
 import OptionMenu from "./OptionMenu";
 import type { SettingDrafts } from "./SettingsView";
@@ -41,7 +41,7 @@ function parseJson(raw: string): unknown {
 
 // One setting as a line of the page: its plain label and a mark when changed, the help under it, and its editor
 export default function SettingRowItem({ row, context, label }: { row: SettingRow; context: SettingEditContext; label?: string }) {
-  const { rows, drafts, profile, edit, typedKeys, setTyped } = context;
+  const { rows, drafts, edit, typedKeys, setTyped } = context;
   const raw = drafts[row.key]?.raw ?? readEditorValue(row);
   const optionValues = (row.choice_options ?? []).map((option) => option.value);
   const isTyped = Boolean(row.is_open_choice) && (typedKeys.includes(row.key) || !optionValues.includes(String(raw)));
@@ -63,14 +63,8 @@ export default function SettingRowItem({ row, context, label }: { row: SettingRo
       <div className="setting-text">
         <div className="setting-name">
           <span className="setting-label">{label ?? readSettingLabel(row.key)}</span>
-          {/* a built-in or shipped default value shows no mark; only a value the owner's own file or a profile changes
-              does, and a change not saved yet is its own mark */}
-          {drafts[row.key]
-            ? <span className="pill warn" title="typed here, not saved yet">unsaved</span>
-            : isOwnerChange(row.source) && (
-              <span className={`pill${profile && row.source === profile ? " running" : ""}`}
-                title={profile && row.source === profile ? `set by profile ${profile}` : "set in your own settings file"}>changed</span>
-            )}
+          {/* only a change typed here and not saved yet is marked; a saved value carries no mark */}
+          {drafts[row.key] && <span className="pill warn" title="typed here, not saved yet">unsaved</span>}
         </div>
         {(help || row.comment) && <p className="muted setting-comment">{help || renderComment(row.comment)}</p>}
       </div>

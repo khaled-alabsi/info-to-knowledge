@@ -48,6 +48,10 @@ export const PROVIDER_KINDS: Record<string, string> = {
   decision: "Decision filter",
 };
 
+// The jobs a model server can do, as tick boxes show them; a server doing chat runs the models that write and read frames
+export const PROVIDER_JOB_CHOICES: { value: string; label: string }[] = Object.entries(PROVIDER_KINDS)
+  .map(([value, label]) => ({ value, label: value === "chat" ? "Language and picture models" : label }));
+
 function buildProviderEntries(): Record<string, SettingLabel> {
   const entries: Record<string, SettingLabel> = {};
   for (const [kind, name] of Object.entries(PROVIDER_KINDS)) {
