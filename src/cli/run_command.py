@@ -608,8 +608,10 @@ def resolve_paths(args: argparse.Namespace) -> RunPaths:
     # `RunPaths` names a target as a folder plus a name inside it. A file target is exactly that pair: the folder is the
     # file's own, the name is the file's, and everything this run writes goes under the output folder the line names.
 
-    target_file = args.target_file.expanduser().resolve()
-    output_root = args.output_root.expanduser().resolve()
+    # A job queued before the repository's folder was renamed names its paths under the old folder: each is read as the
+    # same path under the folder it is now
+    target_file = Path(config.read_current_path(str(args.target_file.expanduser()))).resolve()
+    output_root = Path(config.read_current_path(str(args.output_root.expanduser()))).resolve()
     # A done run keeps its recording in its folder: the inbox path its record names
     # finds it there
     if not target_file.exists():

@@ -118,6 +118,30 @@ def test_a_run_made_before_the_folder_rename_stays_in_its_list_defect():
                   == "/srv/media/video-to-knowledge-2/a.mp4")
 
 
+def test_a_job_queued_before_the_folder_rename_starts_on_its_recording_in_the_inbox_now_defect():
+    # The defect: a job queued before the repository's folder was renamed named its recording under the old folder,
+    # and its start was refused "does not exist". The fix: the start reads that path under the folder it is now.
+    inbox, run_folder, video = _build_place()
+    workspace = inbox.parent
+    old_workspace = workspace.parent / f"{workspace.name}-before-rename"
+    original = config._RETIRED_ROOTS
+    config._RETIRED_ROOTS = ((old_workspace, workspace),)
+    try:
+        logger, _handler = _build_logger()
+        args = _build_fresh_run_args(old_workspace / "inbox" / video.name,
+                                     old_workspace / "output" / run_folder.name, logger)
+        paths = run_command.resolve_paths(args)
+    except Exception as exc:
+        paths = exc
+    finally:
+        config._RETIRED_ROOTS = original
+    harness.check("started on the recording under the folder it is now",
+                  isinstance(paths, RunPaths) and paths.repository == inbox.resolve() and paths.module == video.name,
+                  str(paths))
+    harness.check("its run folder read under the folder it is now",
+                  isinstance(paths, RunPaths) and paths.output_root_override == run_folder.resolve(), str(paths))
+
+
 def test_a_run_not_done_or_a_video_outside_the_inbox_moves_nothing():
     inbox, run_folder, video = _build_place()
     kept = run_recording_service.keep_recording_if_done({"status": "complete",
