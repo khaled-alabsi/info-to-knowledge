@@ -22,6 +22,13 @@ export function describeRunValue(row: RunValueFields): string {
   return row.kind === "long-text" ? "not used" : "automatic";
 }
 
+// The value a run uses alone, short enough for a box's placeholder on a phone ("4", "lmstudio"), or "automatic" when a
+// run uses no value; `describeRunValue` gives the whole line with where it comes from
+export function describeRunValueShort(row: RunValueFields): string {
+  if (isEmptyValue(row.resolved)) return "automatic";
+  return row.key ? readChoiceLabel(row.key, String(row.resolved)) : String(row.resolved);
+}
+
 // A value as the page prints it: its own text, or what a run uses when it has none
 export function describeValue(row: RunValueFields | null, value: unknown): string {
   if (!isEmptyValue(value)) return typeof value === "string" ? value : JSON.stringify(value);

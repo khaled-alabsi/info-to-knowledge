@@ -1,5 +1,5 @@
 import type { SettingRow } from "../api";
-import { describeRunValue } from "../settingRunValue";
+import { describeRunValue, describeRunValueShort, isEmptyValue } from "../settingRunValue";
 import { listFixedChoices, readChoiceLabel, readSettingHelp, readSettingLabel } from "../settingsLabels";
 import OptionMenu from "./OptionMenu";
 import type { SettingDrafts } from "./SettingsView";
@@ -110,9 +110,16 @@ export default function SettingRowItem({ row, context, label }: { row: SettingRo
                 onChange={(next) => edit(row, JSON.stringify(next, null, 2))} />
         ) : (
           // A number in a text box: a number box shows the browser's own decimal sign, a comma in a German browser
-          <input type="text" inputMode={row.kind === "number" ? "decimal" : undefined} aria-label={name} value={String(raw)}
-            placeholder={row.value === null || row.value === "" ? describeRunValue(row) : undefined}
-            onChange={(event) => edit(row, event.target.value)} />
+          // An empty box shows the value a run uses as its placeholder, and where it comes from on a grey line under
+          // it: the two together in the placeholder ran past the box on a phone ("no key is needed: a placeholder is ser")
+          <>
+            <input type="text" inputMode={row.kind === "number" ? "decimal" : undefined} aria-label={name} value={String(raw)}
+              placeholder={isEmptyValue(raw) ? describeRunValueShort(row) : undefined}
+              onChange={(event) => edit(row, event.target.value)} />
+            {isEmptyValue(raw) && describeRunValueShort(row) !== describeRunValue(row) && (
+              <small className="muted run-value-note">{describeRunValue(row)}</small>
+            )}
+          </>
         )}
       </div>
     </div>

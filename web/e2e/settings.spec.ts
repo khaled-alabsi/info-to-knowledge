@@ -524,9 +524,12 @@ for (const size of SCREEN_WIDTHS) {
       // a setting nobody changed is not on the page: a search finds it
       await page.getByRole("searchbox").fill("Spoken language");
       const language = page.getByRole("textbox", { name: "Spoken language" });
-      await expect(language).toHaveAttribute("placeholder", "found from the recording");
+      // the box holds the short value and the note stands under it, so nothing is cut off on a phone
+      await expect(language).toHaveAttribute("placeholder", "automatic");
       await expectInsideScreen(page, language);
       const row = language.locator("xpath=ancestor::div[contains(@class,'setting-row')]");
+      await expect(row.getByText("found from the recording")).toBeVisible();
+      await expectInsideScreen(page, row.getByText("found from the recording"));
       await expect(row.getByText("code", { exact: true })).toHaveCount(0);
       await expect(row.getByText("default", { exact: true })).toHaveCount(0);
       await page.getByRole("searchbox").fill("");
