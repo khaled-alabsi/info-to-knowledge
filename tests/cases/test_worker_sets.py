@@ -202,14 +202,18 @@ def test_a_profile_alone_wins_over_the_default_settings_and_the_set_is_the_defau
                   f"{attempts}, {name_in_force}")
 
 
-def test_the_shipped_default_file_holds_no_worker_set_and_a_set_laid_over_it_keeps_its_other_values():
-    """The shipped default file is the public one: it names the keys and holds no set of a machine of its own (a person's
-    sets live in `playbook.local.json`); a set laid over it changes only the values it names."""
+def test_the_shipped_default_file_holds_only_the_strict_set_and_a_set_laid_over_it_keeps_its_other_values():
+    """The shipped default file is the public one: it names the keys and holds the strict set, which names no machine and no
+    host (a person's own sets live in `playbook.local.json`); a set laid over it changes only the values it names."""
 
     shipped_default = json.loads(config.DEFAULT_CONFIG_FILE.read_text(encoding="utf-8"))
     harness.check("the default settings file holds `workerSets` and `defaultWorkerSet`",
                   "workerSets" in shipped_default and "defaultWorkerSet" in shipped_default, f"{sorted(shipped_default)[:3]}")
-    harness.check("it holds no set of its own", [name for name in shipped_default["workerSets"] if not name.startswith("_")] == [])
+    shipped_sets = {name: values for name, values in shipped_default["workerSets"].items() if not name.startswith("_")}
+    harness.check("the one shipped set is strict, and no shipped set names a machine or a host",
+                  sorted(shipped_sets) == ["strict"]
+                  and all("machine" not in values and "hosts" not in values for values in shipped_sets.values()),
+                  f"{sorted(shipped_sets)}")
     built = config.read_settings_files(config.DEFAULT_CONFIG_FILE, Path(tempfile.mkdtemp()) / "none.json")
     harness.check("the file builds into settings", config.Settings(**built).default_worker_set == "default")
     host = "http://second-host.example:8090/v1"

@@ -312,9 +312,10 @@ def list_worker_sets() -> dict:
     merged = config.read_layers(profile_name=config.PROFILE_NAME, worker_set_name=config.DEFAULT_WORKER_SET_NAME)
     named = merged.get("workerSets") or {}
     label = config.WORKER_SET_LABEL_KEY
-    default_set = {"name": config.DEFAULT_WORKER_SET_NAME, "changes": [], "machine": str(merged.get(label) or "")}
+    default_set = {"name": config.DEFAULT_WORKER_SET_NAME, "changes": [], "machine": config.read_set_machine(merged)}
+    # A set names its own machine, never the default's: with none of its own it is the provider its job runs on
     named_set_list = [{"name": name, "changes": sorted(key for key in values if not key.startswith("_") and key != label),
-                       "machine": str(values.get(label) or "")}
+                       "machine": config.read_set_machine({**config.merge_settings(merged, values), label: values.get(label, "")})}
                       for name, values in sorted(named.items()) if not name.startswith("_")]
 
     return {"default_set": merged.get("defaultWorkerSet", config.DEFAULT_WORKER_SET_NAME),

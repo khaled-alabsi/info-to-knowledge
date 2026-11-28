@@ -1,25 +1,23 @@
 import { useEffect, useState } from "react";
-import { describeError, fetchJson, saveSetting } from "../api";
+import { describeError, fetchJson, removeSetting, saveSetting } from "../api";
 import type { MissingProvider, SettingRow } from "../api";
-import { describeRunValue, isOwnerChange } from "../settingRunValue";
+import { asTree, listJobs, MODELS_KEY, PHASE_MODELS_KEY, readPath } from "../modelLibrary";
+import { findSectionGroup, findSubgroupTitle, isSettingHidden, readSettingHelp, readSettingLabel, readSettingPrefix, SECTION_GROUPS,
+  SECTION_SUBGROUPS } from "../settingsLabels";
 import { usePersistentState } from "../viewState";
 import Icon from "./Icon";
+import { buildNewModelRow, copyModelFields } from "./ModelLibrary";
 import OptionMenu from "./OptionMenu";
+import ServerCards, { countServerCards } from "./ServerCards";
 import { useSettingsProfiles } from "./RunChoices";
+import SettingRowItem, { readEditorValue } from "./SettingRowItem";
+import type { SettingEditContext } from "./SettingRowItem";
 import Spinner from "./Spinner";
 import WorkerSetsPanel, { WORKER_SET_KEYS } from "./WorkerSetsPanel";
 
 // A change typed but not saved yet: its row, and the editor's value as it stands (text, or a checkbox's state)
 export type SettingDraft = { row: SettingRow; raw: string | boolean };
 export type SettingDrafts = Record<string, SettingDraft>;
-
-// The value an editor holds for a row: a checkbox's state, or text (JSON for lists and maps)
-function readEditorValue(row: SettingRow): string | boolean {
-  if (row.kind === "bool") return Boolean(row.value);
-  // laid out one field a line: written on one line, a list of rules ran past its box (the owner)
-  if (row.kind === "json") return JSON.stringify(row.value, null, 2);
-  return row.value === null || row.value === undefined ? "" : String(row.value);
-}
 
 function parseValue(row: SettingRow, raw: string | boolean): unknown {
   if (row.kind === "bool") return raw;
@@ -62,68 +60,73 @@ export async function saveDrafts(drafts: SettingDrafts, profile: string): Promis
   return { left, message: [done, ...refusals].filter(Boolean).join(" · "), isError: refusals.length > 0 };
 }
 
-function isJson(text: string): boolean {
-  try {
-    JSON.parse(text);
-    return true;
-  } catch {
-    // only a parse error is expected here: the text is what the person is typing
-    return false;
-  }
+// The page's sections in setup order: the model servers with the models that run on each, the worker sets that link jobs to
+// models, then the rest by the person's job (`SECTION_GROUPS`, the servers group's own rows standing in the first two)
+const SERVERS = "servers";
+const WORKER_SETS = "worker-sets";
+const OTHER = "other";
+const HOST_PREFIXES = ["hosts", "providers"];
+const SECTION_INTROS: Record<string, string> = {
+  [SERVERS]: "",
+  [WORKER_SETS]: "",
+  [OTHER]: "Settings no other section lists.",
+};
+
+type Section = { id: string; title: string; intro: string };
+
+const SECTIONS: Section[] = [
+  { id: SERVERS, title: "Model servers", intro: SECTION_INTROS[SERVERS] },
+  { id: WORKER_SETS, title: "Worker sets", intro: SECTION_INTROS[WORKER_SETS] },
+  ...SECTION_GROUPS.filter((group) => group.id !== "machines-and-models")
+    .map((group) => ({ id: group.id, title: group.title, intro: group.intro })),
+  { id: OTHER, title: "Other settings", intro: SECTION_INTROS[OTHER] },
+];
+
+// The section a setting stands in; the models, the worker sets' links and the fast workflow's models have panels of their
+// own and never a row in a section
+function readSectionId(row: SettingRow, jobKeys: Set<string>): string {
+  const prefix = readSettingPrefix(row.key);
+  if (prefix === MODELS_KEY) return SERVERS;
+  if (WORKER_SET_KEYS.has(row.key) || prefix === PHASE_MODELS_KEY || jobKeys.has(row.key)) return WORKER_SETS;
+  if (HOST_PREFIXES.includes(prefix)) return SERVERS;
+  return findSectionGroup(row.key)?.id ?? OTHER;
 }
-
-// A setting with no dot in its key stands in the "general" section, never in a section of its own
-const GENERAL = "general";
-
-// The worker sets' keys have no dot but are a subject of their own (the owner): they stand in their own section, first
-const WORKER_SETS = "workerSets";
-
-function readSectionName(row: SettingRow): string {
-  if (WORKER_SET_KEYS.has(row.key)) return WORKER_SETS;
-  return row.key.includes(".") ? row.key.split(".")[0] : GENERAL;
-}
-
-// The sections in the order the rows give them, the worker sets' first
-function orderSections(names: string[]): string[] {
-  return names.includes(WORKER_SETS) ? [WORKER_SETS, ...names.filter((name) => name !== WORKER_SETS)] : names;
-}
-
-// A section whose key is a name, written as the name is written
-const SECTION_TITLES: Record<string, string> = { pdf: "PDF", [WORKER_SETS]: "Worker sets" };
 
 // "framesProcessing" as "Frames processing"
-function renderSectionTitle(section: string): string {
-  if (SECTION_TITLES[section]) return SECTION_TITLES[section];
-  const words = section.replace(/([A-Z])/g, " $1").toLowerCase();
-  return words.charAt(0).toUpperCase() + words.slice(1);
+function renderPrefixTitle(prefix: string): string {
+  const words = prefix.replace(/([A-Z])/g, " $1").toLowerCase();
+  return words === "pdf" ? "PDF" : words.charAt(0).toUpperCase() + words.slice(1);
 }
 
-// The section whose entries are models, each under a name the person gives
-const MODELS_SECTION = "models";
+type SettingCard = { title: string; rows: SettingRow[] };
 
-// The configured models' names, read from the rows of their fields (`models.<name>.<field>`)
-function listModelNames(rows: SettingRow[]): string[] {
-  return [...new Set(rows.filter((row) => row.path?.[0] === MODELS_SECTION && row.path.length > 2).map((row) => row.path![1]))];
+// The cards a section's settings stand in, each titled by what its settings do: the section's own list of cards when it has
+// one (the settings no card lists in a last card), else one card a first part of the keys. A card is never titled like its
+// section: a section of one such group takes the title "<section>: settings"
+export function listSettingCards(section: { id: string; title: string }, rows: SettingRow[]): SettingCard[] {
+  const cards: SettingCard[] = [];
+  const put = (title: string, row: SettingRow) => {
+    const card = cards.find((each) => each.title === title);
+    if (card) card.rows.push(row);
+    else cards.push({ title, rows: [row] });
+  };
+  for (const row of rows) {
+    const title = findSubgroupTitle(section.id, row.key)
+      ?? (SECTION_SUBGROUPS[section.id] ? `More ${section.title.toLowerCase()} settings` : renderPrefixTitle(readSettingPrefix(row.key)));
+    put(title.toLowerCase() === section.title.toLowerCase() ? `${section.title}: settings` : title, row);
+  }
+  // the cards stand in the order the section lists them
+  const order = (SECTION_SUBGROUPS[section.id] ?? []).map((group) => group.title);
+  return cards.sort((first, second) => {
+    const rank = (card: SettingCard) => order.indexOf(card.title) < 0 ? order.length : order.indexOf(card.title);
+    return rank(first) - rank(second);
+  });
 }
 
-// A new model's settings, copied from `source`: every field a settings file sets for it, so the copy reads as it does
-function copyModelSettings(rows: SettingRow[], source: string): Record<string, unknown> {
-  const fields = rows.filter((row) => row.path?.[0] === MODELS_SECTION && row.path[1] === source && row.path.length === 3);
-  const setFields = fields.filter((row) => row.source !== "code");
-  return Object.fromEntries((setFields.length ? setFields : fields.filter((row) => row.path![2] === "spec"))
-    .map((row) => [row.path![2], row.value]));
-}
-
-// The row a new model stands on until it is saved: its whole entry, edited as JSON
-function buildNewModelRow(name: string, source: string): SettingRow {
-  return { key: `${MODELS_SECTION}.${name}`, path: [MODELS_SECTION, name], value: null, kind: "json", source: "new",
-    comment: `A new model, copied from ${source}. Save settings writes it; then each of its fields can be chosen from its list.` };
-}
-
-// A comment's `code` spans drawn as code, the rest as plain text
-function renderComment(comment: string) {
-  return comment.split(/(`[^`]+`)/).map((part, index) =>
-    part.startsWith("`") && part.endsWith("`") && part.length > 2 ? <code key={index}>{part.slice(1, -1)}</code> : part);
+// A setting's words matched by a search: its label, its help, its key and the program's comment
+function matchesSearch(row: SettingRow, needle: string): boolean {
+  return !needle || [readSettingLabel(row.key), readSettingHelp(row.key), row.key, row.comment]
+    .some((text) => text.toLowerCase().includes(needle));
 }
 
 // Every setting with its value in force, the file that set it and its comment. A change is a draft, marked, until the
@@ -147,15 +150,17 @@ export default function SettingsView({ profile, onProfileChange, drafts, onDraft
   const profiles = settingsProfiles.profiles ?? [];
   const [rows, setRows] = useState<SettingRow[] | null>(null);
   const [filter, setFilter] = useState("");
-  // Every group closed until opened, and kept open when the settings are left and opened again; a search opens each
-  // group holding a match
+  // Every section closed until opened, and kept open when the settings are left and opened again; a search opens each
+  // section holding a match
   const [openSections, setOpenSections] = usePersistentState<string[]>("settingsSections", []);
+  // The cards inside a section stay closed until opened too, and keep their state like the sections
+  const [openCards, setOpenCards] = usePersistentState<string[]>("settingsCards", []);
   // The rows whose value is being typed in a box, after "Other…" was picked from their list
   const [typedKeys, setTypedKeys] = useState<string[]>([]);
-  // The "+ Add model" form while it is open: the new model's name and the model it is copied from
-  const [newModel, setNewModel] = useState<{ name: string; source: string } | null>(null);
   // The file chosen in the Edit menu while changes were unsaved, waiting for the person to keep or drop them
   const [pendingProfile, setPendingProfile] = useState<string | null>(null);
+  // Counts the reads the page asked for itself (after a model was taken out), beside the app's own `version`
+  const [reloads, setReloads] = useState(0);
   const draftCount = Object.keys(drafts).length;
   const describeFile = (name: string) => name ? `profile ${name}` : "the default settings";
   // a draft belongs to the file it was typed for: the switch drops them all (App's onProfileChange)
@@ -173,38 +178,67 @@ export default function SettingsView({ profile, onProfileChange, drafts, onDraft
   useEffect(() => {
     fetchJson<SettingRow[]>(`/settings${profile ? `?profile=${encodeURIComponent(profile)}` : ""}`)
       .then(setRows).catch((error: Error) => onMessage(error.message, true));
-  }, [profile, version, onMessage]);
+  }, [profile, version, reloads, onMessage]);
 
   const edit = (row: SettingRow, raw: string | boolean) => onDraft(row.key, raw === readEditorValue(row) ? null : { row, raw });
   const needle = filter.trim().toLowerCase();
+  const allRows = rows ?? [];
+  const jobKeys = new Set(listJobs(allRows).map((job) => job.key));
   // a model added and not saved yet stands among the rows, as a draft of its own
-  const rowKeys = new Set((rows ?? []).map((row) => row.key));
-  const newRows = Object.values(drafts).map((draft) => draft.row).filter((row) => !rowKeys.has(row.key));
-  const shown = [...(rows ?? []), ...newRows].filter((row) => !needle || row.key.toLowerCase().includes(needle)
-    || row.comment.toLowerCase().includes(needle));
-  const modelNames = listModelNames(rows ?? []);
-  const takenNames = new Set([...modelNames, ...newRows.map((row) => row.path?.[1] ?? "")]);
-  const newModelName = newModel?.name.trim() ?? "";
-  const addModel = () => {
-    if (!newModel || !newModelName || takenNames.has(newModelName)) return;
-    onDraft(`${MODELS_SECTION}.${newModelName}`, { row: buildNewModelRow(newModelName, newModel.source),
-      raw: JSON.stringify(copyModelSettings(rows ?? [], newModel.source), null, 2) });
-    setNewModel(null);
-  };
-  // A model spec's sibling row naming the model's host (`models.<name>.host`), and the host in force: its draft when one
-  // is chosen (empty meaning the host named like the provider), else the one the server says the model runs on
-  const findHostRow = (specRow: SettingRow) => (rows ?? []).find((candidate) => candidate.path?.length === 3
-    && candidate.path[0] === specRow.path?.[0] && candidate.path[1] === specRow.path?.[1] && candidate.path[2] === "host");
-  const readModelHost = (specRow: SettingRow): string | undefined => {
-    if (specRow.chosen_host === undefined) return undefined;
-    const hostRow = findHostRow(specRow);
-    const draft = hostRow ? drafts[hostRow.key] : undefined;
-    if (!draft) return specRow.chosen_host;
-    return String(draft.raw) || specRow.default_host;
-  };
+  const newRows = Object.values(drafts).map((draft) => draft.row).filter((row) => row.source === "new");
+  const visible = allRows.filter((row) => !isSettingHidden(row.key) && !row.key.startsWith("_"));
   const setTyped = (key: string, isTyped: boolean) =>
     setTypedKeys((current) => isTyped ? [...new Set([...current, key])] : current.filter((name) => name !== key));
-  const sections = orderSections([...new Set(shown.map(readSectionName))]);
+  const context: SettingEditContext = { rows: allRows, drafts, profile, edit, typedKeys, setTyped };
+
+  // The fields of a model added and not saved yet are one draft, its whole entry; a field typed on its card rewrites it
+  const addModel = (name: string, source: string, host: string) => onDraft(`${MODELS_KEY}.${name}`, {
+    row: buildNewModelRow(name, source), raw: JSON.stringify(copyModelFields(allRows, source, host), null, 2),
+  });
+  const editNewModel = (name: string, field: string, value: unknown) => {
+    const key = `${MODELS_KEY}.${name}`;
+    const draft = drafts[key];
+    if (!draft) return;
+    let fields: Record<string, unknown> = {};
+    try {
+      const parsed: unknown = JSON.parse(String(draft.raw));
+      fields = asTree(parsed);
+    } catch {
+      // the page writes this draft itself, so an unreadable one starts the copy again from its fields
+      fields = {};
+    }
+    const { [field]: _old, ...others } = fields;
+    onDraft(key, { row: draft.row, raw: JSON.stringify(value === null || value === "" ? others : { ...others, [field]: value }, null, 2) });
+  };
+  const removeModel = async (name: string) => {
+    try {
+      const answer = await removeSetting([MODELS_KEY, name], profile);
+      onMessage(answer.output, answer.exit_code !== 0);
+      if (answer.exit_code === 0) setReloads((count) => count + 1);
+    } catch (error) {
+      onMessage(`${name}: ${describeError(error)}`, true);
+    }
+  };
+
+  const modelNames = [...new Set(allRows.filter((row) => readPath(row)[0] === MODELS_KEY && readPath(row).length === 3)
+    .map((row) => readPath(row)[1]))];
+  const setNames = Object.keys(asTree(allRows.find((row) => row.key === "workerSets")?.value));
+  const sectionRows = (id: string) => visible.filter((row) => readSectionId(row, jobKeys) === id && matchesSearch(row, needle));
+  // The servers (with their models) and the worker sets stand on their own panels, so they show whenever the settings hold
+  // them; a section of rows shows when it has a row, and a search keeps the sections holding a match
+  const serverNames = Object.keys(asTree(allRows.find((row) => row.key === "hosts")?.value));
+  const isShown = (id: string) => {
+    if (id === SERVERS) return (serverNames.length + modelNames.length + newRows.length > 0) && (!needle || "model servers".includes(needle)
+      || serverNames.some((name) => name.toLowerCase().includes(needle)) || modelNames.some((name) => name.toLowerCase().includes(needle)));
+    if (id === WORKER_SETS) return allRows.some((row) => row.key === "workerSets")
+      && (!needle || "worker sets".includes(needle) || sectionRows(id).length > 0 || setNames.some((name) => name.toLowerCase().includes(needle)));
+    return sectionRows(id).length > 0;
+  };
+  // the number beside a title counts the cards the section shows
+  const countOf = (id: string): number => id === SERVERS ? countServerCards(allRows, context, newRows)
+    : id === WORKER_SETS ? setNames.length + 1
+    : listSettingCards(SECTIONS.find((section) => section.id === id) ?? { id, title: id }, sectionRows(id)).length;
+  const shownSections = SECTIONS.filter((section) => isShown(section.id));
 
   return (
     <section className="settings-view">
@@ -228,10 +262,10 @@ export default function SettingsView({ profile, onProfileChange, drafts, onDraft
             if (draftCount > 0) setPendingProfile(next); else onProfileChange(next);
           }} />
         <input type="search" className="grow" aria-label="Find" value={filter}
-          placeholder="Find a key or a word of its comment" onChange={(event) => setFilter(event.target.value)} />
+          placeholder="Find a setting" onChange={(event) => setFilter(event.target.value)} />
       </header>
-      <p className="muted">A change is marked until you press Save settings in the top bar. A run already going keeps its values;
-        the next run reads the files at its start.</p>
+      <p className="muted">A change stays marked until you press Save settings in the top bar. A run already going keeps its
+        values; the next run uses the saved ones.</p>
       {missingProviders.length > 0 && (
         <div className="settings-switch-warning" role="alert">
           <p><strong>A model provider a run needs is not set up.</strong> A run is refused until each model below has one:
@@ -263,109 +297,51 @@ export default function SettingsView({ profile, onProfileChange, drafts, onDraft
               Profile {profile} sets {profileRows.length === 1 ? "1 setting" : `${profileRows.length} settings`}:{" "}
               {profileRows.map((row, index) => (
                 <span key={row.key}>{index > 0 && ", "}
-                  <button className="link-button" onClick={() => setFilter(row.key)}>{row.key}</button>
+                  <button className="link-button" onClick={() => setFilter(row.key)}>{readSettingLabel(row.key)}</button>
                 </span>
               ))}. Every other value is the default settings'.</>}
           </p>
         );
       })()}
       {rows === null && <Spinner />}
-      {rows !== null && needle && shown.length === 0 && (
-        <p className="muted">No setting's key or comment holds "{filter.trim()}".</p>
+      {rows !== null && needle && shownSections.length === 0 && (
+        <p className="muted">No setting's name, help or key holds "{filter.trim()}".</p>
       )}
-      {sections.map((section) => {
-        const sectionRows = shown.filter((row) => readSectionName(row) === section);
-        const edited = sectionRows.filter((row) => drafts[row.key]).length;
+      {rows !== null && shownSections.map((section) => {
+        const inSection = sectionRows(section.id);
+        const cards = listSettingCards(section, inSection);
         return (
-          <details key={section} className="settings-section" open={Boolean(needle) || openSections.includes(section)}
+          <details key={section.id} className="settings-section" aria-label={section.title}
+            open={Boolean(needle) || openSections.includes(section.id)}
             onToggle={(event) => {
               if (needle) return;
               const isOpen = event.currentTarget.open;
-              setOpenSections((current) => isOpen ? [...new Set([...current, section])] : current.filter((name) => name !== section));
+              setOpenSections((current) => isOpen ? [...new Set([...current, section.id])] : current.filter((name) => name !== section.id));
             }}>
-            <summary><span className="caret"><Icon name="chevron" size={13} /></span><h3>{renderSectionTitle(section)}</h3><span className="muted">{sectionRows.length}{edited ? ` · ${edited} changed` : ""}</span></summary>
-            {section === MODELS_SECTION && (newModel === null ? (
-              <div className="setting-row add-model">
-                <button className="btn" onClick={() => setNewModel({ name: "", source: modelNames[0] ?? "" })}
-                  disabled={modelNames.length === 0}>+ Add model</button>
-              </div>
-            ) : (
-              <div className="setting-row edited add-model">
-                <input type="text" aria-label="New model's name" placeholder="name, as frame-other-mac" autoFocus
-                  value={newModel.name} onChange={(event) => setNewModel({ ...newModel, name: event.target.value })}
-                  onKeyDown={(event) => { if (event.key === "Enter") addModel(); }} />
-                <OptionMenu name="Copy of" prefix="Copy of" value={newModel.source}
-                  onChoose={(source) => setNewModel({ ...newModel, source })}
-                  options={modelNames.map((name) => ({ value: name, label: name, hint: "", group: "" }))} />
-                <button className="btn primary" onClick={addModel}
-                  disabled={!newModelName || takenNames.has(newModelName)}>Add</button>
-                <button className="btn" onClick={() => setNewModel(null)}>Cancel</button>
-                {takenNames.has(newModelName) && <small className="error">a model has this name</small>}
-              </div>
+            <summary><span className="caret"><Icon name="chevron" size={13} /></span><h3>{section.title}</h3>
+              <span className="muted">{countOf(section.id)}</span></summary>
+            {section.intro && <p className="muted settings-section-intro">{section.intro}</p>}
+            {section.id === SERVERS && (
+              <ServerCards rows={allRows} context={context} newRows={newRows} onAdd={addModel}
+                onDiscard={(name) => onDraft(`${MODELS_KEY}.${name}`, null)} onEditNew={editNewModel} onRemove={removeModel} />
+            )}
+            {section.id === WORKER_SETS && <WorkerSetsPanel rows={allRows} drafts={drafts} onEdit={edit} />}
+            {section.id !== SERVERS && section.id !== WORKER_SETS && cards.map((card) => (
+              // a card never repeats its section's title: the settings are split by what they do, and each card is closed until
+              // opened, like the section, so an opened section shows its card titles alone
+              <details key={card.title} className="settings-prefix-group" aria-label={card.title}
+                open={Boolean(needle) || openCards.includes(`${section.id}/${card.title}`)}
+                onToggle={(event) => {
+                  if (needle) return;
+                  const isOpen = event.currentTarget.open;
+                  const id = `${section.id}/${card.title}`;
+                  setOpenCards((current) => isOpen ? [...new Set([...current, id])] : current.filter((name) => name !== id));
+                }}>
+                <summary><span className="caret"><Icon name="chevron" size={13} /></span><h4 className="settings-prefix">{card.title}</h4>
+                  <span className="muted">{card.rows.length}</span></summary>
+                {card.rows.map((row) => <SettingRowItem key={row.key} row={row} context={context} />)}
+              </details>
             ))}
-            {section === WORKER_SETS && <WorkerSetsPanel rows={rows ?? []} drafts={drafts} onEdit={edit} />}
-            {section !== WORKER_SETS && sectionRows.map((row) => {
-              const raw = drafts[row.key]?.raw ?? readEditorValue(row);
-              const optionValues = (row.choice_options ?? []).map((option) => option.value);
-              const isTyped = Boolean(row.is_open_choice) && (typedKeys.includes(row.key) || !optionValues.includes(String(raw)));
-              return (
-                <div key={row.key} className={`setting-row${drafts[row.key] ? " edited" : ""}`}>
-                  <div className="setting-text">
-                    <div className="setting-name">
-                      <code>{row.key.split(".").slice(1).join(".") || row.key}</code>
-                      {/* a built-in or shipped default value shows no mark; only a value the owner's own file or a profile
-                          changes does, and a change not saved yet is its own mark */}
-                      {drafts[row.key]
-                        ? <span className="pill warn" title="typed here, not saved yet">unsaved</span>
-                        : isOwnerChange(row.source) && (
-                          <span className={`pill${profile && row.source === profile ? " running" : ""}`}
-                            title={profile && row.source === profile ? `set by profile ${profile}` : "set in your own settings file"}>changed</span>
-                        )}
-                    </div>
-                    {row.comment && <p className="muted setting-comment">{renderComment(row.comment)}</p>}
-                  </div>
-                  <div className={`setting-control ${row.choice_options ? "choice" : row.kind}`}>
-                    {row.kind === "bool" ? (
-                      <input type="checkbox" aria-label={row.key} checked={Boolean(raw)} onChange={(event) => edit(row, event.target.checked)} />
-                    ) : row.choice_options ? (
-                      <>
-                        <OptionMenu name={row.key} options={row.choice_options} value={String(raw)}
-                          host={readModelHost(row)}
-                          onOther={row.is_open_choice ? () => setTyped(row.key, true) : undefined}
-                          onChoose={(value, option) => {
-                            setTyped(row.key, false);
-                            edit(row, value);
-                            // a model chosen under another host runs on that host: the model's host moves with it
-                            const hostRow = findHostRow(row);
-                            if (option.host === undefined || !hostRow || option.host === readModelHost(row)) return;
-                            edit(hostRow, option.host === row.default_host ? "" : option.host);
-                          }} />
-                        {isTyped && (
-                          <input type="text" aria-label={`${row.key}, your own value`} autoFocus value={String(raw)}
-                            placeholder="type a value" onChange={(event) => edit(row, event.target.value)} />
-                        )}
-                      </>
-                    ) : row.choices && row.choices.length > 0 ? (
-                      <OptionMenu name={row.key} value={String(raw)} onChoose={(value) => edit(row, value)}
-                        options={row.choices.map((choice) => ({ value: choice, label: choice, hint: "", group: "" }))} />
-                    ) : row.kind === "long-text" ? (
-                      <textarea aria-label={row.key} value={String(raw ?? "")} rows={4}
-                        placeholder={describeRunValue(row)} onChange={(event) => edit(row, event.target.value)} />
-                    ) : row.kind === "json" ? (
-                      <textarea aria-label={row.key} value={String(raw)} spellCheck={false} wrap="off"
-                        rows={Math.min(16, String(raw).split("\n").length)} onChange={(event) => edit(row, event.target.value)} />
-                    ) : (
-                      <input type={row.kind === "number" ? "number" : "text"} aria-label={row.key} value={String(raw)}
-                        placeholder={row.value === null || row.value === "" ? describeRunValue(row) : undefined}
-                        onChange={(event) => edit(row, event.target.value)} />
-                    )}
-                    {row.kind === "json" && drafts[row.key] && !isJson(String(raw)) && (
-                      <small className="error">not valid JSON</small>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
           </details>
         );
       })}

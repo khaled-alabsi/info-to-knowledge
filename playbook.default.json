@@ -60,7 +60,7 @@
     }
   },
   "video": {
-    "_comment": "The video workflow: quality runs phases 3 to 6 as they always ran; direct-draft (the Fast speed's) has phase 3 write each batch of framesProcessing.framesPerCall frames straight into a draft already in chapters, no check, and phase 4 make one small call that titles and summarises it, with the quality workflow's models; fast-processing has phase 3 describe each frame from its image alone with frameModel, frameFollowUps frames to a session, no check, and phase 4 write the document in one call of documentModel; phases 5 and 6 are off in both. A run line's --workflow, or the run form's Workflow, chooses one per run.",
+    "_comment": "The video workflow: quality runs phases 3 to 6 as they always ran; direct-draft (the Fast speed's) has phase 3 write each batch of framesProcessing.framesPerCall frames straight into a draft already in chapters, no check, and phase 4 make one small call that titles and summarises it, with the quality workflow's models; fast-processing has phase 3 describe each frame from its image alone, frameFollowUps frames to a session, no check, and phase 4 write the document in one call, each with the model the worker set's frames processing and document writing jobs name (frameModel and documentModel, when set, name another); phases 5 and 6 are off in both. A run line's --workflow, or the run form's Workflow, chooses one per run.",
     "workflow": "quality",
     "directDraft": {
       "frameWidth": 1280,
@@ -69,12 +69,12 @@
       "outlineCalls": 60
     },
     "fastProcessing": {
-      "frameModel": "qwen3.5-4b",
+      "frameModel": "",
       "frameFollowUps": 5,
       "frameWidth": 1280,
       "isFrameThinkingOn": false,
       "frameMaxTokens": 4096,
-      "documentModel": "document",
+      "documentModel": "",
       "isDocumentThinkingOn": true
     }
   },
@@ -101,16 +101,19 @@
   },
   "hosts": {
     "lmstudio": {
-      "url": "http://localhost:1234/v1"
+      "url": "http://localhost:1234/v1",
+      "kinds": ["chat"]
     },
     "ollama": {
-      "url": "http://localhost:11434"
+      "url": "http://localhost:11434",
+      "kinds": ["chat"]
     }
   },
   "models": {
     "frame": {
       "_comment": "LM Studio on this machine (the host lmstudio in hosts). A model served by another machine is a model of its own in the library, linked from a worker set (see workerSets and playbook.local.example.json).",
       "spec": "lmstudio:qwen3.6-35b-a3b-mtp",
+      "suits": ["frames"],
       "numCtx": 183040,
       "temperature": 1.0,
       "maxTokens": 40960,
@@ -126,6 +129,7 @@
     "document": {
       "_comment": "This machine, as frame above.",
       "spec": "lmstudio:qwen3.6-35b-a3b-mtp",
+      "suits": ["writing"],
       "numCtx": 183040,
       "temperature": 1.0,
       "maxTokens": 32768,
@@ -141,6 +145,7 @@
     "lfm-vl-3b": {
       "_comment": "LiquidAI/LFM2.5-VL-3B-GGUF, Q8_0 with its F16 vision projector, on LM Studio. 32,768 tokens is its most context. Sampling from Liquid AI's model card. It has no thinking mode. Not measured in any phase of a run yet; a phase uses it only when phaseModels or the run form names it.",
       "spec": "lmstudio:lfm2.5-vl-3b",
+      "suits": ["filtering", "frames"],
       "numCtx": 32768,
       "temperature": 0.1,
       "maxTokens": 8192,
@@ -153,6 +158,7 @@
     "qwen3.5-4b-filter": {
       "_comment": "Qwen3.5-4B as phase 2's redundancy and similarity model: asked with no thinking (phase 2 sends reasoning_effort none), so Qwen's sampling for answers without thinking, as a test measured it. On Lecture 9 at 7 frames a call and 1280 px, with the word check, 7 right removals and none lost (lfm2.5-vl-3b: 2 to 4).",
       "spec": "lmstudio:qwen3.5-4b",
+      "suits": ["filtering"],
       "numCtx": 32768,
       "temperature": 0.7,
       "topP": 0.8,
@@ -168,6 +174,7 @@
     "qwen3.5-4b": {
       "_comment": "unsloth/Qwen3.5-4B-GGUF, Q8_0 with its F16 vision projector, on LM Studio. The best describer in a test of the small models: at 3 frames a call, 1280 px wide, with thinking off, it described 45 of 60 test frames whole and missed 1. Set here for phase 3, which thinks: 131,072 tokens of context (LM Studio loads it with whatever context it is given at load time: load it with lms load qwen3.5-4b --context-length 131072), the frame model's output limit, and Qwen's thinking-mode sampling for general tasks. Used by no phase unless phaseModels or the run form names it.",
       "spec": "lmstudio:qwen3.5-4b",
+      "suits": ["frames"],
       "framesPerCall": 5,
       "numCtx": 131072,
       "temperature": 1.0,
@@ -287,7 +294,24 @@
     "onFailure": "continue"
   },
   "workerSets": {
-    "_note": "named worker sets: a set links each job (a phase of a run, the fast workflow's document model) to a model of the models library by its name, e.g. \"gpu-box\": {\"phaseModels\": {\"frames_processing\": \"gpu-box-frame\"}}, and the jobs it does not name keep the default models. Jobs on different sets run at the same time, jobs on one set one after another. The default set is these files as they are and has no entry. The shipped file holds no set: yours go in playbook.local.json (see playbook.local.example.json)."
+    "_note": "named worker sets: a set links each job (a phase of a run, the fast workflow's document model) to a model of the models library by its name, e.g. \"gpu-box\": {\"phaseModels\": {\"frames_processing\": \"gpu-box-frame\"}}, and the jobs it does not name keep the default models. Jobs on different sets run at the same time, jobs on one set one after another. The default set is these files as they are and has no entry. The shipped file holds the strict set and names no machine and no host: yours go in playbook.local.json (see playbook.local.example.json).",
+    "strict": {
+      "_comment": [
+        "Zero repair, asked for by `--profile strict` or chosen as the worker set: a refused frame is blocked as the answer wrote it and phase 3 stops there. It is never asked again, never handed to the second look and never accepted with a warning, so the cause is fixed in the instruction, the check or the settings rather than paid for again by another call. A refused frame tool blocks the chapter the same way.",
+        "The default settings hold the tolerated values instead: frames go back in a repair call, a frame still not finished is sent by itself, and a refused frame tool only costs that tool's turn."
+      ],
+      "framesProcessing": {
+        "framesPerCall": 8,
+        "repairCalls": 0,
+        "singleFrameAttempts": 0
+      },
+      "budgets": {
+        "cutsPerFrame": 3,
+        "failOnFrameCutFail": true,
+        "maxAttempts": 1,
+        "writeChapterAttempts": 1
+      }
+    }
   },
   "defaultWorkerSet": "default",
   "machine": "this machine"

@@ -180,14 +180,39 @@ def _build_model_field(endpoint: EndpointSpec) -> dict[str, str]:
     return {"model": endpoint.model} if endpoint.model else {}
 
 
+def _find_library_endpoint(kind: str,
+                           library_model: str,
+                           default_timeout_s: int) -> EndpointSpec | None:
+    """Give me the server of the entry of `models` that `kind` of model is: the host it runs on, the model's name there
+    (the spec after its colon) and its own wait time when it sets one, else the kind's. None when the entry names no
+    server. Raises `ValueError` for a name `models` does not hold: a run never falls back to a model nobody chose."""
+
+    models = config.settings.models
+    if library_model not in models:
+        raise ValueError(f"providers.{kind}.libraryModel: no model {library_model!r} in `models`: the models are "
+                         f"{', '.join(sorted(models)) or 'none'}")
+    entry = models[library_model]
+    host = config.settings.find_model_host(entry)
+    if host is None:
+        return None
+    timeout_s = entry.request_timeout_s if "request_timeout_s" in entry.model_fields_set and entry.request_timeout_s \
+        else default_timeout_s
+
+    return EndpointSpec(base_url=host.url, api_key_env=host.api_key_env, timeout_s=timeout_s,
+                        model=entry.spec.partition(":")[2])
+
+
 def find_endpoint(kind: str) -> EndpointSpec | None:
     """Give me the server set for `kind` of model (`chat`, `speech`, `diarization`, `embeddings`, `decision`): the entry of
-    `hosts` it names. None when it names none, which keeps the program's own way of running that model."""
+    `models` its `libraryModel` names, else the entry of `hosts` its `host` names. None when it names none, which keeps
+    the program's own way of running that model."""
 
     providers = config.settings.providers
     if kind not in type(providers).model_fields:
         raise ValueError(f"no kind of model {kind!r}: the kinds are {sorted(type(providers).model_fields)}")
     provider = getattr(providers, kind)
+    if provider.library_model:
+        return _find_library_endpoint(kind=kind, library_model=provider.library_model, default_timeout_s=provider.timeout_s)
     if not provider.host:
         return None
     host = config.settings.find_host(provider.host)

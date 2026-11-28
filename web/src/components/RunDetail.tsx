@@ -694,7 +694,7 @@ export default function RunDetail({
                   owner: "ugly layout ... missing scroll"); a video run's Workflow speed is a dropdown on top of the
                   Settings tab (the owner: "it can be in the setting tab, its only a drop down"), the same choice as
                   the header's Speed pill, and the run queued here takes it */}
-              <PhaseSelector phases={runnablePhases} settingsProfiles={settingsProfiles} phaseModels={phaseModels}
+              <PhaseSelector phases={runnablePhases} phaseModels={phaseModels}
                 selection={fitSelection(selection)} onChange={setSelection} isTagsShown={false} layout="tabs"
                 settingsExtraSummary={detail?.workflow && runDefaults?.speed ? `speed ${describeSpeed(runChoice, runDefaults)}` : ""}
                 settingsExtra={detail?.workflow && runDefaults?.speed ? <div className="field">

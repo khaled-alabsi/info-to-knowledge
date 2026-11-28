@@ -31,6 +31,7 @@ def test_every_kind_of_model_has_a_provider_that_is_empty_until_a_person_sets_it
     for kind in KIND_LIST:
         provider = getattr(providers, kind)
         harness.check(f"{kind} names no host, so the program keeps its own way", provider.host == "", provider.host)
+        harness.check(f"{kind} names no library model", provider.library_model == "", provider.library_model)
         harness.check(f"{kind} waits {TIMEOUT_S_BY_KIND[kind]} seconds for one request",
                       provider.timeout_s == TIMEOUT_S_BY_KIND[kind], str(provider.timeout_s))
     harness.check("chat has no model name: each phase names its own", not hasattr(providers.chat, "model"))
@@ -65,6 +66,17 @@ def test_a_provider_is_set_from_a_settings_file_and_from_the_environment():
     harness.check("the environment variable PB_PROVIDERS__SPEECH__HOST sets the speech host",
                   from_environment.providers.speech.host == "lmstudio", from_environment.providers.speech.host)
     harness.check("the environment leaves the other kinds empty", from_environment.providers.chat.host == "")
+
+
+def test_a_host_lists_the_jobs_it_can_do_and_does_chat_when_it_lists_none():
+    settings = config.Settings(**{"hosts": {"box": {"url": "http://box/v1"}, "voice": {"url": "http://v/v1", "kinds": ["speech", "chat"]}}})
+    harness.check("a host with no list does chat", settings.hosts["box"].kinds == ["chat"], str(settings.hosts["box"].kinds))
+    harness.check("a host keeps the jobs its list names", settings.hosts["voice"].kinds == ["speech", "chat"],
+                  str(settings.hosts["voice"].kinds))
+    harness.check("the two hosts every machine has do chat", all(host.kinds == ["chat"] for host in config.Settings().hosts.values()))
+    harness.check("a job no provider does is refused by its name",
+                  "voice" in _find_refusal({"hosts": {"box": {"url": "http://box/v1", "kinds": ["voice"]}}}))
+    harness.check("a list written as one word is refused", _find_refusal({"hosts": {"box": {"url": "x", "kinds": "chat"}}}) != "")
 
 
 def test_a_wrong_key_under_providers_is_refused_by_its_name():

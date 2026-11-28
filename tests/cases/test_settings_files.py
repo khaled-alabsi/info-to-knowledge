@@ -44,7 +44,9 @@ def test_the_shipped_default_file_holds_placeholders_and_no_host_of_a_person():
     shipped = json.loads(text)
     harness.check("the default file is there and is a settings object", isinstance(shipped, dict) and "framesProcessing" in shipped)
     harness.check("it names no home-network host", "192.168." not in text and "http://pc." not in text)
-    harness.check("it holds no worker set of its own", [name for name in shipped["workerSets"] if not name.startswith("_")] == [])
+    shipped_sets = {name: values for name, values in shipped["workerSets"].items() if not name.startswith("_")}
+    harness.check("a shipped set names no machine and no host",
+                  all("machine" not in values and "hosts" not in values for values in shipped_sets.values()), f"{sorted(shipped_sets)}")
 
 
 def test_a_profile_is_read_on_top_of_the_local_file():
@@ -71,9 +73,7 @@ def test_the_strict_profile_turns_every_repair_off():
     the run, while the default settings hold the tolerated values."""
 
     name = config.PROFILE_NAME
-    overrides = config.read_settings_files(config.DEFAULT_CONFIG_FILE, config.LOCAL_CONFIG_FILE,
-                                           config.build_profile_path("strict"))
-    strict = config.Settings(**overrides)
+    strict = config.Settings(**config.read_layers(profile_name="", worker_set_name="strict"))
     harness.check("strict blocks a refused frame at once and stops on a refused frame tool",
                   (strict.frames_processing.repair_calls == 0 and strict.frames_processing.single_frame_attempts == 0
                    and strict.budgets.fail_on_frame_cut_fail),
@@ -86,6 +86,11 @@ def test_the_strict_profile_turns_every_repair_off():
                   f"{config.settings.frames_processing.repair_calls}, "
                   f"{config.settings.frames_processing.single_frame_attempts}, "
                   f"{config.settings.budgets.fail_on_frame_cut_fail}")
+    harness.check("--profile strict reads the shipped strict set when no file of that name exists",
+                  config.load_profile("strict") == ["budgets", "framesProcessing"]
+                  and config.WORKER_SET_NAME == "strict" and config.settings.frames_processing.repair_calls == 0,
+                  f"{config.WORKER_SET_NAME}, {config.settings.frames_processing.repair_calls}")
+    config.apply_worker_set("")
     harness.check("a profile with no file is refused by name, never run on the settings it was to replace",
                   _refusal_for("no-such-profile").startswith("no profile 'no-such-profile'"),
                   _refusal_for("no-such-profile"))

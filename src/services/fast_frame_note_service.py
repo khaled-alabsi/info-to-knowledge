@@ -133,7 +133,7 @@ def _log_call(ctx: RunContext,
 
     name = f"{output_contract.FAST_NOTE_SLUG_PREFIX}{_read_frame_number(item):03d}"
     call_log_service.write_call_log(call_log_service.build_call_log_path(ctx.paths, name), {
-        "phase": PHASE, "slug": session_slug, "attempt": 1, "model": config.settings.video.fast_processing.frame_model,
+        "phase": PHASE, "slug": session_slug, "attempt": 1, "model": config.settings.resolve_fast_model_name(config.FRAMES_PROCESSING_PHASE),
         "request": {"frame": item["slug"], "image": item["path"]}, "response": {"description": note}})
 
 
@@ -158,7 +158,7 @@ def describe_session(ctx: RunContext,
 
     # STEP 1: the session's model, with its one tool, thinking as the settings say
     settings = config.settings.video.fast_processing
-    model = MODEL_FACTORY(settings.frame_model).bind_tools([SUBMIT_NOTE_TOOL]).bind(max_tokens=settings.frame_max_tokens)
+    model = MODEL_FACTORY(config.settings.resolve_fast_model_name(config.FRAMES_PROCESSING_PHASE)).bind_tools([SUBMIT_NOTE_TOOL]).bind(max_tokens=settings.frame_max_tokens)
     if not settings.is_frame_thinking_on:
         model = chat_model_service.bind_no_thinking(model)
     slugs = [item["slug"] for item in items]

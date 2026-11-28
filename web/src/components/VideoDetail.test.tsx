@@ -307,7 +307,7 @@ describe("VideoDetail", () => {
     expect(within(phase).getByRole("radio", { name: "5 · review (off)" })).toBeDisabled();
   });
 
-  it("chooses the settings and each phase's model behind Start run's gear and sends them with the run", async () => {
+  it("chooses each phase's model behind Start run's gear and sends it with the run", async () => {
     const calls = installServer({ "GET /api/profiles": { profiles: ["strict"], server_profile: "" },
       "GET /api/phase-models": { models: [{ name: "document", spec: "lmstudio:big" }, { name: "small", spec: "lmstudio:small" }],
         phases: [{ phase: "finalize", number: 4, title: "document writing", default: "document" }] },
@@ -316,13 +316,13 @@ describe("VideoDetail", () => {
       onChanged={() => {}} onMessage={() => {}} />);
     await userEvent.click(screen.getByRole("button", { name: "phases, settings and models" }));
     await userEvent.click(document.querySelectorAll<HTMLElement>(".phase-more > summary")[1]);
-    await userEvent.click(await screen.findByRole("radio", { name: "profile: strict" }));
+    expect(screen.queryByRole("radio", { name: "profile: strict" })).not.toBeInTheDocument();
     await userEvent.click(within(await screen.findByRole("radiogroup", { name: "model of document writing" }))
       .getByRole("radio", { name: /small/ }));
-    expect(screen.getByRole("button", { name: /Start run/ })).toHaveTextContent("profile strict · models: 1 changed");
+    expect(screen.getByRole("button", { name: /Start run/ })).toHaveTextContent("models: 1 changed");
     await userEvent.click(screen.getByRole("button", { name: /Start run/ }));
     const queued = calls.find((call) => call.method === "POST" && call.url === "/api/jobs");
-    expect(queued?.body).toMatchObject({ profile: "strict", phase_models: { finalize: "small" } });
+    expect(queued?.body).toMatchObject({ phase_models: { finalize: "small" } });
   });
 
   it("says a video already sent to the queue is waiting and opens its job's console", async () => {

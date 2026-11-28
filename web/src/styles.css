@@ -1384,19 +1384,16 @@ p.transcript-suggestions { padding: 10px 12px; }
 .worker-set-head h4 { margin: 0; font-size: 15px; }
 .worker-set-actions { display: flex; gap: 8px; margin-left: auto; flex-wrap: wrap; }
 .worker-set-chosen { display: flex; align-items: center; gap: 6px; font-size: 13px; }
-.worker-set-machine { display: flex; align-items: center; gap: 8px; }
 .worker-set-subhead { margin: 4px 0 0; font-size: 13px; color: var(--muted, #666); }
-/* a job of a set: its title, the library model chosen from a list, and where that model runs; the list stays one box wide */
-.job-links { display: flex; flex-direction: column; border-top: 1px solid var(--border); }
-.job-link { display: grid; grid-template-columns: minmax(0, 11rem) minmax(0, 16rem) minmax(0, 1fr); gap: 4px 12px;
-  align-items: center; padding: 6px 0; border-bottom: 1px solid var(--border); }
+/* a job of a set is one card: its title, the library model chosen from a list, and where that model runs; the list stays one box wide */
+.job-links { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr)); gap: 8px; }
+.job-link { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 10px 12px; min-width: 0;
+  border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
 .job-link .job-title, .worker-set-value .job-title { font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
 .job-link .btn.setting-choice { width: 100%; }
+.job-link > * { max-width: 100%; }
 .job-runs { overflow-wrap: anywhere; }
 .copy-form { align-items: center; }
-@media (max-width: 760px) {
-  .job-link { grid-template-columns: minmax(0, 1fr); }
-}
 /* a table-edited setting (model servers, sampling, name rules): small tables with a red square trash icon to a row */
 .structured-table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: auto; }
 .structured-table th, .structured-table td { text-align: left; padding: 4px 6px; border-top: 1px solid var(--border);
@@ -1429,8 +1426,22 @@ p.transcript-suggestions { padding: 10px 12px; }
 .structured-block-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .structured-block-head h5 { margin: 0; font-size: 13px; }
 .setting-control.json { display: block; width: 100%; min-width: 0; }
-/* the models library: a card a model, closed to its name, where it runs and how much it reads */
-.model-library { display: flex; flex-direction: column; gap: 8px; padding: 8px 0 12px; }
+/* the model servers: a card a server with its address, token, jobs and the models inside it */
+.server-cards { display: flex; flex-direction: column; gap: 12px; padding: 8px 0 12px; }
+.server-card { border: 1px solid var(--border); border-radius: 10px; padding: 12px; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.server-card.edited { border-color: var(--warn); }
+.server-card-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+.server-card-head h4 { margin: 0; font-size: 15px; }
+.server-fields { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.server-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.server-field input[type="text"] { width: 100%; min-width: 0; height: 36px; box-sizing: border-box; }
+.server-models-head { margin: 6px 0 0; font-size: 13px; }
+/* the tick boxes of the jobs a server does or a model suits: each a box with its words beside it, wrapping as a whole */
+.suits { display: flex; flex-wrap: wrap; gap: 6px 16px; min-width: 0; }
+.suit-choice { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+.suit-choice input { flex: none; margin: 0; }
+/* the models of one server: a card a model, closed to its name and how much it reads */
+.model-library { display: flex; flex-direction: column; gap: 8px; padding: 0; }
 .model-card { border: 1px solid var(--border); border-radius: 10px; min-width: 0; }
 .model-card.edited { border-color: var(--warn); }
 .model-card > summary { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; padding: 10px 12px; cursor: pointer; }
@@ -1443,7 +1454,11 @@ p.transcript-suggestions { padding: 10px 12px; }
 .model-advanced > summary { cursor: pointer; padding: 8px 0; font-size: 13px; }
 .model-card-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding-top: 10px; border-top: 1px solid var(--border); }
 .settings-section-intro { margin: 0 0 6px; }
-.settings-prefix { margin: 10px 0 0; font-size: 13px; color: var(--muted, #666); }
+.settings-prefix-group { border: 1px solid var(--border); border-radius: 10px; padding: 0 12px; margin: 8px 0; min-width: 0; }
+.settings-prefix-group[open] { padding-bottom: 8px; }
+.settings-prefix-group > summary { display: flex; align-items: center; gap: 6px; padding: 10px 0; cursor: pointer; list-style: none; }
+.settings-prefix-group > summary::-webkit-details-marker { display: none; }
+.settings-prefix { margin: 0; font-size: 14px; }
 .worker-set-value { display: grid; grid-template-columns: minmax(0, 14rem) minmax(0, 1fr) auto; gap: 4px 8px;
   align-items: center; }
 .worker-set-value code { overflow-wrap: anywhere; font-size: 12px; }
@@ -1463,8 +1478,9 @@ p.transcript-suggestions { padding: 10px 12px; }
 .setting-control.json textarea { width: 100%; font-family: var(--mono, ui-monospace, Menlo, monospace); font-size: 13px;
   line-height: 1.5; resize: vertical; white-space: pre; overflow-x: auto; }
 .settings-section { border-top: 1px solid var(--border); }
-.settings-section summary { display: flex; gap: 8px; align-items: baseline; padding: 10px 0; cursor: pointer; }
-.settings-section summary h3 { margin: 0; font-size: 15px; }
+/* only the section's own heading line: a model card's summary inside the section keeps its inner padding */
+.settings-section > summary { display: flex; gap: 8px; align-items: baseline; padding: 10px 0; cursor: pointer; }
+.settings-section > summary h3 { margin: 0; font-size: 15px; }
 .setting-row { display: grid; grid-template-columns: minmax(0, 1fr) 240px; gap: 8px 32px; padding: 12px 8px 12px 21px; border-top: 1px solid var(--border); align-items: start; }
 .setting-text { min-width: 0; }
 .setting-name { display: flex; gap: 8px; align-items: center; min-width: 0; overflow-wrap: anywhere; }

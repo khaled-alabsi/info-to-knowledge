@@ -52,9 +52,10 @@ test("starts the run with every choice made on the form", async ({ page, api }) 
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "phases, settings and models" }).click();
   await page.getByText(/^Run with /).click();
-  await choice(page, "Settings", "profile: strict").click();
+  // the form has no settings-file menu: strict is a worker set, chosen on the Settings page
+  await expect(page.getByRole("radiogroup", { name: "Settings", exact: true })).toHaveCount(0);
   await choice(page, "model of document writing", "acme-vision-4b").click();
-  await expect(page.getByText("Run with profile: strict, models: 1 changed")).toBeVisible();
+  await expect(page.getByText("Run with default settings, models: 1 changed")).toBeVisible();
 
   await page.getByText(/^Phases: /).click();
   await choice(page, "which phases", "Only").click();
@@ -62,7 +63,7 @@ test("starts the run with every choice made on the form", async ({ page, api }) 
   await page.keyboard.press("Escape");
   // what differs from the defaults shows on Start run itself
   const startRun = page.getByRole("button", { name: /^Start run/ });
-  await expect(startRun).toContainText("phase 2 · profile strict · models: 1 changed");
+  await expect(startRun).toContainText("phase 2 · default settings · models: 1 changed");
 
   await startRun.click();
   // the mocked queue holds one waiting job, so the run is queued behind it
@@ -71,7 +72,7 @@ test("starts the run with every choice made on the form", async ({ page, api }) 
   expect(sent).toHaveLength(1);
   expect(sent[0].body).toMatchObject({
     items: [{ video: "inbox/AcmeSync kickoff.mp4", output: "output/AcmeSync kickoff" }],
-    speed_preset: "balanced", profile: "strict", only_phase: 2, phase_models: { finalize: "small" },
+    speed_preset: "balanced", only_phase: 2, phase_models: { finalize: "small" },
     is_run_as_audio: false,
   });
 });

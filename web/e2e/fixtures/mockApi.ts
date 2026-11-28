@@ -84,6 +84,9 @@ function buildDefaultHandlers(): Map<string, Handler> {
   handlers.set("PUT /settings", (request) => ({
     json: { exit_code: 0, output: `${(request.body as { key: string }).key} saved` },
   }));
+  handlers.set("POST /settings/remove", (request) => ({
+    json: { exit_code: 0, output: `${(request.body as { key_parts: string[] }).key_parts.join(".")} removed` },
+  }));
   handlers.set("POST /setup/configure", () => ({ json: { exit_code: 0, output: "LM Studio is used for every phase" } }));
   handlers.set("POST /runs/display-names", () => ({ json: { records: [{ name: "gateway-review", outcome: "renamed" }] } }));
   handlers.set("GET /videos/compression", json(data.COMPRESSIBLE_VIDEOS));

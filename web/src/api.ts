@@ -1326,6 +1326,12 @@ export function saveSetting(key: string, newValue: unknown, profile: string, key
   return putJson<CommandOutput>("/settings", { key, new_value: newValue, profile, key_parts: keyParts ?? null });
 }
 
+// Takes one entry (a model of the library) out of the owner's settings file, or a profile's file; the answer says what was
+// removed, or why not (a model the shipped settings hold stays)
+export function removeSetting(keyParts: string[], profile: string): Promise<CommandOutput> {
+  return sendJson<CommandOutput>("/settings/remove", { key_parts: keyParts, profile });
+}
+
 // What the setup wizard shows (`GET /api/setup`): each model host, API and tool a run needs, each model a phase calls,
 // and the models download. A run needs the one host its models name; `kind` tells a local host, an API and a tool apart.
 export type SetupSystem = "mac" | "windows" | "linux";

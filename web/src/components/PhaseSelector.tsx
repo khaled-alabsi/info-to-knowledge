@@ -2,8 +2,7 @@ import { useState } from "react";
 import type { ReactNode } from "react";
 import type { Phase, PhaseModels, PhaseSelection } from "../api";
 import { formatPhaseTitle } from "../api";
-import { CHOICE_HELP, ChoiceDropdown, ModelRows, SettingsSelect, describeModels } from "./RunChoices";
-import type { SettingsProfiles } from "./RunChoices";
+import { CHOICE_HELP, ChoiceDropdown, ModelRows, describeModels } from "./RunChoices";
 import Icon from "./Icon";
 import { WorkerSetChoice, useWorkerSets } from "./WorkerSetChoice";
 import { TagInput, mergeTags } from "./TagInput";
@@ -67,7 +66,6 @@ export function describeSelection(selection: PhaseSelection, phaseModels: PhaseM
 // tags, unless the page shows those itself.
 export default function PhaseSelector({
   phases,
-  settingsProfiles,
   phaseModels,
   selection,
   onChange,
@@ -82,8 +80,6 @@ export default function PhaseSelector({
   settingsExtraSummary = "",
 }: {
   phases: Phase[];
-  // read once by the page that holds this panel: the panel is drawn afresh each time its menu opens
-  settingsProfiles: SettingsProfiles;
   phaseModels: PhaseModels;
   selection: PhaseSelection;
   onChange: (selection: PhaseSelection) => void;
@@ -111,7 +107,6 @@ export default function PhaseSelector({
   // each phase of this workflow with what it does, for the phase lists' help
   const phaseHelp = phases.map((phase) => ({ label: `${phase.number} · ${formatPhaseTitle(phase)}`,
     text: phase.summary ?? "" }));
-  const profiles = settingsProfiles.profiles ?? [];
   const mode = readMode(selection);
   const start = selection.only_phase ?? selection.from_phase ?? phases[0]?.number ?? 1;
 
@@ -206,14 +201,9 @@ export default function PhaseSelector({
         <span>Dry run <small>prompts only, no model call</small></span>
       </label>
   );
-  const settingsError = isRunWithShown && settingsProfiles.error ? <small className="error">{settingsProfiles.error}</small> : null;
   const workerSets = useWorkerSets();
   const workerSetField = isRunWithShown && isWorkerSetShown
     ? <WorkerSetChoice sets={workerSets} selection={selection} onChange={onChange} isDropdown={isDropdown} /> : null;
-  const settingsField = isRunWithShown && profiles.length > 0
-    ? <SettingsSelect profiles={profiles} serverProfile={settingsProfiles.serverProfile} selection={selection} onChange={onChange}
-        isDropdown={isDropdown} />
-    : null;
   const modelRows = isRunWithShown && phaseModels.models.length > 1
     ? (isDropdown && workflows.length
       ? <>{workflows.map((workflow) => (
@@ -254,7 +244,7 @@ export default function PhaseSelector({
       { key: "settings", label: "Settings", summary: [settingsExtraSummary,
           ...listRunWith(selection, phaseModels, "counted", isTagsShown).filter((part) => part !== describeModels(selection))]
           .filter(Boolean).join(", "),
-        body: <>{settingsExtra}{settingsError}{settingsField}{workerSetField}{dryRunSwitch}{tagsField}</> },
+        body: <>{settingsExtra}{workerSetField}{dryRunSwitch}{tagsField}</> },
       ...(modelRows ? [{ key: "models", label: "Models", summary: describeModels(selection), body: modelRows }] : []),
       ...extraTabs,
     ];
@@ -289,11 +279,9 @@ export default function PhaseSelector({
       <details className="phase-more" open={openPart === "more"}>
         <summary onClick={toggle("more")}><span className="caret"><Icon name="chevron" size={13} /></span>{describeMore()}</summary>
         {dryRunSwitch}
-        {settingsError}
-        {(settingsField || modelRows) && (
+        {(workerSetField || modelRows) && (
           <>
             <div className="menu-heading">Run with</div>
-            {settingsField}
             {workerSetField}
             {modelRows && <div className="field"><span>Models</span>{modelRows}</div>}
           </>

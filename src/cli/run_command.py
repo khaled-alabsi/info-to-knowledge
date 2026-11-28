@@ -209,13 +209,12 @@ def _select_window_model(phase: str,
                          name: str,
                          is_fast: bool) -> str:
     """The configured model whose window a phase's calls are measured against: on a fast-processing run, phases 3 and
-    4 call `video.fastProcessing`'s models, never the phase's own."""
+    4 call the models `Settings.resolve_fast_model_name` names (`video.fastProcessing`'s own, else the set's job models)."""
 
     if not is_fast or phase not in _FAST_MODEL_PHASES:
         return name
-    fast = config.settings.video.fast_processing
 
-    return fast.frame_model if phase == config.FRAMES_PROCESSING_PHASE else fast.document_model
+    return config.settings.resolve_fast_model_name(phase)
 
 
 def read_phase_windows(log: logging.Logger,
@@ -345,8 +344,11 @@ def describe_workflow(run_folder: Path) -> str:
         return title
     fast = config.settings.video.fast_processing
 
-    return (f"{title} (phase 3 {fast.frame_model}, {fast.frame_follow_ups} frames a session, no check; phase 4 one call "
-            f"of {fast.document_model}; phases 5 and 6 off)")
+    frame_model = config.settings.resolve_fast_model_name(config.FRAMES_PROCESSING_PHASE)
+    document_model = config.settings.resolve_fast_model_name(config.FINALIZE_PHASE)
+
+    return (f"{title} (phase 3 {frame_model}, {fast.frame_follow_ups} frames a session, no check; phase 4 one call "
+            f"of {document_model}; phases 5 and 6 off)")
 
 
 def _describe_fast_model(phase: str,
@@ -354,14 +356,15 @@ def _describe_fast_model(phase: str,
     """A fast-processing run's line for phase 3 or 4: the model that workflow calls there, its spec and what it does."""
 
     fast = config.settings.video.fast_processing
+    name = config.settings.resolve_fast_model_name(phase)
+    spec = config.settings.resolve_model(name).spec
     if phase == config.FRAMES_PROCESSING_PHASE:
-        spec = config.settings.resolve_model(fast.frame_model).spec
 
-        return f"{fast.frame_model}: {spec} ({fast.frame_follow_ups} frames a session, each described alone)"
+        return f"{name}: {spec} ({fast.frame_follow_ups} frames a session, each described alone)"
     window = windows.get(phase)
     loaded = f", window {window:,}" if window else ""
 
-    return f"{fast.document_model}: {config.settings.resolve_model(fast.document_model).spec} (one call{loaded})"
+    return f"{name}: {spec} (one call{loaded})"
 
 
 def describe_redundancy_model() -> str:

@@ -1451,7 +1451,7 @@ export default function InboxPanel({
             {isRunSettingsOpen && (
               <Dialog title={`Run settings · ${describeRunTarget(tickedRows, newItems.length)}`}
                 onClose={() => setIsRunSettingsOpen(false)}>
-                <PhaseSelector phases={mediumPhases ?? phases} settingsProfiles={settingsProfiles} phaseModels={phaseModels}
+                <PhaseSelector phases={mediumPhases ?? phases} phaseModels={phaseModels}
                   selection={selection} onChange={setSelection} layout="tabs"
                   workflows={workflows}
                   // the video workflow applies to every video processed, and only to them (the owner: "select the fast

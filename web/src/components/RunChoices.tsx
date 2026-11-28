@@ -348,51 +348,6 @@ export function usePhaseModels(): { phaseModels: PhaseModels; error: string } {
   return state;
 }
 
-// The settings files the run reads: the default settings, or a profile read on top of them
-export function SettingsSelect({ profiles, serverProfile, selection, onChange, isBoxed = false, isDropdown = false }: {
-  profiles: string[];
-  serverProfile: string;
-  selection: PhaseSelection;
-  onChange: (selection: PhaseSelection) => void;
-  // drawn as a one-line box for a toolbar, else as a labelled field in a menu
-  isBoxed?: boolean;
-  // a drop-down list with a "default" pill, in the run settings dialog
-  isDropdown?: boolean;
-}) {
-  const defaultLabel = serverProfile ? `the server's settings (profile ${serverProfile})` : isBoxed ? "default" : "default settings";
-  if (isDropdown) {
-    return (
-      <ChoiceDropdown label="Settings" title="Settings: the files this run reads" value={selection.profile} help={CHOICE_HELP.settings}
-        isDefault={!selection.profile} onChange={(profile) => onChange({ ...selection, profile })}
-        choices={[{ value: "", label: defaultLabel }, ...profiles.map((name) => ({ value: name, label: `profile: ${name}` }))]} />
-    );
-  }
-  if (isBoxed) {
-    return (
-      <label className="field-select" title="Settings: the files this run reads">
-        <small>Settings</small>
-        <select aria-label="Settings" value={selection.profile} onChange={(event) => onChange({ ...selection, profile: event.target.value })}>
-          <option value="">{defaultLabel}</option>
-          {profiles.map((name) => <option key={name} value={name}>profile: {name}</option>)}
-        </select>
-      </label>
-    );
-  }
-  // in a menu, buttons the page draws itself: a browser's own list for a select there opened far from its box
-  return (
-    <div className="field" title="Settings: the files this run reads">
-      <span>Settings</span>
-      <div className="phase-list" role="radiogroup" aria-label="Settings">
-        {[{ value: "", label: defaultLabel }, ...profiles.map((name) => ({ value: name, label: `profile: ${name}` }))].map((choice) => (
-          <button key={choice.value} role="radio" aria-checked={selection.profile === choice.value}
-            className={selection.profile === choice.value ? "on" : ""}
-            onClick={() => onChange({ ...selection, profile: choice.value })}>{choice.label}</button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 // An untouched choice names the value the settings resolve it to ("default: text only"), or plain "default" until the
 // server answers: "default" alone did not say what the run would do
 

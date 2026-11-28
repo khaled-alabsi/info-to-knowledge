@@ -10,7 +10,7 @@ import PartsPlayer from "./PartsPlayer";
 import PhaseSelector, { describePhases } from "./PhaseSelector";
 import RangeEditor, { buildInboxPreviewSource, describeRange } from "./RangeEditor";
 import type { RangeValue } from "./RangeEditor";
-import { describeDefault, describeModels, PdfChoices, useIngestingProfiles, usePhaseModels, useRunDefaults, useSettingsProfiles }
+import { describeDefault, describeModels, PdfChoices, useIngestingProfiles, usePhaseModels, useRunDefaults }
   from "./RunChoices";
 import WorkflowSpeedChoice, { readSpeedOffPhases, readSpeedWorkflow } from "./WorkflowSpeedChoice";
 import { nameWorkerSet, useWorkerSets } from "./WorkerSetChoice";
@@ -123,7 +123,6 @@ export default function VideoDetail({
     fetchJson<Phase[]>(`/phases?${query}`).then(setFlowPhases).catch(() => setFlowPhases(null));
   }, [flowMedium, speedWorkflow, selection.ingesting_profile, flowPass, speedOffKey]);
   // The ingesting profiles with what each is for; none answered shows only Automatic
-  const settingsProfiles = useSettingsProfiles();
   const workerSets = useWorkerSets();
   const { phaseModels, error: modelsError } = usePhaseModels();
   const { profiles, error: profilesError } = useIngestingProfiles();
@@ -185,7 +184,7 @@ export default function VideoDetail({
                       as in the inbox */}
                   <Dropdown label={<Icon name="settings" size={16} />} variant="primary" align="right"
                     title="phases, settings and models" panelClassName="wide">
-                    {() => <PhaseSelector phases={flowPhases ?? phases} settingsProfiles={settingsProfiles} phaseModels={phaseModels}
+                    {() => <PhaseSelector phases={flowPhases ?? phases} phaseModels={phaseModels}
                       selection={selection} onChange={setSelection} isTagsShown={false} isWorkerSetShown={false} />}
                   </Dropdown>
                 </div>
@@ -321,8 +320,8 @@ export default function VideoDetail({
                   </select>
                 </label>
               )}
-              {(settingsProfiles.error || modelsError || profilesError) && (
-                <small className="error">{[settingsProfiles.error, modelsError, profilesError].filter(Boolean).join("; ")}</small>
+              {(modelsError || profilesError) && (
+                <small className="error">{[modelsError, profilesError].filter(Boolean).join("; ")}</small>
               )}
             </>
           )}

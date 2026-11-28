@@ -676,7 +676,8 @@ def read_job_lane(job: RunJob,
 def _read_set_machine(worker_set: str,
                       profile: str,
                       file_stamps: tuple[tuple[str, int], ...]) -> str:
-    """The machine `worker_set` names, its own name when it names none or is gone from the files. `file_stamps` (each
+    """The machine `worker_set` runs on (`config.read_set_machine`: the `machine` an old file names, else the provider its
+    frames processing model runs on), its own name when that is empty or the set is gone from the files. `file_stamps` (each
     settings file's path and change time) makes another file, or a file saved since the last call, read again."""
 
     try:
@@ -684,7 +685,7 @@ def _read_set_machine(worker_set: str,
     except (ValueError, OSError):
         return worker_set
 
-    return str(merged.get(config.WORKER_SET_LABEL_KEY) or worker_set)
+    return config.read_set_machine(merged) or worker_set
 
 
 def _select_next_job(jobs: list[RunJob],

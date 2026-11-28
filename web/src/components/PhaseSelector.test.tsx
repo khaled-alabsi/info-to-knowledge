@@ -4,19 +4,18 @@ import { useState } from "react";
 import { describe, expect, it } from "vitest";
 import { NO_SELECTION } from "../api";
 import type { PhaseSelection } from "../api";
-import { PHASES, answerJson, installServer } from "../test/fakeServer";
+import { PHASES, installServer } from "../test/fakeServer";
 import PhaseSelector, { describeSelection } from "./PhaseSelector";
-import { usePhaseModels, useSettingsProfiles } from "./RunChoices";
+import { usePhaseModels } from "./RunChoices";
 
 const NO_MODELS = { models: [], phases: [] };
 
 // The panel as a page holds it: the lists read once by the page, the choice kept by it and named in its summary
 function ChoosePhases({ phases, onChosen }: { phases: typeof PHASES; onChosen: (selection: PhaseSelection) => void }) {
   const [selection, setSelection] = useState(NO_SELECTION);
-  const settingsProfiles = useSettingsProfiles();
   const { phaseModels } = usePhaseModels();
   onChosen(selection);
-  return <><PhaseSelector phases={phases} settingsProfiles={settingsProfiles} phaseModels={phaseModels} selection={selection}
+  return <><PhaseSelector phases={phases} phaseModels={phaseModels} selection={selection}
     onChange={setSelection} /><output>{describeSelection(selection, phaseModels)}</output></>;
 }
 
@@ -118,26 +117,13 @@ async function pick(list: string, name: RegExp | string) {
 }
 
 describe("PhaseSelector settings", () => {
-  it("offers the default settings or a profile the server lists, and puts the choice on the run", async () => {
+  it("has no settings menu: strict is a worker set, and the settings files are chosen on the Settings page", async () => {
+    // Strict was a settings file the run form offered in a menu; it is the worker set "strict" now, so the form never lists a file
     installServer({ "GET /api/profiles": { profiles: ["strict"], server_profile: "" } });
-    const chosen = renderChoosePhases();
-    const settings = await screen.findByRole("radiogroup", { name: "Settings" });
-    expect(within(settings).getAllByRole("radio").map((option) => option.textContent)).toEqual(["default settings", "profile: strict"]);
-    await userEvent.click(within(settings).getByRole("radio", { name: "profile: strict" }));
-    expect(chosen.selection.profile).toBe("strict");
-  });
-
-  it("says when the settings profiles could not be read, never that none exists", async () => {
-    installServer({ "GET /api/profiles": answerJson({ detail: "down" }, 500) });
-    renderChoosePhases();
-    expect(await screen.findByText("the settings profiles could not be read: 500: down")).toHaveClass("error");
-  });
-
-  it("shows no choice when the server lists no profile", async () => {
-    installServer({ "GET /api/profiles": { profiles: [], server_profile: "" } });
     renderChoosePhases();
     await screen.findByRole("radio", { name: "Every phase" });
     expect(screen.queryByRole("radiogroup", { name: "Settings" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("radio", { name: "profile: strict" })).not.toBeInTheDocument();
   });
 
   it("offers each phase the configured models, puts the choice on the run and names it in the summary", async () => {

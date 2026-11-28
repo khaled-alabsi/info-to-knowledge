@@ -159,12 +159,13 @@ def write_document(ctx: RunContext,
     settings = config.settings.video.fast_processing
     messages = build_messages(ctx.paths, recording)
     prompt_tokens = count_prompt_tokens(messages)
-    model_settings = config.settings.resolve_model(settings.document_model)
+    model_name = config.settings.resolve_fast_model_name(config.FINALIZE_PHASE)
+    model_settings = config.settings.resolve_model(model_name)
     window = ctx.phase_windows.get(PHASE) or model_settings.num_ctx or 0
     room = compute_answer_room(prompt_tokens, window, model_settings.max_tokens) if window else None
     if room is not None and room < _MIN_ANSWER_TOKENS:
         raise DescriptionsDoNotFit(f"the descriptions take about {prompt_tokens:,} tokens, which leaves {max(room, 0):,} for the "
-                         f"answer in {settings.document_model}'s window of {window:,}, under {_MIN_ANSWER_TOKENS:,}")
+                         f"answer in {model_name}'s window of {window:,}, under {_MIN_ANSWER_TOKENS:,}")
 
     # STEP 3: the request on disk before the call, so it can be read while the call runs
     request_path = build_request_path(ctx.paths)
@@ -173,12 +174,12 @@ def write_document(ctx: RunContext,
 
     # STEP 4: the one call, thinking as the settings say, writing up to the room left; its answer kept before anything
     # is built from it
-    model = MODEL_FACTORY(settings.document_model)
+    model = MODEL_FACTORY(model_name)
     if room is not None:
         model = model.bind(max_tokens=room)
     if not settings.is_document_thinking_on:
         model = chat_model_service.bind_no_thinking(model)
-    ctx.log.info(f"phase 4: a fast-processing run, one call of {settings.document_model} over "
+    ctx.log.info(f"phase 4: a fast-processing run, one call of {model_name} over "
                  f"{len(fast_frame_note_service.list_described_frames(ctx.paths))} frame descriptions, "
                  f"about {prompt_tokens:,} tokens, the answer up to {room or 0:,}")
     started = time.monotonic()
@@ -199,7 +200,7 @@ def write_document(ctx: RunContext,
     usage = chain_response_utils.read_token_usage(reply)
     system_text, human_text = chain_response_utils.render_prompt_as_text(messages)
     call_log_service.write_call_log(call_log_service.build_call_log_path(ctx.paths, output_contract.FAST_DOCUMENT_SLUG), {
-        "phase": PHASE, "slug": output_contract.FAST_DOCUMENT_SLUG, "attempt": 1, "model": settings.document_model,
+        "phase": PHASE, "slug": output_contract.FAST_DOCUMENT_SLUG, "attempt": 1, "model": model_name,
         "request": {"system": system_text, "human": human_text}, "response": {"content": answer}})
     ctx.log.info(f"phase 4: the document written in {seconds:.0f} s, {usage['output_tokens'] or 0:,} tokens out")
 
