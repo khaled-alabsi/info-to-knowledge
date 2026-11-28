@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { buildDownloadUrl, buildVersionsDownloadUrl, buildRunBase, saveRunDisplayName, buildRunPath, describeDocumentPass, describeError, describePdfChoice, describePdfMode, formatDateTime, formatDuration,
-  formatPhaseTitle, formatRunState, formatSize, isSameName, NO_SELECTION, PDF_MODES, queueJobs, saveRunTags, sendFile, sendJson } from "../api";
+  formatPhaseTitle, formatRunState, formatSize, isSameName, NO_SELECTION, PDF_MODES, queueJobs, saveRunSpeed, saveRunTags, sendFile, sendJson } from "../api";
 import type { CommandOutput, Job, Phase, PhaseSelection, RecordingCompression, RunDetail as Detail, RunSignal, RunSummary } from "../api";
 import { sendJobAction } from "../jobs";
 import { useUpdateStream } from "../useUpdateStream";
@@ -213,7 +213,9 @@ export default function RunDetail({
   // on the Fast workflow before speeds were kept is Fast); an untouched run of the settings' speed sends none
   const [speedChoice, setSpeedChoice] = useState<Pick<PhaseSelection, "speed_preset" | "speed_settings"> | null>(null);
   const runDefaults = useRunDefaults(isMadeWithProfileGone ? "" : madeWithProfile);
-  const keptSpeed = detail?.speed ? { speed_preset: detail.speed.preset, speed_settings: detail.speed.values }
+  // what the run kept apart as changed by hand; a speed kept before that holds only its full values, which are compared
+  // with the preset as it is now
+  const keptSpeed = detail?.speed ? { speed_preset: detail.speed.preset, speed_settings: detail.speed.changes ?? detail.speed.values }
     : isFastWorkflow(detail?.workflow) ? { speed_preset: "fast", speed_settings: {} } : {};
   const runSpeed = detail?.workflow ? speedChoice ?? keptSpeed : {};
   const runChoice: PhaseSelection = { ...NO_SELECTION, profile: isMadeWithProfileGone ? "" : madeWithProfile, ...runSpeed };
@@ -800,7 +802,12 @@ export default function RunDetail({
           {detail?.workflow && (
             <span className="pill profile speed-pill" title="the Workflow speed: the run's next resume or phase run takes it">
               Speed: {runDefaults?.speed ? <WorkflowSpeedChoice selection={runChoice} defaults={runDefaults}
-                onChange={(next) => setSpeedChoice({ speed_preset: next.speed_preset, speed_settings: next.speed_settings })} />
+                onChange={(next) => {
+                  setSpeedChoice({ speed_preset: next.speed_preset, speed_settings: next.speed_settings });
+                  // the choice is kept in the run's folder at once: held on the page alone, a reload gave the old speed back
+                  saveRunSpeed(base, next.speed_preset ?? "", next.speed_settings ?? {}).then(onChanged)
+                    .catch((error) => reportFailure("the speed was not kept", error));
+                }} />
                 : nameSpeedPreset(detail.speed?.name ?? (isFastWorkflow(detail.workflow) ? "fast" : "quality"))}
             </span>
           )}

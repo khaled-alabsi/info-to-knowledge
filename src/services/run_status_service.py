@@ -397,7 +397,8 @@ def _list_off_phases(folder: Path,
 def _list_speed_off_phases(folder: Path) -> tuple[int, ...]:
     """The review and the critique collection when the run's Workflow speed switches them off (Balanced, Fast)."""
 
-    values = (run_speed_service.read_chosen_speed(folder) or {}).get("values") or {}
+    speed = run_speed_service.read_chosen_speed(folder)
+    values = run_speed_service.list_speed_values(speed) if speed else {}
     switches = (("review.isOn", "review"), ("critiqueCollection.isOn", output_contract.CRITIQUE_COLLECTION_PHASE))
 
     return tuple(output_contract.PHASE_NUMBERS[phase] for key, phase in switches if values.get(key) is False)

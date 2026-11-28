@@ -10,7 +10,7 @@ from models import output_contract
 
 __all__ = ["JobItemRequest", "RunSelectionRequest", "StartJobsRequest", "QueueRunRequest", "ControlRequest",
            "ResetRequest", "FrameDropRequest", "MoveRequest", "RestoreRequest", "ZipRequest", "HiddenRequest",
-           "ConvertRequest", "BranchRequest", "RunTagsRequest", "RunRef", "BatchDownloadRequest", "RunNamesRequest",
+           "ConvertRequest", "BranchRequest", "RunTagsRequest", "RunSpeedRequest", "RunRef", "BatchDownloadRequest", "RunNamesRequest",
            "InboxTagsRequest", "RenameRequest", "MergeRequest", "MarkdownWriteRequest", "SettingRequest", "SettingRemoveRequest",
            "ModelsDownloadRequest", "ModelsConfigureRequest", "SignInRequest", "AccountRequest", "AccountChangeRequest",
            "InstructionSaveRequest", "InstructionResetRequest", "InstructionPreviewRequest", "PhaseFlowRequest"]
@@ -100,6 +100,14 @@ class ProviderSetRequest(BaseModel):
     """The provider set a run that is not running is given; its next phases go on with it."""
 
     provider_set: str
+
+
+class RunSpeedRequest(BaseModel):
+    """The Workflow speed a run keeps from now on: a preset and the settings changed from it by hand (none for the
+    preset as it is). A run that works goes on as it started; its next start takes this."""
+
+    speed_preset: str
+    speed_settings: dict[str, bool | int | str] = Field(default_factory=dict)
 
 
 class ControlRequest(BaseModel):

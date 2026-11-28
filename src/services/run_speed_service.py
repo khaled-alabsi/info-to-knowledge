@@ -12,8 +12,8 @@ from models import speed_setting_vocabulary
 from services import video_workflow_service
 from utils import json_store_utils
 
-__all__ = ["read_chosen_speed", "resolve_speed", "write_chosen_speed", "apply_chosen_speed", "describe_speed_options",
-           "parse_speed_setting"]
+__all__ = ["read_chosen_speed", "resolve_speed", "write_chosen_speed", "apply_chosen_speed", "list_speed_values",
+           "describe_speed_options", "parse_speed_setting"]
 
 # The preset a new video run takes when nobody chose a speed for it (the owner)
 DEFAULT_PRESET = "balanced"
@@ -53,17 +53,35 @@ def resolve_speed(preset: str,
         raise ValueError(f"{', '.join(unknown)} is no setting of the Workflow speed menu")
     values = {**presets[preset], **changes}
 
-    return {"preset": preset, "values": values, "name": _name_speed(preset, values)}
+    # `changes` is what the person set by hand on top of the preset; the run keeps it apart, so a preset edited later
+    # reaches a run that never changed a value (it stays "Balanced" and runs with Balanced's current values)
+    return {"preset": preset, "values": values, "name": _name_speed(preset, values), "changes": dict(changes)}
 
 
 def write_chosen_speed(folder: Path,
-                       speed: dict) -> None:
-    """The run's speed, and its workflow when the speed sets one, so every reader of the workflow agrees."""
+                       speed: dict,
+                       is_workflow_kept: bool = True) -> None:
+    """The run's speed, and its workflow when the speed sets one, so every reader of the workflow agrees. A live run
+    passes `is_workflow_kept=False`: its workflow is read while it works, so the new one waits for its next start."""
 
     json_store_utils.write_json(folder / output_contract.RUN_SPEED_FILE, speed)
     workflow = speed["values"].get("video.workflow")
-    if workflow:
+    if workflow and is_workflow_kept:
         video_workflow_service.write_chosen_workflow(folder, str(workflow), _CHOSEN_BY)
+
+
+def list_speed_values(speed: dict) -> dict:
+    """The values a run with the kept `speed` runs with: its preset as it is now with what was changed by hand on top.
+    A speed kept before changes were kept apart holds its stored values over the preset's; a preset the settings no
+    longer hold leaves the stored values."""
+
+    stored = speed.get("values") or {}
+    preset_values = config.settings.speed_presets.get(speed.get("preset") or "")
+    if preset_values is None:
+        return dict(stored)
+    # the preset as it is now, so a setting added to the menu after the run chose its speed takes the preset's value,
+    # never the program's
+    return {**preset_values, **(speed["changes"] if "changes" in speed else stored)}
 
 
 def apply_chosen_speed(folder: Path) -> dict | None:
@@ -71,10 +89,7 @@ def apply_chosen_speed(folder: Path) -> dict | None:
 
     speed = read_chosen_speed(folder)
     if speed:
-        # the preset as it is now under the values kept, so a setting added to the menu after the run chose its speed
-        # takes the preset's value, never the program's
-        preset_values = config.settings.speed_presets.get(speed.get("preset") or "", {})
-        config.apply_speed_values({**preset_values, **(speed.get("values") or {})})
+        config.apply_speed_values(list_speed_values(speed))
 
     return speed
 

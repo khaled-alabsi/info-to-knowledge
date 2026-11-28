@@ -1048,7 +1048,7 @@ def cmd_run(args: argparse.Namespace) -> int:
             chosen_speed = run_speed_service.resolve_speed(run_speed_service.DEFAULT_PRESET, {})
         speed = chosen_speed or run_speed_service.read_chosen_speed(paths.output_root)
         if speed:
-            config.apply_speed_values(speed.get("values") or {})
+            config.apply_speed_values(run_speed_service.list_speed_values(speed))
         # This run's own choice of model per phase, on top of the settings' `phaseModels`, before any model is built
         config.settings.phase_models = {**config.settings.phase_models, **read_phase_models(args.phase_models)}
         # Phases 1 and 2 read the recording, so they wait while a done run keeps it in its folder; a branch made to run

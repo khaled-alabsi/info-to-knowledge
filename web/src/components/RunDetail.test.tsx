@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { Job, RunDetail as Detail } from "../api";
 import { FakeUpdateSource, PHASES, answerJson, answerText, installServer, makeJob, makePhaseRows, makeRun, makeRunDetail } from "../test/fakeServer";
+import { SPEED_OPTIONS } from "../test/speedOptions";
 import { readViewState } from "../viewState";
 import RunDetail from "./RunDetail";
 
@@ -1396,6 +1397,24 @@ describe("RunDetail branch", () => {
     expect(document.querySelector(".speed-pill")).toHaveTextContent("Speed: Fast");
     sendUpdate({ workflow: "quality", speed: { preset: "balanced", values: {}, name: "custom" } });
     expect(document.querySelector(".speed-pill")).toHaveTextContent("Speed: Custom");
+  });
+
+  it("a run kept as Balanced with no change by hand reads Balanced, and Balanced chosen again in the chip is kept in the run", async () => {
+    // The defect: the chip read Custom for a Balanced run holding an old copy of Balanced's values, and choosing Balanced
+    // again was held on the page alone, so a reload gave Custom back
+    const calls = installServer({ "GET /api/run-defaults?profile=": { pdf_mode: "text-only", pdf_ocr_engine: "tesseract",
+      knowledge_filter_model: "", workflow: "quality", speed: SPEED_OPTIONS },
+      [`POST ${RUN_BASE}/speed`]: { preset: "balanced", values: {}, name: "balanced", changes: {} } });
+    renderRun();
+    const oldCopy = { ...SPEED_OPTIONS.presets.balanced, "review.isOn": false, "framesProcessing.isCritiqueOn": true };
+    sendUpdate({ workflow: "quality", speed: { preset: "balanced", values: oldCopy, name: "custom", changes: {} } });
+    expect(await screen.findByRole("button", { name: "workflow speed: Balanced" })).toBeInTheDocument();
+    sendUpdate({ workflow: "quality", speed: { preset: "balanced", values: oldCopy, name: "custom" } });
+    await userEvent.click(await screen.findByRole("button", { name: "workflow speed: Custom" }));
+    await userEvent.click(screen.getByRole("radio", { name: /^Balanced/ }));
+    const saved = calls.find((call) => call.method === "POST" && call.url === `${RUN_BASE}/speed`);
+    expect(saved?.body).toEqual({ speed_preset: "balanced", speed_settings: {} });
+    expect(screen.getByRole("button", { name: "workflow speed: Balanced" })).toBeInTheDocument();
   });
 
   it("a branched run's header names the run and phase it came from", () => {

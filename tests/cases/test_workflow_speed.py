@@ -144,3 +144,25 @@ def test_a_job_with_a_speed_names_it_on_its_run_line_and_keeps_it_in_its_folder_
     harness.check("a run folder sent by its full path keeps its speed at once too (defect: it was kept only for output/<name>)",
                   by_full_path.status_code == 200
                   and (run_speed_service.read_chosen_speed(run) or {}).get("preset") == "fast", by_full_path.text[:200])
+
+
+def test_a_run_kept_as_balanced_with_no_change_by_hand_runs_with_balanced_s_values_of_now_defect():
+    # The defect: a run chosen as Balanced showed "Speed: Custom", since its folder held an old copy of every Balanced
+    # value (review on) and the page and the next start both took the old copy over Balanced as it is now. The fix: the
+    # folder keeps the changes made by hand apart, and a run with none runs with the preset's current values.
+    stale = {**config.settings.speed_presets["balanced"], "review.isOn": True}
+    folder = Path(tempfile.mkdtemp())
+    run_speed_service.write_chosen_speed(folder, run_speed_service.resolve_speed("balanced", {}))
+    kept = run_speed_service.read_chosen_speed(folder)
+    harness.check("a speed chosen with no change by hand keeps an empty list of changes and the name Balanced",
+                  kept["changes"] == {} and kept["name"] == "balanced", json.dumps(kept))
+    harness.check("a run with one change by hand keeps that change apart",
+                  run_speed_service.resolve_speed("balanced", {"review.isOn": True})["changes"] == {"review.isOn": True})
+    with_changes = {"preset": "balanced", "values": stale, "name": "custom", "changes": {}}
+    harness.check("a speed with no change by hand takes the preset's values of now, whatever its stored copy holds",
+                  run_speed_service.list_speed_values(with_changes) == config.settings.speed_presets["balanced"])
+    harness.check("a change by hand stays on top of the preset",
+                  run_speed_service.list_speed_values({**with_changes, "changes": {"review.isOn": True}})["review.isOn"] is True)
+    legacy = {"preset": "balanced", "values": stale, "name": "custom"}
+    harness.check("a speed kept before changes were kept apart still runs with the values it stored",
+                  run_speed_service.list_speed_values(legacy)["review.isOn"] is True)

@@ -27,7 +27,7 @@ from models import phase_guide
 from models.operation_result import OperationResult
 from models import run_job
 from models.run_job import RunJob, RunJobRequest
-from models.web_api_request import (JobItemRequest, ProviderSetRequest, AccountChangeRequest, AccountRequest, SignInRequest, BatchDownloadRequest, JobMoveRequest, JobOnFailureRequest, QueuePauseRequest, PartMessageRequest,ModelsConfigureRequest, ModelsDownloadRequest, BranchRequest, ConvertRequest, PartRunRequest, RunNamesRequest, RunRefsRequest, ControlRequest, RunDisplayNameRequest, RunTagsRequest, FrameDropRequest, HiddenRequest, ResetRequest, SettingRequest, SettingRemoveRequest, RestoreRequest, StartJobsRequest,
+from models.web_api_request import (JobItemRequest, ProviderSetRequest, RunSpeedRequest, AccountChangeRequest, AccountRequest, SignInRequest, BatchDownloadRequest, JobMoveRequest, JobOnFailureRequest, QueuePauseRequest, PartMessageRequest,ModelsConfigureRequest, ModelsDownloadRequest, BranchRequest, ConvertRequest, PartRunRequest, RunNamesRequest, RunRefsRequest, ControlRequest, RunDisplayNameRequest, RunTagsRequest, FrameDropRequest, HiddenRequest, ResetRequest, SettingRequest, SettingRemoveRequest, RestoreRequest, StartJobsRequest,
                                     InboxTagsRequest, RenameRequest, MergeRequest, MoveRequest, ZipRequest,
                                     MarkdownWriteRequest, ProjectRequest, GrantRequest, GroupRequest, GroupAccountsRequest,
                                     RunListsRequest, InstructionSaveRequest, InstructionResetRequest,
@@ -376,6 +376,24 @@ def set_run_provider_set(root: str,
     run_provider_set_service.write_chosen_provider_set(folder, name_in_force)
 
     return {"provider_set": name_in_force}
+
+
+@router.post("/runs/{root}/{name}/speed")
+def set_run_speed(root: str,
+                  name: str,
+                  body: RunSpeedRequest) -> dict:
+    """Keep the Workflow speed the page's chip chose in the run's folder at once, so it shows after a reload and the
+    run's next start takes it. A run that works goes on as it started: it reads its speed only at its start, and its
+    workflow file, which it reads while it works, is left as it is until then."""
+
+    folder = _resolve_folder(root, name)
+    try:
+        speed = run_speed_service.resolve_speed(body.speed_preset, body.speed_settings)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    run_speed_service.write_chosen_speed(folder, speed, is_workflow_kept=not run_status_service.list_live_pids(folder))
+
+    return speed
 
 
 @router.get("/run-defaults")

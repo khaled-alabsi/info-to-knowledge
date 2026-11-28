@@ -631,6 +631,8 @@ export interface RunSpeed {
   preset: string;
   values: Record<string, SpeedValue>;
   name: string;
+  // only what was changed by hand from the preset; a speed kept before the changes were kept apart has none
+  changes?: Record<string, SpeedValue>;
 }
 
 export interface PhaseModels {
@@ -1323,6 +1325,12 @@ export function saveRunDisplayName(runBase: string, name: string): Promise<Comma
 
 export function saveRunTags(runBase: string, tags: string[]): Promise<CommandOutput> {
   return putJson<CommandOutput>(`${runBase}/tags`, { tags });
+}
+
+// Keeps the Workflow speed the run's chip chose in the run's folder, so it shows after a reload and the run's next start
+// takes it; `changes` is only what was set by hand from the preset
+export function saveRunSpeed(runBase: string, preset: string, changes: Record<string, SpeedValue>): Promise<RunSpeed> {
+  return sendJson<RunSpeed>(`${runBase}/speed`, { speed_preset: preset, speed_settings: changes });
 }
 
 // Saves one setting in both default settings files, or in a profile's file; the answer says what was written, or why not
