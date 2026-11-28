@@ -64,7 +64,7 @@ const OTHER_KEYS = [
   "providers.embeddings.timeoutS", "providers.decision.host", "providers.decision.model",
   "providers.decision.timeoutS", "providers.chat.libraryModel", "providers.speech.libraryModel",
   "providers.diarization.libraryModel", "providers.embeddings.libraryModel", "providers.decision.libraryModel",
-  "speedPresets", "workerSets", "defaultWorkerSet", "machine",
+  "speedPresets", "providerSets", "defaultProviderSet", "machine",
 ];
 const ALL_KEYS = [...OTHER_KEYS, ...MODEL_KEYS];
 

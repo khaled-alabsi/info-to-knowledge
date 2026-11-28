@@ -35,9 +35,9 @@ class RunSelectionRequest(BaseModel):
     is_dry_run: bool = False
     # `playbook.<name>.json` for these jobs; empty or absent runs on the server's own settings
     profile: str = ""
-    # The worker set (`default` or a name in the settings' `workerSets`) these runs are on; empty leaves each run
-    # folder's set, else the settings' `defaultWorkerSet`
-    worker_set: str = ""
+    # The provider set (`default` or a name in the settings' `providerSets`) these runs are on; empty leaves each run
+    # folder's set, else the settings' `defaultProviderSet`
+    provider_set: str = ""
     # The ingesting profile chosen by hand (`takeaway`, `meeting`, ...); empty leaves it to a tag or phase 2's call, and
     # once chosen no tag and no model call changes it
     ingesting_profile: str = ""
@@ -96,10 +96,10 @@ class QueueRunRequest(JobItemRequest, RunSelectionRequest):
     up to a phase or one phase, optionally on a settings profile and in an ingesting profile chosen by hand."""
 
 
-class WorkerSetRequest(BaseModel):
-    """The worker set a run that is not running is given; its next phases go on with it."""
+class ProviderSetRequest(BaseModel):
+    """The provider set a run that is not running is given; its next phases go on with it."""
 
-    worker_set: str
+    provider_set: str
 
 
 class ControlRequest(BaseModel):

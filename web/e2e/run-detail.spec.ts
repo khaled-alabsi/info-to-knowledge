@@ -53,7 +53,7 @@ test("Resume's arrow resumes with other settings, which win over the run's own, 
   api.answer("GET /runs/output/gateway-review/update", { json: { run: detail, offset: 0, text: "" } });
   api.answer("POST /jobs", { json: [buildJob("job-9", { status: "queued" })] });
   await openDoneRun(page);
-  const arrow = page.getByRole("button", { name: "resume with another worker set or other settings" });
+  const arrow = page.getByRole("button", { name: "resume with another provider set or other settings" });
   for (const size of SCREEN_WIDTHS) {
     await page.setViewportSize(size);
     await expectInsideScreen(page, page.getByRole("button", { name: /Resume from 4/ }));

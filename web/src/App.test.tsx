@@ -32,18 +32,18 @@ describe("App", () => {
     expect(await screen.findByRole("heading", { level: 2, name: "Jonas-call" })).toBeInTheDocument();
   });
 
-  it("with several runs running, the running count lists each with its phase and worker set, and opens the one picked defect", async () => {
+  it("with several runs running, the running count lists each with its phase and provider set, and opens the one picked defect", async () => {
     // Defect: "3 running" opened whichever running run came first, so the owner could not choose which one.
-    // Fix: with more than one running, the count opens a menu naming each run, its phase and its worker set.
+    // Fix: with more than one running, the count opens a menu naming each run, its phase and its provider set.
     serveLists({ runs: [
       makeRun({ name: "Jonas-call", folder: "/work/knowledge/Jonas-call", is_live: true, status: "running", live_phase: 3 }),
-      makeRun({ name: "Weekly", folder: "/work/knowledge/Weekly", is_live: true, status: "running", live_phase: 4, worker_set: "gpu-box" }),
+      makeRun({ name: "Weekly", folder: "/work/knowledge/Weekly", is_live: true, status: "running", live_phase: 4, provider_set: "gpu-box" }),
     ] });
     render(<App />);
     await userEvent.click(await screen.findByRole("button", { name: /2 running/ }));
     expect(screen.getByRole("heading", { level: 2, name: "Nothing open" })).toBeInTheDocument();
-    expect(await screen.findByText("phase 3 · worker set default")).toBeInTheDocument();
-    expect(screen.getByText("phase 4 · worker set gpu-box")).toBeInTheDocument();
+    expect(await screen.findByText("phase 3 · provider set default")).toBeInTheDocument();
+    expect(screen.getByText("phase 4 · provider set gpu-box")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("menuitem", { name: /Weekly/ }));
     expect(await screen.findByRole("heading", { level: 2, name: "Weekly" })).toBeInTheDocument();
   });

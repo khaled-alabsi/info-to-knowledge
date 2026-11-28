@@ -1376,20 +1376,20 @@ p.transcript-suggestions { padding: 10px 12px; }
 .setting-control.long-text { grid-column: 1 / -1; }
 .setting-control.long-text textarea { width: 100%; box-sizing: border-box; font: inherit; line-height: 1.5; resize: vertical;
   padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); }
-/* Worker sets: one card a set, the values it changes one a row */
-.worker-sets { display: flex; flex-direction: column; gap: 12px; padding: 8px 0 12px; }
-.worker-set { border: 1px solid var(--border, #e2e2e2); border-radius: 10px; padding: 12px; display: flex;
+/* Provider sets: one card a set, the values it changes one a row */
+.provider-sets { display: flex; flex-direction: column; gap: 12px; padding: 8px 0 12px; }
+.provider-set { border: 1px solid var(--border, #e2e2e2); border-radius: 10px; padding: 12px; display: flex;
   flex-direction: column; gap: 8px; min-width: 0; }
-.worker-set-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.worker-set-head h4 { margin: 0; font-size: 15px; }
-.worker-set-actions { display: flex; gap: 8px; margin-left: auto; flex-wrap: wrap; }
-.worker-set-chosen { display: flex; align-items: center; gap: 6px; font-size: 13px; }
-.worker-set-subhead { margin: 4px 0 0; font-size: 13px; color: var(--muted, #666); }
+.provider-set-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.provider-set-head h4 { margin: 0; font-size: 15px; }
+.provider-set-actions { display: flex; gap: 8px; margin-left: auto; flex-wrap: wrap; }
+.provider-set-chosen { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.provider-set-subhead { margin: 4px 0 0; font-size: 13px; color: var(--muted, #666); }
 /* a job of a set is one card: its title, the library model chosen from a list, and where that model runs; the list stays one box wide */
 .job-links { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr)); gap: 8px; }
 .job-link { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 10px 12px; min-width: 0;
   border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
-.job-link .job-title, .worker-set-value .job-title { font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+.job-link .job-title, .provider-set-value .job-title { font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
 .job-link .btn.setting-choice { width: 100%; }
 .job-link > * { max-width: 100%; }
 .job-runs { overflow-wrap: anywhere; }
@@ -1459,21 +1459,21 @@ p.transcript-suggestions { padding: 10px 12px; }
 .settings-prefix-group > summary { display: flex; align-items: center; gap: 6px; padding: 10px 0; cursor: pointer; list-style: none; }
 .settings-prefix-group > summary::-webkit-details-marker { display: none; }
 .settings-prefix { margin: 0; font-size: 14px; }
-.worker-set-value { display: grid; grid-template-columns: minmax(0, 14rem) minmax(0, 1fr) auto; gap: 4px 8px;
+.provider-set-value { display: grid; grid-template-columns: minmax(0, 14rem) minmax(0, 1fr) auto; gap: 4px 8px;
   align-items: center; }
-.worker-set-value code { overflow-wrap: anywhere; font-size: 12px; }
-.worker-set-value input { min-width: 0; }
-.worker-set-value small { grid-column: 2; overflow-wrap: anywhere; }
-.worker-set-value .btn { grid-column: 3; grid-row: 1; }
-.worker-set-add { display: flex; gap: 8px; flex-wrap: wrap; }
-.worker-set-add input { flex: 1; min-width: 12rem; }
-.worker-set p { margin: 0; }
+.provider-set-value code { overflow-wrap: anywhere; font-size: 12px; }
+.provider-set-value input { min-width: 0; }
+.provider-set-value small { grid-column: 2; overflow-wrap: anywhere; }
+.provider-set-value .btn { grid-column: 3; grid-row: 1; }
+.provider-set-add { display: flex; gap: 8px; flex-wrap: wrap; }
+.provider-set-add input { flex: 1; min-width: 12rem; }
+.provider-set p { margin: 0; }
 @media (max-width: 520px) {
-  .worker-set-value { grid-template-columns: minmax(0, 1fr) auto; }
-  .worker-set-value code { grid-column: 1 / -1; }
-  .worker-set-value input { grid-column: 1; }
-  .worker-set-value small { grid-column: 1 / -1; }
-  .worker-set-value .btn { grid-column: 2; grid-row: 2; }
+  .provider-set-value { grid-template-columns: minmax(0, 1fr) auto; }
+  .provider-set-value code { grid-column: 1 / -1; }
+  .provider-set-value input { grid-column: 1; }
+  .provider-set-value small { grid-column: 1 / -1; }
+  .provider-set-value .btn { grid-column: 2; grid-row: 2; }
 }
 .setting-control.json textarea { width: 100%; font-family: var(--mono, ui-monospace, Menlo, monospace); font-size: 13px;
   line-height: 1.5; resize: vertical; white-space: pre; overflow-x: auto; }

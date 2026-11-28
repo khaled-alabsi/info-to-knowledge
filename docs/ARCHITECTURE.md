@@ -65,12 +65,12 @@ key is an error, and a key that starts with `_` is a note. Shipped profiles:
 | `container` | Linux settings: faster-whisper and Tesseract in place of the Apple tools, model hosts reached through `host.containers.internal` |
 | `strict` | zero repair of a frame, and a refused frame tool stops the run |
 
-Worker sets name other model hosts. Jobs on different sets run at the same time, jobs on one set one after another.
+Provider sets name other model hosts. Jobs on different sets run at the same time, jobs on one set one after another.
 
 ## The server, the queue and the pages
 
 `i2k serve` starts one server and one queue. The web page and the terminal UI add jobs to the queue. The queue runs
-one job at a time per worker set, each as its own `i2k run` process, so closing a page or the server leaves a running
+one job at a time per provider set, each as its own `i2k run` process, so closing a page or the server leaves a running
 job going. A restarted server finds a job by its process id and marks it `lost` when the process ended with no exit
 code to read. Progress is read from the run folder, so a run started by hand shows up the same way.
 

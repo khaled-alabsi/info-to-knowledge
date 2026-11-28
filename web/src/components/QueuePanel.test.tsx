@@ -61,8 +61,8 @@ describe("QueuePanel", () => {
     expect(within(listWaiting()).getAllByRole("listitem")[0]).toHaveTextContent("Jonas-call");
   });
 
-  it("groups the running and waiting jobs by worker set when more than one set has jobs, each numbered in its set defect", () => {
-    // Defect: with jobs on three worker sets, the queue showed one list numbered 1 to 20, so the owner could not see
+  it("groups the running and waiting jobs by provider set when more than one set has jobs, each numbered in its set defect", () => {
+    // Defect: with jobs on three provider sets, the queue showed one list numbered 1 to 20, so the owner could not see
     // which set ran what or what each set ran next. Fix: one group per set, its running job first, its waiting jobs
     // numbered in the order that set runs them.
     renderQueue([
@@ -81,9 +81,9 @@ describe("QueuePanel", () => {
     expect(within(macRows[1]).getByRole("button", { name: "run later" })).toBeDisabled();
   });
 
-  it("shows one plain list when every job runs on one worker set", () => {
+  it("shows one plain list when every job runs on one provider set", () => {
     renderQueue();
-    expect(screen.queryByRole("region", { name: /worker set/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: /provider set/ })).not.toBeInTheDocument();
   });
 
   it("names a converted run by its new folder, and the recording it is written from under it", () => {

@@ -7,7 +7,7 @@ on your machine and are mounted into the container, so the image stays small and
 
 | On your machine | In the container | Holds |
 |---|---|---|
-| `playbook.local.json` | `/app/playbook.local.json` | your settings: the model host addresses and your worker sets |
+| `playbook.local.json` | `/app/playbook.local.json` | your settings: the model host addresses and your provider sets |
 | `inbox/` | `/data/inbox` | recordings to process |
 | `output/` | `/data/output` | run folders and finished documents |
 | `ui/` | `/data/ui` | the queue and the console of each job |
@@ -82,7 +82,7 @@ settings profile (switched on by the image through `I2K_PROFILE=container`) alre
 }
 ```
 
-A worker set, or a host added to `hosts` and named in a model's `host`, in `playbook.local.json` can reach any other machine. Compose adds
+A provider set, or a host added to `hosts` and named in a model's `host`, in `playbook.local.json` can reach any other machine. Compose adds
 `host.containers.internal` with `extra_hosts`, so it also works with Docker on Linux.
 
 ## Limits

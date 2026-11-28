@@ -17,7 +17,7 @@ services:
       # the Hugging Face token comes from your shell, never from a file
       HF_TOKEN: ${HF_TOKEN:-}
     volumes:
-      - ./playbook.local.json:/app/playbook.local.json:ro   # your settings: model host addresses, worker sets
+      - ./playbook.local.json:/app/playbook.local.json:ro   # your settings: model host addresses, provider sets
       - ./inbox:/data/inbox                                  # recordings to process
       - ./output:/data/output                                # run folders and finished documents
       - ./ui:/data/ui                                        # the queue and each job's console

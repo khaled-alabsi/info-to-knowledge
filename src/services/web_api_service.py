@@ -27,7 +27,7 @@ from models import phase_guide
 from models.operation_result import OperationResult
 from models import run_job
 from models.run_job import RunJob, RunJobRequest
-from models.web_api_request import (JobItemRequest, WorkerSetRequest, AccountChangeRequest, AccountRequest, SignInRequest, BatchDownloadRequest, JobMoveRequest, JobOnFailureRequest, QueuePauseRequest, PartMessageRequest,ModelsConfigureRequest, ModelsDownloadRequest, BranchRequest, ConvertRequest, PartRunRequest, RunNamesRequest, RunRefsRequest, ControlRequest, RunDisplayNameRequest, RunTagsRequest, FrameDropRequest, HiddenRequest, ResetRequest, SettingRequest, SettingRemoveRequest, RestoreRequest, StartJobsRequest,
+from models.web_api_request import (JobItemRequest, ProviderSetRequest, AccountChangeRequest, AccountRequest, SignInRequest, BatchDownloadRequest, JobMoveRequest, JobOnFailureRequest, QueuePauseRequest, PartMessageRequest,ModelsConfigureRequest, ModelsDownloadRequest, BranchRequest, ConvertRequest, PartRunRequest, RunNamesRequest, RunRefsRequest, ControlRequest, RunDisplayNameRequest, RunTagsRequest, FrameDropRequest, HiddenRequest, ResetRequest, SettingRequest, SettingRemoveRequest, RestoreRequest, StartJobsRequest,
                                     InboxTagsRequest, RenameRequest, MergeRequest, MoveRequest, ZipRequest,
                                     MarkdownWriteRequest, ProjectRequest, GrantRequest, GroupRequest, GroupAccountsRequest,
                                     RunListsRequest, InstructionSaveRequest, InstructionResetRequest,
@@ -65,7 +65,7 @@ from services import instruction_catalogue_service
 from services import instruction_edit_service
 from services import instruction_store_service
 from services import job_queue_service
-from services import run_worker_set_service
+from services import run_provider_set_service
 from services import run_artifact_service
 from services import run_operations_service
 from services import run_recording_service
@@ -189,7 +189,7 @@ def save_setting(body: SettingRequest) -> dict:
 
 @router.post("/settings/remove")
 def remove_setting(body: SettingRemoveRequest) -> dict:
-    """One entry (a model, a worker set, a host) taken out of the owner's own settings file or a profile's file, refused
+    """One entry (a model, a provider set, a host) taken out of the owner's own settings file or a profile's file, refused
     with the reason when it is shipped or the settings would not load without it."""
 
     return _describe_operation(settings_service.remove_setting(key_parts=body.key_parts, profile=body.profile))
@@ -303,33 +303,33 @@ def list_phase_models() -> dict:
                        for phase in config.PHASE_DEFAULT_MODELS]}
 
 
-@router.get("/worker-sets")
-def list_worker_sets() -> dict:
-    """The worker sets a run can be on, read from the settings files now: `default` (the settings as they are) first,
+@router.get("/provider-sets")
+def list_provider_sets() -> dict:
+    """The provider sets a run can be on, read from the settings files now: `default` (the settings as they are) first,
     then each set the files name, with the settings it changes and the machine it runs on; and the set a run with no
     choice is on."""
 
-    merged = config.read_layers(profile_name=config.PROFILE_NAME, worker_set_name=config.DEFAULT_WORKER_SET_NAME)
-    named = merged.get("workerSets") or {}
-    label = config.WORKER_SET_LABEL_KEY
-    default_set = {"name": config.DEFAULT_WORKER_SET_NAME, "changes": [], "machine": config.read_set_machine(merged)}
+    merged = config.read_layers(profile_name=config.PROFILE_NAME, provider_set_name=config.DEFAULT_PROVIDER_SET_NAME)
+    named = merged.get("providerSets") or {}
+    label = config.PROVIDER_SET_LABEL_KEY
+    default_set = {"name": config.DEFAULT_PROVIDER_SET_NAME, "changes": [], "machine": config.read_set_machine(merged)}
     # A set names its own machine, never the default's: with none of its own it is the provider its job runs on
     named_set_list = [{"name": name, "changes": sorted(key for key in values if not key.startswith("_") and key != label),
                        "machine": config.read_set_machine({**config.merge_settings(merged, values), label: values.get(label, "")})}
                       for name, values in sorted(named.items()) if not name.startswith("_")]
 
-    return {"default_set": merged.get("defaultWorkerSet", config.DEFAULT_WORKER_SET_NAME),
+    return {"default_set": merged.get("defaultProviderSet", config.DEFAULT_PROVIDER_SET_NAME),
             "sets": [default_set, *named_set_list]}
 
 
-def _check_worker_set_name(worker_set: str) -> None:
-    """400 naming the sets that exist when `worker_set` is none of them; an empty name is no choice and passes."""
+def _check_provider_set_name(provider_set: str) -> None:
+    """400 naming the sets that exist when `provider_set` is none of them; an empty name is no choice and passes."""
 
-    if not worker_set:
+    if not provider_set:
         return
-    known = [entry["name"] for entry in list_worker_sets()["sets"]]
-    if worker_set not in known:
-        raise HTTPException(status_code=400, detail=f"no worker set {worker_set!r}: the worker sets are " + ", ".join(known))
+    known = [entry["name"] for entry in list_provider_sets()["sets"]]
+    if provider_set not in known:
+        raise HTTPException(status_code=400, detail=f"no provider set {provider_set!r}: the provider sets are " + ", ".join(known))
 
 
 def _find_job_holding_folder(folder: Path) -> RunJob | None:
@@ -341,54 +341,54 @@ def _find_job_holding_folder(folder: Path) -> RunJob | None:
                  and Path(job.request.output_root).resolve() == root), None)
 
 
-def _check_worker_set_free_to_choose(items: list[JobItemRequest],
-                                     worker_set: str) -> None:
-    """409 when a run asked to be queued on `worker_set` is already held by a job of the queue on another set: queued
+def _check_provider_set_free_to_choose(items: list[JobItemRequest],
+                                     provider_set: str) -> None:
+    """409 when a run asked to be queued on `provider_set` is already held by a job of the queue on another set: queued
     twice with two sets, it would run on both or on neither."""
 
-    if not worker_set:
+    if not provider_set:
         return
-    default_set = job_queue_service.read_default_worker_set()
+    default_set = job_queue_service.read_default_provider_set()
     for item in items:
         held = _find_job_holding_folder(Path(item.output))
         if held is None:
             continue
-        held_set = job_queue_service.read_job_worker_set(held, default_set)
-        if held_set != worker_set:
-            raise HTTPException(status_code=409, detail=f"{Path(item.output).name} is already queued on worker set "
+        held_set = job_queue_service.read_job_provider_set(held, default_set)
+        if held_set != provider_set:
+            raise HTTPException(status_code=409, detail=f"{Path(item.output).name} is already queued on provider set "
                                                         f"{held_set!r}: cancel that job first or queue it on {held_set!r}")
 
 
-@router.post("/runs/{root}/{name}/worker-set")
-def set_run_worker_set(root: str,
+@router.post("/runs/{root}/{name}/provider-set")
+def set_run_provider_set(root: str,
                        name: str,
-                       body: WorkerSetRequest) -> dict:
-    """Give a run that is not running another worker set; its next phases go on with it. 409 while a job of the run
+                       body: ProviderSetRequest) -> dict:
+    """Give a run that is not running another provider set; its next phases go on with it. 409 while a job of the run
     waits, runs or holds the queue, since that job is already on a set."""
 
-    _check_worker_set_name(body.worker_set)
+    _check_provider_set_name(body.provider_set)
     folder = _resolve_folder(root, name)
     held = _find_job_holding_folder(folder)
     if held is not None:
         raise HTTPException(status_code=409, detail=f"{name} has a {held.status} job: cancel it or let it end before "
-                                                    "choosing another worker set")
-    name_in_force = body.worker_set or job_queue_service.read_default_worker_set()
-    run_worker_set_service.write_chosen_worker_set(folder, name_in_force)
+                                                    "choosing another provider set")
+    name_in_force = body.provider_set or job_queue_service.read_default_provider_set()
+    run_provider_set_service.write_chosen_provider_set(folder, name_in_force)
 
-    return {"worker_set": name_in_force}
+    return {"provider_set": name_in_force}
 
 
 @router.get("/run-defaults")
 def read_run_defaults(profile: str = "",
-                      worker_set: str = "") -> dict:
+                      provider_set: str = "") -> dict:
     """What a run started now takes for each choice the run form leaves untouched, read from the files now: the
     default settings with `profile` on top, or with the server's own profile when the run names none, and the
-    `worker_set`'s changes on top of those."""
+    `provider_set`'s changes on top of those."""
 
     if profile and profile not in config.list_profile_names():
         raise HTTPException(status_code=404, detail=f"no profile {profile!r}")
-    _check_worker_set_name(worker_set)
-    next_job_settings = settings_service.read_next_job_settings(profile or config.PROFILE_NAME, worker_set)
+    _check_provider_set_name(provider_set)
+    next_job_settings = settings_service.read_next_job_settings(profile or config.PROFILE_NAME, provider_set)
 
     return {"pdf_mode": next_job_settings.pdf.default_mode,
             # under "by-size", the page counts that pick a PDF's default: at most the first, pages as images; over
@@ -1260,7 +1260,7 @@ def convert_run(root: str,
         copied = result.records[0]
         request = RunJobRequest(video=Path(copied["video"]), output_root=Path(copied["folder"]),
                                 from_phase=int(copied["fromPhase"]), is_forced=True, purpose=copied["purpose"],
-                                worker_set=run_worker_set_service.read_chosen_worker_set(folder) or "")
+                                provider_set=run_provider_set_service.read_chosen_provider_set(folder) or "")
         described["jobs"] = [job.as_dict() for job in job_queue_service.queue_jobs(job_queue_service.QUEUE_DIR, [request])]
 
     return described
@@ -1371,7 +1371,7 @@ def run_another_part(root: str,
         # Past the processed-once check: the branch is a copy of a run of the same recording, run again on purpose
         request = RunJobRequest(video=Path(branch["video"]), output_root=Path(branch["folder"]), from_phase=1,
                                 is_forced=True, purpose=f"{words} · phases 1 on",
-                                worker_set=run_worker_set_service.read_chosen_worker_set(_resolve_folder(root, name)) or "")
+                                provider_set=run_provider_set_service.read_chosen_provider_set(_resolve_folder(root, name)) or "")
         described["jobs"] = [job.as_dict() for job in job_queue_service.queue_jobs(job_queue_service.QUEUE_DIR, [request])]
 
     return described
@@ -1452,10 +1452,10 @@ def save_recording_upload(root: str,
 @router.get("/jobs")
 def list_jobs(request: Request) -> list[dict]:
     """The queue, oldest first, each job saying whether its run folder went missing while it ran, and each job that may
-    still run naming the worker set it runs on (its lane, which the queue groups by); a job of a run the account may not
+    still run naming the provider set it runs on (its lane, which the queue groups by); a job of a run the account may not
     see is left out."""
 
-    default_set = job_queue_service.read_default_worker_set()
+    default_set = job_queue_service.read_default_provider_set()
     return [{**job.as_dict(), "is_output_missing": job_queue_service.is_run_folder_missing(job_queue_service.QUEUE_DIR, job),
              "tries": job_queue_service.count_tries(job),
              "lane": job_queue_service.read_job_lane(job, default_set) if job.status in (
@@ -1488,8 +1488,8 @@ def queue_jobs(body: StartJobsRequest,
         if missing_providers:
             lines = [f"{row['name']} (called by {', '.join(row['used_by'])}): {row['reason']}" for row in missing_providers]
             raise HTTPException(status_code=409, detail="a run needs a model provider that is not set up: " + "; ".join(lines))
-    _check_worker_set_name(body.worker_set)
-    _check_worker_set_free_to_choose(body.items, body.worker_set)
+    _check_provider_set_name(body.provider_set)
+    _check_provider_set_free_to_choose(body.items, body.provider_set)
     for phase, name in body.phase_models.items():
         try:
             config.check_phase_model(phase, name, config.settings.models)
@@ -1513,7 +1513,7 @@ def queue_jobs(body: StartJobsRequest,
                               document_source=body.document_source, knowledge_filter_model=body.knowledge_filter_model,
                               range_start=body.range_start, range_end=body.range_end, range_pages=body.range_pages,
                               phase_models=tuple(f"{phase}={name}" for phase, name in body.phase_models.items()),
-                              workflow=body.workflow, worker_set=body.worker_set, speed_preset=body.speed_preset,
+                              workflow=body.workflow, provider_set=body.provider_set, speed_preset=body.speed_preset,
                               speed_settings=speed_pairs)
                 for item in body.items]
     _save_document_wishes(body.document_pass, body.document_wishes)
@@ -1526,10 +1526,10 @@ def queue_jobs(body: StartJobsRequest,
                                                                                          body.speed_settings))
 
     # a run folder that exists keeps its set at once, so its page names the set it waits on
-    for item in body.items if body.worker_set else []:
+    for item in body.items if body.provider_set else []:
         folder = _resolve_output_folder(item.output)
         if folder is not None and folder.is_dir():
-            run_worker_set_service.write_chosen_worker_set(folder, body.worker_set)
+            run_provider_set_service.write_chosen_provider_set(folder, body.provider_set)
 
     return [job.as_dict() for job in job_queue_service.queue_jobs(job_queue_service.QUEUE_DIR, requests)]
 

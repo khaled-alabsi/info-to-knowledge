@@ -29,7 +29,7 @@ export function readOptionLabel(label: string): string {
   return label === "" || label === "(empty)" ? "automatic" : label;
 }
 
-// A value an owner's own file or a worker set sets, against the program's and the shipped default settings' values
+// A value an owner's own file or a provider set sets, against the program's and the shipped default settings' values
 export function isOwnerChange(source: string): boolean {
   return source !== "code" && source !== "default";
 }

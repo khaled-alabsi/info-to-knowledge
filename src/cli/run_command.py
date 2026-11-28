@@ -66,7 +66,7 @@ from services import run_resume_service
 from services import run_store_service
 from services import run_tags_service
 from services import run_speed_service
-from services import run_worker_set_service
+from services import run_provider_set_service
 from services import server_client_service
 from services import slides_source_service
 from services import text_detection_service
@@ -482,7 +482,7 @@ def _log_run_header(ctx: RunContext,
     if config.PROFILE_NAME:
         profile_part = f" + {config.build_profile_path(config.PROFILE_NAME).name} (--profile {config.PROFILE_NAME})"
     ctx.log.info(f"  config: {config.DEFAULT_CONFIG_FILE.name} + {config.LOCAL_CONFIG_FILE.name}{profile_part}")
-    ctx.log.info(f"  worker set: {config.WORKER_SET_NAME}")
+    ctx.log.info(f"  provider set: {config.PROVIDER_SET_NAME}")
     is_fast = _is_fast_run(ctx.paths.output_root, is_audio)
     has_no_critic = _has_no_critic_run(ctx.paths.output_root, is_audio)
     # A fast run repairs nothing: the quality workflow's retry settings would only mislead
@@ -545,7 +545,7 @@ def _queue_on_server(args: argparse.Namespace) -> int:
             "knowledge_filter_model": getattr(args, "knowledge_filter_model", ""),
             "range_start": getattr(args, "range_start", ""), "range_end": getattr(args, "range_end", ""),
             "range_pages": getattr(args, "range_pages", ""),
-            "phase_models": phase_models, "workflow": args.workflow, "worker_set": getattr(args, "worker_set", "")}
+            "phase_models": phase_models, "workflow": args.workflow, "provider_set": getattr(args, "provider_set", "")}
     try:
         jobs = server_client_service.call_server("POST", "/jobs", json=body)
     except RuntimeError as error:
@@ -745,8 +745,8 @@ def add_run_arguments(parser: argparse.ArgumentParser) -> None:
                              "the run folder, so a resume needs no flag")
     parser.add_argument("--resume", dest="is_resuming", action="store_true",
                         help="continue the newest run of this output folder instead of starting a new one")
-    parser.add_argument("--worker-set", dest="worker_set", default="", metavar="NAME",
-                        help="the worker set the run is on: the entry of the settings' `workerSets` whose models and "
+    parser.add_argument("--provider-set", "--worker-set", dest="provider_set", default="", metavar="NAME",
+                        help="the provider set the run is on: the entry of the settings' `providerSets` whose models and "
                              "hosts it uses, or `default` for the settings as they are; kept in the run folder, so a "
                              "resume needs no flag")
     parser.add_argument("--speed-preset", dest="speed_preset", default="", metavar="NAME",
@@ -1006,12 +1006,12 @@ def cmd_run(args: argparse.Namespace) -> int:
         if duplicate is not None:
             raise BadTarget(duplicate)
         selection = build_phase_request(args)
-        # This run's worker set: the run line's, else the one the folder kept, else the settings' default; laid over the
+        # This run's provider set: the run line's, else the one the folder kept, else the settings' default; laid over the
         # files and the profile before the speed values, which go on top of it. The folder keeps it in step 2
         try:
-            worker_set, is_worker_set_to_keep = run_worker_set_service.resolve_worker_set(
-                paths.output_root, getattr(args, "worker_set", ""))
-            config.apply_worker_set(worker_set)
+            provider_set, is_provider_set_to_keep = run_provider_set_service.resolve_provider_set(
+                paths.output_root, getattr(args, "provider_set", ""))
+            config.apply_provider_set(provider_set)
         except ValueError as exc:
             raise BadTarget(str(exc)) from exc
         # This run's Workflow speed: the one the run line names, else the one kept in the folder; laid over the settings
@@ -1090,8 +1090,8 @@ def cmd_run(args: argparse.Namespace) -> int:
             pdf_source_service.write_chosen_ocr_engine(paths.output_root, args.pdf_ocr_engine)
         if getattr(args, "knowledge_filter_model", "") and not args.is_dry_run:
             decision_filter_service.write_chosen_model(paths.output_root, args.knowledge_filter_model)
-        if is_worker_set_to_keep and not args.is_dry_run:
-            run_worker_set_service.write_chosen_worker_set(paths.output_root, worker_set)
+        if is_provider_set_to_keep and not args.is_dry_run:
+            run_provider_set_service.write_chosen_provider_set(paths.output_root, provider_set)
         if chosen_speed and not args.is_dry_run:
             run_speed_service.write_chosen_speed(paths.output_root, chosen_speed)
         write_chosen_workflow(paths.output_root, args.workflow, args.is_dry_run)

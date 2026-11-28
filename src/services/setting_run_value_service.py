@@ -25,7 +25,7 @@ _NOTE_BY_KEY = {
     "pdf.cleanupWishes": "no extra wishes are added",
     "pdf.rewriteWishes": "no extra wishes are added",
     "pdf.knowledgeWishes": "no extra wishes are added",
-    "machine": "no machine name is shown beside the worker set",
+    "machine": "no machine name is shown beside the provider set",
     "providers.chat.host": "scanned PDF pages are read by the reader installed on this machine",
     "providers.speech.host": "speech to text runs on this machine",
     "providers.diarization.host": "speaker turns are found on this machine",

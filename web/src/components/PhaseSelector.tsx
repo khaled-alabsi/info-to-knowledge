@@ -4,7 +4,7 @@ import type { Phase, PhaseModels, PhaseSelection } from "../api";
 import { formatPhaseTitle } from "../api";
 import { CHOICE_HELP, ChoiceDropdown, ModelRows, describeModels } from "./RunChoices";
 import Icon from "./Icon";
-import { WorkerSetChoice, useWorkerSets } from "./WorkerSetChoice";
+import { ProviderSetChoice, useProviderSets } from "./ProviderSetChoice";
 import { TagInput, mergeTags } from "./TagInput";
 
 type Mode = "all" | "from" | "only";
@@ -24,7 +24,7 @@ function listRunWith(selection: PhaseSelection, phaseModels: PhaseModels, form: 
   const tags = selection.tags ?? [];
   if (form === "counted") {
     const parts = [selection.profile ? `profile: ${selection.profile}` : "default settings", describeModels(selection)];
-    if (selection.worker_set) parts.push(`worker set: ${selection.worker_set}`);
+    if (selection.provider_set) parts.push(`provider set: ${selection.provider_set}`);
     if (selection.is_dry_run) parts.unshift("dry run");
     if (isTagsShown && tags.length) parts.push(`tags: ${tags.length}`);
     return parts;
@@ -71,7 +71,7 @@ export default function PhaseSelector({
   onChange,
   isTagsShown = true,
   isRunWithShown = true,
-  isWorkerSetShown = true,
+  isProviderSetShown = true,
   layout = "folded",
   children,
   extraTabs = [],
@@ -87,8 +87,8 @@ export default function PhaseSelector({
   isTagsShown?: boolean;
   // false where the page shows the settings and the models itself (a new video's page, in its toolbar)
   isRunWithShown?: boolean;
-  // false where the page shows the Worker set in its own row of choices (a new recording's page)
-  isWorkerSetShown?: boolean;
+  // false where the page shows the Provider set in its own row of choices (a new recording's page)
+  isProviderSetShown?: boolean;
   // "folded" in a narrow menu, each part under a line that opens it; "tabs" in a dialog, a tab each part
   layout?: "folded" | "tabs";
   // further parts the page adds after these in the folded layout
@@ -201,9 +201,9 @@ export default function PhaseSelector({
         <span>Dry run <small>prompts only, no model call</small></span>
       </label>
   );
-  const workerSets = useWorkerSets();
-  const workerSetField = isRunWithShown && isWorkerSetShown
-    ? <WorkerSetChoice sets={workerSets} selection={selection} onChange={onChange} isDropdown={isDropdown} /> : null;
+  const providerSets = useProviderSets();
+  const providerSetField = isRunWithShown && isProviderSetShown
+    ? <ProviderSetChoice sets={providerSets} selection={selection} onChange={onChange} isDropdown={isDropdown} /> : null;
   const modelRows = isRunWithShown && phaseModels.models.length > 1
     ? (isDropdown && workflows.length
       ? <>{workflows.map((workflow) => (
@@ -244,7 +244,7 @@ export default function PhaseSelector({
       { key: "settings", label: "Settings", summary: [settingsExtraSummary,
           ...listRunWith(selection, phaseModels, "counted", isTagsShown).filter((part) => part !== describeModels(selection))]
           .filter(Boolean).join(", "),
-        body: <>{settingsExtra}{workerSetField}{dryRunSwitch}{tagsField}</> },
+        body: <>{settingsExtra}{providerSetField}{dryRunSwitch}{tagsField}</> },
       ...(modelRows ? [{ key: "models", label: "Models", summary: describeModels(selection), body: modelRows }] : []),
       ...extraTabs,
     ];
@@ -279,10 +279,10 @@ export default function PhaseSelector({
       <details className="phase-more" open={openPart === "more"}>
         <summary onClick={toggle("more")}><span className="caret"><Icon name="chevron" size={13} /></span>{describeMore()}</summary>
         {dryRunSwitch}
-        {(workerSetField || modelRows) && (
+        {(providerSetField || modelRows) && (
           <>
             <div className="menu-heading">Run with</div>
-            {workerSetField}
+            {providerSetField}
             {modelRows && <div className="field"><span>Models</span>{modelRows}</div>}
           </>
         )}

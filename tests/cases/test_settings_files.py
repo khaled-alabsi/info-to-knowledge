@@ -38,13 +38,13 @@ def test_the_local_file_is_read_on_top_of_the_default_file():
 
 def test_the_shipped_default_file_holds_placeholders_and_no_host_of_a_person():
     """The shipped default file is the public one: every key a person may change, with a value that works on any machine
-    (`localhost` hosts, no worker set); a person's own hosts and worker sets live in `playbook.local.json`, read on top."""
+    (`localhost` hosts, no provider set); a person's own hosts and provider sets live in `playbook.local.json`, read on top."""
 
     text = config.DEFAULT_CONFIG_FILE.read_text(encoding="utf-8")
     shipped = json.loads(text)
     harness.check("the default file is there and is a settings object", isinstance(shipped, dict) and "framesProcessing" in shipped)
     harness.check("it names no home-network host", "192.168." not in text and "http://pc." not in text)
-    shipped_sets = {name: values for name, values in shipped["workerSets"].items() if not name.startswith("_")}
+    shipped_sets = {name: values for name, values in shipped["providerSets"].items() if not name.startswith("_")}
     harness.check("a shipped set names no machine and no host",
                   all("machine" not in values and "hosts" not in values for values in shipped_sets.values()), f"{sorted(shipped_sets)}")
 
@@ -73,7 +73,7 @@ def test_the_strict_profile_turns_every_repair_off():
     the run, while the default settings hold the tolerated values."""
 
     name, settings_in_force = config.PROFILE_NAME, config.settings
-    strict = config.Settings(**config.read_layers(profile_name="strict", worker_set_name=config.DEFAULT_WORKER_SET_NAME))
+    strict = config.Settings(**config.read_layers(profile_name="strict", provider_set_name=config.DEFAULT_PROVIDER_SET_NAME))
     harness.check("strict blocks a refused frame at once and stops on a refused frame tool",
                   (strict.frames_processing.repair_calls == 0 and strict.frames_processing.single_frame_attempts == 0
                    and strict.budgets.fail_on_frame_cut_fail),
@@ -89,12 +89,12 @@ def test_the_strict_profile_turns_every_repair_off():
     sections = config.load_profile("strict")
     loaded = config.settings.frames_processing.repair_calls
     config.PROFILE_NAME, config.settings = name, settings_in_force
-    harness.check("--profile strict reads the profile file `playbook.strict.json`, and the worker set in force stays the default",
+    harness.check("--profile strict reads the profile file `playbook.strict.json`, and the provider set in force stays the default",
                   sections == ["budgets", "framesProcessing"] and loaded == 0
-                  and config.WORKER_SET_NAME == config.DEFAULT_WORKER_SET_NAME,
-                  f"{sections}, {loaded}, {config.WORKER_SET_NAME}")
-    harness.check("the shipped default file holds no `strict` set: strict is a profile file, not a worker set",
-                  "strict" not in config.read_settings_file(config.DEFAULT_CONFIG_FILE).get("workerSets", {}))
+                  and config.PROVIDER_SET_NAME == config.DEFAULT_PROVIDER_SET_NAME,
+                  f"{sections}, {loaded}, {config.PROVIDER_SET_NAME}")
+    harness.check("the shipped default file holds no `strict` set: strict is a profile file, not a provider set",
+                  "strict" not in config.read_settings_file(config.DEFAULT_CONFIG_FILE).get("providerSets", {}))
     harness.check("a profile with no file is refused by name, never run on the settings it was to replace",
                   _refusal_for("no-such-profile").startswith("no profile 'no-such-profile'"),
                   _refusal_for("no-such-profile"))
@@ -390,7 +390,7 @@ def _list_models_of_made_hosts(provider: str,
 
 def _write_two_connection_files(folder: Path) -> None:
     """Default settings with the two shipped hosts and two model entries, one named with a dot, and a profile adding a
-    host on another machine and pointing one of the models at it, as a worker set does."""
+    host on another machine and pointing one of the models at it, as a provider set does."""
 
     hosts = {"lmstudio": {"url": "http://localhost:1234/v1"}, "ollama": {"url": "http://localhost:11434"}}
     models = {"frame": {"spec": "lmstudio:big-model"}, "small.v2": {"spec": "lmstudio:small-model"}}

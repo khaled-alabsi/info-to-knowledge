@@ -260,20 +260,20 @@ describe("VideoDetail", () => {
       name: "Gateway-review.mp4", path: "inbox/Gateway-review.mp4" }));
   });
 
-  it("offers the worker set in the row of a new recording's page and starts the run on the set chosen defect", async () => {
-    // Defect: a new recording's page had the Worker set only behind Start run's gear, and the owner saw no way to pick
+  it("offers the provider set in the row of a new recording's page and starts the run on the set chosen defect", async () => {
+    // Defect: a new recording's page had the Provider set only behind Start run's gear, and the owner saw no way to pick
     // it. Fix: the row beside Workflow speed has it, and the run is queued on the set chosen.
     const calls = installServer({ "GET /api/profiles": { profiles: [], server_profile: "" }, "POST /api/jobs": [makeJob()],
-      "GET /api/worker-sets": { default_set: "default", sets: [{ name: "default", changes: [], machine: "main machine" },
+      "GET /api/provider-sets": { default_set: "default", sets: [{ name: "default", changes: [], machine: "main machine" },
         { name: "gpu-box", changes: ["models"], machine: "gpu-box" }] } });
     render(<VideoDetail item={ITEM} phases={PHASES} jobs={[]} onBack={() => {}} onOpenJob={() => {}}
       onChanged={() => {}} onMessage={() => {}} />);
-    const choice = await screen.findByRole("combobox", { name: "worker set" });
+    const choice = await screen.findByRole("combobox", { name: "provider set" });
     expect(within(choice).getByRole("option", { name: "default · main machine (default)" })).toBeInTheDocument();
     await userEvent.selectOptions(choice, "gpu-box");
     await userEvent.click(screen.getByRole("button", { name: /Start run/ }));
     const queued = calls.find((call) => call.method === "POST" && call.url === "/api/jobs");
-    expect(queued?.body).toMatchObject({ worker_set: "gpu-box" });
+    expect(queued?.body).toMatchObject({ provider_set: "gpu-box" });
   });
 
   it("names each choice of the run row once and keeps the rest behind Start run's gear defect", async () => {

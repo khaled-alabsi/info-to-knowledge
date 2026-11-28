@@ -66,15 +66,15 @@ CONTAINER_SETUP_REFUSAL = ("{action} is off: this server runs in a container, wh
 HF_TOKEN_ENV_VAR = "HF_TOKEN"
 # The name of the profile `load_profile` last applied; empty for the default settings. Only `load_profile` rebinds it.
 PROFILE_NAME = ""
-# The name of the worker set the process runs on: "default" is the settings files as they are, any
-# other name is a part of the settings (`workerSets` in the settings files) laid over the files and the profile. Only
-# `apply_worker_set` rebinds it.
-DEFAULT_WORKER_SET_NAME = "default"
-WORKER_SET_NAME = DEFAULT_WORKER_SET_NAME
-# What a worker set may not hold: the sets and the choice of the default belong to the settings, never to one set
-_WORKER_SET_FORBIDDEN_KEYS = ("workerSets", "worker_sets", "defaultWorkerSet", "default_worker_set")
-# The one key of a worker set that changes no setting a run uses: the machine's name, shown beside the set's name
-WORKER_SET_LABEL_KEY = "machine"
+# The name of the provider set the process runs on: "default" is the settings files as they are, any
+# other name is a part of the settings (`providerSets` in the settings files) laid over the files and the profile. Only
+# `apply_provider_set` rebinds it.
+DEFAULT_PROVIDER_SET_NAME = "default"
+PROVIDER_SET_NAME = DEFAULT_PROVIDER_SET_NAME
+# What a provider set may not hold: the sets and the choice of the default belong to the settings, never to one set
+_PROVIDER_SET_FORBIDDEN_KEYS = ("providerSets", "provider_sets", "defaultProviderSet", "default_provider_set")
+# The one key of a provider set that changes no setting a run uses: the machine's name, shown beside the set's name
+PROVIDER_SET_LABEL_KEY = "machine"
 # The Workflow speed presets the program ships (the owner): Quality, the whole quality workflow; Balanced, the same large
 # model with no critique, no repair round, no review and no critique collection ("the best model without a critic and reparation
 # loops"); Fast, a small model's quick description of each frame and the document in one call
@@ -242,7 +242,7 @@ class ModelSettings(_OverlaySettings):
     # minutes; `None` restores the unbounded wait.
     request_timeout_s: int | None = 900
     # The name of the entry of `hosts` this model runs on; empty: the host named like the spec's provider (`lmstudio`).
-    # What a worker set switches to point the large model at another machine
+    # What a provider set switches to point the large model at another machine
     host: str = Field(default="",
                       json_schema_extra={setting_choice_vocabulary.CHOICES_KEY: setting_choice_vocabulary.HOST_NAMES})
     # For a local host that insists on a key; a real key goes in the environment (OPENAI_API_KEY and the like), never in a settings file
@@ -535,7 +535,7 @@ class FastProcessingSettings(_OverlaySettings):
     """The fast-processing video workflow: phase 3 describes each frame from its image
     alone, with no check, and phase 4 writes the document in one call from those descriptions."""
 
-    # The configured model that describes the frames; empty uses the model the worker set's frames processing job names
+    # The configured model that describes the frames; empty uses the model the provider set's frames processing job names
     # (a small vision model is enough for one frame at a time)
     frame_model: str = Field(default="",
                              json_schema_extra={setting_choice_vocabulary.CHOICES_KEY: setting_choice_vocabulary.MODEL_NAMES})
@@ -549,7 +549,7 @@ class FastProcessingSettings(_OverlaySettings):
     # The most one frame's reply may write: the longest description measured was about 530 words (under 1,000
     # tokens); without it a reply that looped ran to the model's own 40,960 for 20 minutes on one frame
     frame_max_tokens: int = Field(default=4096, ge=256)
-    # The configured model that writes the document from every description, in one call; empty uses the model the worker
+    # The configured model that writes the document from every description, in one call; empty uses the model the provider
     # set's document writing job names
     document_model: str = Field(default="",
                                 json_schema_extra={setting_choice_vocabulary.CHOICES_KEY: setting_choice_vocabulary.MODEL_NAMES})
@@ -991,51 +991,51 @@ class Settings(BaseSettings):
     # `models.speed_setting_vocabulary.SPEED_KEYS` lists). A run keeps the preset chosen for it, and any value changed
     # by hand, in `run-speed.json`; a setting a preset leaves out keeps the settings' own value
     speed_presets: dict[str, dict[str, bool | int | str]] = Field(default_factory=lambda: dict(DEFAULT_SPEED_PRESETS))
-    # The worker sets: each a name and the part of the settings it overrides, nested as a profile
+    # The provider sets: each a name and the part of the settings it overrides, nested as a profile
     # file nests it (`models`, `hosts`, `audio.mlx.model`). Jobs on different sets run at the same time, jobs
     # on one set one after another. The default set is the settings files as they are and has no entry here
-    worker_sets: dict[str, dict[str, Any]] = Field(default_factory=dict)
-    # The set a job takes when none is chosen: "default", or the name of one entry of `workerSets`
-    default_worker_set: str = DEFAULT_WORKER_SET_NAME
-    # The machine the settings run on, in the owner's words, shown beside a worker set's name wherever a
+    provider_sets: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    # The set a job takes when none is chosen: "default", or the name of one entry of `providerSets`
+    default_provider_set: str = DEFAULT_PROVIDER_SET_NAME
+    # The machine the settings run on, in the owner's words, shown beside a provider set's name wherever a
     # set is chosen. The default set's machine is this value; another set names its own by overriding it
-    # (`workerSets.<name>.machine`), so a set's name and machine are one object
+    # (`providerSets.<name>.machine`), so a set's name and machine are one object
     machine: str = ""
 
     @model_validator(mode="before")
     @classmethod
-    def _check_worker_sets(cls,
+    def _check_provider_sets(cls,
                            values: Any) -> Any:
         if not isinstance(values, dict):
             return values
-        worker_sets = values.get("workerSets", values.get("worker_sets"))
-        if not worker_sets:
+        provider_sets = values.get("providerSets", values.get("provider_sets"))
+        if not provider_sets:
             return values
-        if not isinstance(worker_sets, dict):
-            raise ValueError("workerSets: it must be an object holding one entry per worker set")
+        if not isinstance(provider_sets, dict):
+            raise ValueError("providerSets: it must be an object holding one entry per provider set")
         # Each set is checked by building the settings with it on top: a bad key or value is refused under its name
-        settings_without_sets = {key: value for key, value in values.items() if key not in _WORKER_SET_FORBIDDEN_KEYS}
-        for name, overrides in worker_sets.items():
-            if name == DEFAULT_WORKER_SET_NAME:
-                raise ValueError(f"workerSets.{name}: {DEFAULT_WORKER_SET_NAME!r} is the settings files as they are, "
+        settings_without_sets = {key: value for key, value in values.items() if key not in _PROVIDER_SET_FORBIDDEN_KEYS}
+        for name, overrides in provider_sets.items():
+            if name == DEFAULT_PROVIDER_SET_NAME:
+                raise ValueError(f"providerSets.{name}: {DEFAULT_PROVIDER_SET_NAME!r} is the settings files as they are, "
                                  f"so it takes no entry")
             if not isinstance(overrides, dict):
-                raise ValueError(f"workerSets.{name}: it must be an object holding the settings it overrides")
-            forbidden = sorted(set(overrides) & set(_WORKER_SET_FORBIDDEN_KEYS))
+                raise ValueError(f"providerSets.{name}: it must be an object holding the settings it overrides")
+            forbidden = sorted(set(overrides) & set(_PROVIDER_SET_FORBIDDEN_KEYS))
             if forbidden:
-                raise ValueError(f"workerSets.{name}: {', '.join(forbidden)} belongs to the settings, not to one set")
+                raise ValueError(f"providerSets.{name}: {', '.join(forbidden)} belongs to the settings, not to one set")
             try:
                 cls(**merge_settings(settings_without_sets, overrides))
             except ValidationError as error:
-                raise ValueError(f"workerSets.{name}: {_describe_validation_issues(error)}") from error
+                raise ValueError(f"providerSets.{name}: {_describe_validation_issues(error)}") from error
 
         return values
 
     @model_validator(mode="after")
-    def _check_default_worker_set(self) -> "Settings":
-        if self.default_worker_set != DEFAULT_WORKER_SET_NAME and self.default_worker_set not in self.worker_sets:
-            raise ValueError(f"defaultWorkerSet: {self.default_worker_set!r} is no worker set; they are "
-                             f"{', '.join([DEFAULT_WORKER_SET_NAME, *sorted(self.worker_sets)])}")
+    def _check_default_provider_set(self) -> "Settings":
+        if self.default_provider_set != DEFAULT_PROVIDER_SET_NAME and self.default_provider_set not in self.provider_sets:
+            raise ValueError(f"defaultProviderSet: {self.default_provider_set!r} is no provider set; they are "
+                             f"{', '.join([DEFAULT_PROVIDER_SET_NAME, *sorted(self.provider_sets)])}")
 
         return self
 
@@ -1136,7 +1136,7 @@ class Settings(BaseSettings):
     def resolve_fast_model_name(self,
                                 phase: str) -> str:
         """The name of the model a fast-processing run calls in phase 3 (describing a frame) or phase 4 (writing the
-        document): the one `video.fastProcessing` names for it, else the model the worker set's own job (`phaseModels`
+        document): the one `video.fastProcessing` names for it, else the model the provider set's own job (`phaseModels`
         for that phase) names, so the fast workflow is another flow on the same models. Raises `KeyError` for any other
         phase."""
 
@@ -1229,37 +1229,37 @@ def read_settings_files(default_file: Path,
 
 
 def read_layers(profile_name: str,
-                worker_set_name: str) -> dict:
+                provider_set_name: str) -> dict:
     """The settings a run reads, last one wins: the default settings, the local file, the profile `profile_name` names (none
-    when empty), then the worker set `worker_set_name` names (none for "default"). Raises `ValueError`, naming the sets
-    that exist, for a worker set the merged files do not hold."""
+    when empty), then the provider set `provider_set_name` names (none for "default"). Raises `ValueError`, naming the sets
+    that exist, for a provider set the merged files do not hold."""
 
     profile_path = build_profile_path(profile_name) if profile_name else None
 
-    return merge_worker_set(read_settings_files(DEFAULT_CONFIG_FILE, LOCAL_CONFIG_FILE, profile_path), worker_set_name)
+    return merge_provider_set(read_settings_files(DEFAULT_CONFIG_FILE, LOCAL_CONFIG_FILE, profile_path), provider_set_name)
 
 
-def merge_worker_set(merged: dict,
-                     worker_set_name: str) -> dict:
-    """`merged` (settings already merged from the files) with the entry of `workerSets` named `worker_set_name` on top;
+def merge_provider_set(merged: dict,
+                     provider_set_name: str) -> dict:
+    """`merged` (settings already merged from the files) with the entry of `providerSets` named `provider_set_name` on top;
     `merged` itself for "default". Raises `ValueError`, naming the sets that exist, for a name it does not hold."""
 
-    if worker_set_name == DEFAULT_WORKER_SET_NAME:
+    if provider_set_name == DEFAULT_PROVIDER_SET_NAME:
         return merged
-    worker_sets = merged.get("workerSets") or {}
-    if worker_set_name not in worker_sets:
-        names = ", ".join([DEFAULT_WORKER_SET_NAME, *sorted(worker_sets)])
-        raise ValueError(f"no worker set {worker_set_name!r}: the worker sets are {names}")
+    provider_sets = merged.get("providerSets") or {}
+    if provider_set_name not in provider_sets:
+        names = ", ".join([DEFAULT_PROVIDER_SET_NAME, *sorted(provider_sets)])
+        raise ValueError(f"no provider set {provider_set_name!r}: the provider sets are {names}")
 
-    return merge_settings(merged, worker_sets[worker_set_name])
+    return merge_settings(merged, provider_sets[provider_set_name])
 
 
 def read_set_machine(merged: dict) -> str:
-    """The machine a worker set runs on, from `merged` (the settings with the set on top): the `machine` an old file still
+    """The machine a provider set runs on, from `merged` (the settings with the set on top): the `machine` an old file still
     names, else the provider (`hosts` entry) the model of the set's frames processing job runs on, else "". A set's lane
     in the job queue and the name beside it in the run form are this."""
 
-    named = merged.get(WORKER_SET_LABEL_KEY)
+    named = merged.get(PROVIDER_SET_LABEL_KEY)
     if named:
         return str(named)
     phase_models = merged.get("phaseModels") or {}
@@ -1272,7 +1272,7 @@ def read_set_machine(merged: dict) -> str:
 def load_profile(name: str) -> list[str]:
     """Read `playbook.<name>.json` on top of the default and local files and rebind `settings` to the result. Returns
     the top-level sections the profile sets, for the line the CLI prints. A name with no file raises: a profile
-    asked for and silently not applied runs the whole job on the settings it was meant to replace. The worker set in force
+    asked for and silently not applied runs the whole job on the settings it was meant to replace. The provider set in force
     stays on top of the profile."""
 
     global PROFILE_NAME, settings
@@ -1283,22 +1283,22 @@ def load_profile(name: str) -> list[str]:
     if not overrides:
         raise ValueError(f"profile {name!r} ({path.name}) sets nothing: it is empty, unreadable or all comments")
     # Validated before either global changes: a profile with a bad value leaves the name and the settings in force
-    loaded = Settings(**read_layers(profile_name=name, worker_set_name=WORKER_SET_NAME))
+    loaded = Settings(**read_layers(profile_name=name, provider_set_name=PROVIDER_SET_NAME))
     PROFILE_NAME, settings = name, loaded
 
     return sorted(overrides)
 
 
-def apply_worker_set(name: str) -> None:
+def apply_provider_set(name: str) -> None:
     """Rebind `settings` to the files in force (the default settings, the local file and the profile when one is loaded)
-    with the worker set `name` on top; an empty name takes `defaultWorkerSet`. A name no `workerSets` entry holds raises
+    with the provider set `name` on top; an empty name takes `defaultProviderSet`. A name no `providerSets` entry holds raises
     `ValueError` naming the sets that exist, before the global changes."""
 
-    global WORKER_SET_NAME, settings
-    files_in_force = read_layers(profile_name=PROFILE_NAME, worker_set_name=DEFAULT_WORKER_SET_NAME)
-    chosen_name = name or files_in_force.get("defaultWorkerSet", DEFAULT_WORKER_SET_NAME)
-    loaded = Settings(**read_layers(profile_name=PROFILE_NAME, worker_set_name=chosen_name))
-    WORKER_SET_NAME, settings = chosen_name, loaded
+    global PROVIDER_SET_NAME, settings
+    files_in_force = read_layers(profile_name=PROFILE_NAME, provider_set_name=DEFAULT_PROVIDER_SET_NAME)
+    chosen_name = name or files_in_force.get("defaultProviderSet", DEFAULT_PROVIDER_SET_NAME)
+    loaded = Settings(**read_layers(profile_name=PROFILE_NAME, provider_set_name=chosen_name))
+    PROVIDER_SET_NAME, settings = chosen_name, loaded
 
 
 def build_nested_settings(values: dict[str, bool | int | str]) -> dict:
@@ -1317,11 +1317,11 @@ def build_nested_settings(values: dict[str, bool | int | str]) -> dict:
 
 
 def apply_speed_values(values: dict[str, bool | int | str]) -> None:
-    """Rebind `settings` to the files in force (the default and local settings, the profile when one is loaded and the worker
+    """Rebind `settings` to the files in force (the default and local settings, the profile when one is loaded and the provider
     set in force) with this run's Workflow speed values on top. Validated before the global changes, as a profile is."""
 
     global settings
-    merged = read_layers(profile_name=PROFILE_NAME, worker_set_name=WORKER_SET_NAME)
+    merged = read_layers(profile_name=PROFILE_NAME, provider_set_name=PROVIDER_SET_NAME)
     settings = Settings(**merge_settings(merged, build_nested_settings(values)))
 
 

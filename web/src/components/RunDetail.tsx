@@ -23,7 +23,7 @@ import ResetDialog from "./ResetDialog";
 import type { ResetKind } from "./ResetDialog";
 import { DocumentPassPanel, isProfileGone, useIngestingProfiles, usePhaseModels, useRunDefaults, useSettingsProfiles }
   from "./RunChoices";
-import { WorkerSetChoice, nameWorkerSet, useWorkerSets } from "./WorkerSetChoice";
+import { ProviderSetChoice, nameProviderSet, useProviderSets } from "./ProviderSetChoice";
 import WorkflowSpeedChoice, { describeSpeed } from "./WorkflowSpeedChoice";
 import { nameSpeedPreset } from "../speed";
 import { chooseProgress, describeUnit, listStages } from "./runProgress";
@@ -162,10 +162,10 @@ export default function RunDetail({
   // the Copy and run again menu's Another part, open in its dialog
   const [isPartOpen, setIsPartOpen] = useState(false);
   const [isRunOpen, setIsRunOpen] = useState(false);
-  // the Unblock dialog: the worker set the unblock runs on is chosen there, and nothing is queued until its button
+  // the Unblock dialog: the provider set the unblock runs on is chosen there, and nothing is queued until its button
   const [isUnblockOpen, setIsUnblockOpen] = useState(false);
   const [unblockSet, setUnblockSet] = useState("");
-  const workerSets = useWorkerSets();
+  const providerSets = useProviderSets();
   // A file a card asked to be read, handed to the artifacts view once, so a notice opens what it is about.
   const [openPath, setOpenPath] = useState("");
   const [livePhase, setLivePhase] = useState<number | null>(null);
@@ -675,11 +675,11 @@ export default function RunDetail({
           <Dialog title={`Unblock phase ${blockedPhase.number} · ${formatPhaseTitle(blockedPhase)}`} onClose={() => setIsUnblockOpen(false)}>
             <div className="run-choices">
               <p className="muted">The blocked step is asked again, then the run goes on. Nothing runs until you press Run it now.</p>
-              <WorkerSetChoice sets={workerSets} selection={{ ...NO_SELECTION, worker_set: unblockSet }}
-                onChange={(next) => setUnblockSet(next.worker_set ?? "")} />
+              <ProviderSetChoice sets={providerSets} selection={{ ...NO_SELECTION, provider_set: unblockSet }}
+                onChange={(next) => setUnblockSet(next.provider_set ?? "")} />
               <button className="btn primary block" onClick={() => {
                 setIsUnblockOpen(false);
-                void queue({ ...runChoice, is_resuming: true, ...(unblockSet ? { worker_set: unblockSet } : {}) }, "an unblock");
+                void queue({ ...runChoice, is_resuming: true, ...(unblockSet ? { provider_set: unblockSet } : {}) }, "an unblock");
               }}>
                 <Icon name="play" /> Run it now
               </button>
@@ -804,12 +804,12 @@ export default function RunDetail({
                 : nameSpeedPreset(detail.speed?.name ?? (isFastWorkflow(detail.workflow) ? "fast" : "quality"))}
             </span>
           )}
-          {/* the worker set the run is on, and its machine: its own choice, else the default set, which a run that
-              never chose one is on (the owner saw no worker set on such a run) */}
-          {(detail?.worker_set || workerSets) && (
-            <span className="pill profile" title="the worker set: the models and hosts this run's next phases call">
-              Worker set: {nameWorkerSet(workerSets?.sets.find((entry) => entry.name === (detail?.worker_set || workerSets.default_set))
-                ?? { name: detail?.worker_set || workerSets?.default_set || "default" })}
+          {/* the provider set the run is on, and its machine: its own choice, else the default set, which a run that
+              never chose one is on (the owner saw no provider set on such a run) */}
+          {(detail?.provider_set || providerSets) && (
+            <span className="pill profile" title="the provider set: the models and hosts this run's next phases call">
+              Provider set: {nameProviderSet(providerSets?.sets.find((entry) => entry.name === (detail?.provider_set || providerSets.default_set))
+                ?? { name: detail?.provider_set || providerSets?.default_set || "default" })}
             </span>
           )}
           <span className="pill profile" title="the settings the run read: the default settings, and a settings profile on top">
@@ -928,8 +928,8 @@ export default function RunDetail({
         {openJob && <JobFailureControls job={openJob} onChanged={onChanged} onMessage={onMessage}
           holdItem={isLive ? null : holdItem} />}
         {canStart && blockedPhase && (
-          <button className="btn primary" onClick={() => { setUnblockSet(detail?.worker_set ?? ""); setIsUnblockOpen(true); }}
-            title="opens a window: you choose whether the run goes on now, and on which worker set; nothing runs before that">
+          <button className="btn primary" onClick={() => { setUnblockSet(detail?.provider_set ?? ""); setIsUnblockOpen(true); }}
+            title="opens a window: you choose whether the run goes on now, and on which provider set; nothing runs before that">
             <Icon name="unlock" /> Unblock phase {blockedPhase.number} · {formatPhaseTitle(blockedPhase)}…
           </button>
         )}
@@ -953,13 +953,13 @@ export default function RunDetail({
               onClick={() => void queue({ ...runChoice, is_resuming: true }, "a resume")}>
               <Icon name="play" /> Resume
             </button>
-            <Menu icon="chevron" variant="icon-only" align="right" title="resume with another worker set or other settings"
-              note={`Goes on from phase ${firstOpen.number}, ${formatPhaseTitle(firstOpen)}, on the worker set or with the settings you choose, in place of the run's own.`}
-              items={[...(workerSets && workerSets.sets.length > 1 ? workerSets.sets.map((entry) => ({
-                label: `worker set: ${nameWorkerSet(entry)}`, group: "Resume on", hint: entry.name === detail?.worker_set ? "the run's own"
-                  : !detail?.worker_set && entry.name === workerSets.default_set ? "the default" : "",
-                onSelect: () => void queue({ ...runChoice, is_resuming: true, worker_set: entry.name },
-                  `a resume on worker set ${entry.name}`) })) : []),
+            <Menu icon="chevron" variant="icon-only" align="right" title="resume with another provider set or other settings"
+              note={`Goes on from phase ${firstOpen.number}, ${formatPhaseTitle(firstOpen)}, on the provider set or with the settings you choose, in place of the run's own.`}
+              items={[...(providerSets && providerSets.sets.length > 1 ? providerSets.sets.map((entry) => ({
+                label: `provider set: ${nameProviderSet(entry)}`, group: "Resume on", hint: entry.name === detail?.provider_set ? "the run's own"
+                  : !detail?.provider_set && entry.name === providerSets.default_set ? "the default" : "",
+                onSelect: () => void queue({ ...runChoice, is_resuming: true, provider_set: entry.name },
+                  `a resume on provider set ${entry.name}`) })) : []),
                 ...["", ...(settingsProfiles.profiles ?? [])].map((profile) => ({
                 label: profile ? `profile: ${profile}` : "default settings", group: "Resume with",
                 hint: profile === runChoice.profile ? "the run's own" : profile === settingsProfiles.serverProfile ? "the server's" : "",

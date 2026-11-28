@@ -7,7 +7,8 @@
       "url": "http://localhost:11434"
     },
     "gpu-box": {
-      "url": "http://gpu-box.example:8090/v1"
+      "url": "http://gpu-box.example:8090/v1",
+      "kinds": ["chat", "speech"]
     }
   },
   "_comment": [
@@ -27,7 +28,7 @@
       "host": "gpu-box"
     }
   },
-  "workerSets": {
+  "providerSets": {
     "_note": "Other machines that run a model for this one. A set links each job to a model of the models above by its name; a job it does not name keeps the default model. A job picks a set by name; jobs on different sets run at the same time, jobs on one set one after another. Remove the sets you do not use.",
     "gpu-box": {
       "machine": "the GPU box",
@@ -46,6 +47,6 @@
       }
     }
   },
-  "defaultWorkerSet": "default",
+  "defaultProviderSet": "default",
   "machine": "this computer"
 }

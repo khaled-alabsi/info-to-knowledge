@@ -12,7 +12,7 @@ import type { SettingEditContext } from "./SettingRowItem";
 // The models of one model server (or of no listed server), one card each with which model it is, how much it reads at once
 // and its other settings: opening a card shows them, the ones few people change under "Advanced". It stands inside its
 // server's card on the page, so the card never asks for the server. A model is added as a copy of another, copied from its
-// card, and removed from its card when the owner's own file holds it. Nothing here is attached to a job: the worker sets
+// card, and removed from its card when the owner's own file holds it. Nothing here is attached to a job: the provider sets
 // link jobs to these models by name.
 
 const MAIN_FIELDS = ["spec", "suits", "framesPerCall"];
@@ -180,7 +180,7 @@ function ModelCard({ name, rows, context, isNew, drafted, sourceRows, users, isC
           ) : isRemovable ? (
             isConfirming ? (
               <>
-                <span>Remove {name} from your settings?{users.length > 0 ? ` The worker sets ${users.map((use) => use.set).join(", ")} call it.` : ""}</span>
+                <span>Remove {name} from your settings?{users.length > 0 ? ` The provider sets ${users.map((use) => use.set).join(", ")} call it.` : ""}</span>
                 <button type="button" className="btn danger" onClick={onRemove} aria-label={`yes, remove model ${name}`}>Yes, remove</button>
                 <button type="button" className="btn" onClick={onCancel}>Keep it</button>
               </>

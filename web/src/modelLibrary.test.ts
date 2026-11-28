@@ -99,14 +99,14 @@ describe("model library", () => {
     expect(readSetJobModel({}, review)).toBe("");
   });
 
-  it("names the worker sets that call a model, the default set first", () => {
+  it("names the provider sets that call a model, the default set first", () => {
     const sets = { Office: { phaseModels: { review: "mixed" } }, Other: {} };
     expect(listModelUsers(ROWS, sets, "frame")).toEqual(["default"]);
     expect(listModelUsers(ROWS, sets, "mixed")).toEqual(["Office"]);
     expect(listModelUsers(ROWS, sets, "frame-gpu")).toEqual(["default"]);
   });
 
-  it("says for each worker set which jobs call a model", () => {
+  it("says for each provider set which jobs call a model", () => {
     const sets = { Office: { phaseModels: { review: "frame", frames_processing: "frame" } } };
     expect(describeModelUses(listModelUses(ROWS, sets, "frame"))).toBe(
       "default (Frames processing), Office (Frames processing, Review)");

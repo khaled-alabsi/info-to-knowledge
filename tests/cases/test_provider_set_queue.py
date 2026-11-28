@@ -1,4 +1,4 @@
-"""The queue's lanes: a job runs in the lane of its worker set; jobs of one lane run one after
+"""The queue's lanes: a job runs in the lane of its provider set; jobs of one lane run one after
 another, jobs of different lanes at the same time; a job holding the queue holds its own lane only; one run folder is
 never written by two jobs. Made data: a stand-in `main.py` that starts, says so through a named pipe and waits for its
 release through another, so no test waits on the clock."""
@@ -18,7 +18,7 @@ from models import run_job
 from models.run_job import RunJobRequest
 from services import job_queue_service
 
-def _point_at_own_settings(text: str = '{"defaultWorkerSet": "default"}') -> tuple:
+def _point_at_own_settings(text: str = '{"defaultProviderSet": "default"}') -> tuple:
     """Points the settings at a folder of the test's own holding `text` as the default file, and returns what to point
     back to. Never the owner's files: a set they put on a machine moves its jobs to that machine's lane, and a test
     asking the set's lane would wait for ever."""
@@ -74,10 +74,10 @@ def _release(pipes: Path,
 
 
 def _request(name: str,
-             worker_set: str,
+             provider_set: str,
              output_root: str | None = None) -> RunJobRequest:
     return RunJobRequest(video=Path(f"/in/{name}.mp4"), output_root=Path(output_root or f"/out/{name}"),
-                         worker_set=worker_set)
+                         provider_set=provider_set)
 
 
 def _use_stand_in(pipes: Path, retries: int = 0, on_failure: str = "continue") -> tuple:
@@ -108,15 +108,15 @@ def _run_in_thread(queue_dir: Path,
     return thread
 
 
-def test_the_run_line_carries_the_worker_set_and_a_job_knows_its_lane():
+def test_the_run_line_carries_the_provider_set_and_a_job_knows_its_lane():
     command = job_queue_service.build_run_command(_request("a", "second-host"))
-    harness.check("the run line names the worker set", command[-2:] == ["--worker-set", "second-host"], str(command))
+    harness.check("the run line names the provider set", command[-2:] == ["--provider-set", "second-host"], str(command))
     plain = job_queue_service.build_run_command(RunJobRequest(video=Path("/in/a.mp4"), output_root=Path("/out/a")))
-    harness.check("a request with no set leaves the flag out", "--worker-set" not in plain, str(plain))
+    harness.check("a request with no set leaves the flag out", "--provider-set" not in plain, str(plain))
     folder = Path(tempfile.mkdtemp())
-    (folder / "run-worker-set.json").write_text('{"name": "Mac"}', encoding="utf-8")
+    (folder / "run-provider-set.json").write_text('{"name": "Mac"}', encoding="utf-8")
     kept = run_job.RunJob(job_id="k", request=RunJobRequest(video=Path("/in/a.mp4"), output_root=folder))
-    asked = run_job.RunJob(job_id="a", request=RunJobRequest(video=Path("/in/a.mp4"), output_root=folder, worker_set="second-host"))
+    asked = run_job.RunJob(job_id="a", request=RunJobRequest(video=Path("/in/a.mp4"), output_root=folder, provider_set="second-host"))
     none = run_job.RunJob(job_id="n", request=RunJobRequest(video=Path("/in/a.mp4"), output_root=Path("/out/none")))
     previous = _point_at_own_settings()
     try:
@@ -131,7 +131,7 @@ def test_two_sets_on_one_machine_share_one_lane_defect():
     # Defect: jobs waited for each other by set name, so a "strict" set on the same machine ran beside a default job
     # on the same card. Fix: a job's lane is the machine its set names, its set's own name only when it names none.
     previous = _point_at_own_settings(
-        '{"defaultWorkerSet": "default", "machine": "office", "workerSets": {"strict": {"machine": "office"},'
+        '{"defaultProviderSet": "default", "machine": "office", "providerSets": {"strict": {"machine": "office"},'
         ' "remote": {"machine": "gpu-box"}, "plain": {}}}')
     try:
         lanes = tuple(job_queue_service.read_job_lane(run_job.RunJob(job_id=name, request=_request(name, name)), "default")
@@ -143,11 +143,11 @@ def test_two_sets_on_one_machine_share_one_lane_defect():
 
 
 def test_a_profile_can_name_the_set_its_jobs_run_on():
-    """The owner: each profile can override the worker set, and a profile that names none uses the default settings'."""
+    """The owner: each profile can override the provider set, and a profile that names none uses the default settings'."""
 
     folder = Path(tempfile.mkdtemp())
-    (folder / "playbook.default.json").write_text('{"defaultWorkerSet": "default"}', encoding="utf-8")
-    (folder / "playbook.strict.json").write_text('{"defaultWorkerSet": "second-host"}', encoding="utf-8")
+    (folder / "playbook.default.json").write_text('{"defaultProviderSet": "default"}', encoding="utf-8")
+    (folder / "playbook.strict.json").write_text('{"defaultProviderSet": "second-host"}', encoding="utf-8")
     (folder / "playbook.quiet.json").write_text("{}", encoding="utf-8")
     previous = (config.DEFAULT_CONFIG_FILE, config.LOCAL_CONFIG_FILE, config.PLAYBOOK_ROOT, config.PROFILE_NAME)
     config.DEFAULT_CONFIG_FILE, config.LOCAL_CONFIG_FILE = folder / "playbook.default.json", folder / "playbook.local.json"
@@ -156,7 +156,7 @@ def test_a_profile_can_name_the_set_its_jobs_run_on():
         def lane(profile: str) -> str:
             job = run_job.RunJob(job_id=profile or "none", request=RunJobRequest(
                 video=Path("/in/a.mp4"), output_root=Path("/out/" + (profile or "none")), profile=profile))
-            return job_queue_service.read_job_lane(job, job_queue_service.read_default_worker_set())
+            return job_queue_service.read_job_lane(job, job_queue_service.read_default_provider_set())
 
         lanes = (lane(""), lane("strict"), lane("quiet"))
     finally:
@@ -175,7 +175,7 @@ def test_two_jobs_on_two_sets_run_at_the_same_time():
         threads = [_run_in_thread(queue_dir, "second-host", results), _run_in_thread(queue_dir, "Mac", results)]
         _wait_started(pipes, "one")
         _wait_started(pipes, "two")
-        both_running = sorted(job.request.worker_set for job in job_queue_service.list_jobs(queue_dir)
+        both_running = sorted(job.request.provider_set for job in job_queue_service.list_jobs(queue_dir)
                               if job.status == run_job.JOB_RUNNING)
         _release(pipes, "one")
         _release(pipes, "two")

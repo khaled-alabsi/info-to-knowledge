@@ -72,7 +72,7 @@ def run_case(func,
     the whole suite ran in one process, never when their file ran alone."""
 
     settings = config.settings.model_copy(deep=True)
-    profile_name, worker_set_name = config.PROFILE_NAME, config.WORKER_SET_NAME
+    profile_name, provider_set_name = config.PROFILE_NAME, config.PROVIDER_SET_NAME
     try:
         func()
     except Exception:
@@ -80,7 +80,7 @@ def run_case(func,
         harness.check(name, False, traceback.format_exc().strip().splitlines()[-1])
     finally:
         config.settings = settings
-        config.PROFILE_NAME, config.WORKER_SET_NAME = profile_name, worker_set_name
+        config.PROFILE_NAME, config.PROVIDER_SET_NAME = profile_name, provider_set_name
 
 
 def main() -> int:

@@ -1,4 +1,4 @@
-"""Worker sets: `workerSets` in the settings files holds named parts of the settings, each laid over the
+"""Provider sets: `providerSets` in the settings files holds named parts of the settings, each laid over the
 default settings, the local file and the profile; the default set is the files as they are. The owner: a set names only
 what it overrides, and a bad set is refused by its name when the settings load."""
 
@@ -15,7 +15,7 @@ import config
 _DEFAULT_FILE_VALUES = {
     "budgets": {"maxAttempts": 3},
     "hosts": {"lmstudio": {"url": "http://localhost:1234/v1"}, "ollama": {"url": "http://localhost:11434"}},
-    "workerSets": {
+    "providerSets": {
         "_note": "a note beside the sets is dropped like every note",
         "second-host": {"_note": "a second machine",
                "hosts": {"lmstudio": {"url": "http://second-host.example:1234/v1"},
@@ -36,20 +36,20 @@ def _write_files(folder: Path,
 
 
 def _use_folder(folder: Path) -> tuple:
-    """Point the settings files at `folder`, with no profile and the default worker set in force; returns what to give back
+    """Point the settings files at `folder`, with no profile and the default provider set in force; returns what to give back
     to `_give_back`."""
 
     previous = (config.DEFAULT_CONFIG_FILE, config.LOCAL_CONFIG_FILE, config.PLAYBOOK_ROOT, config.PROFILE_NAME,
-                config.WORKER_SET_NAME, config.settings)
+                config.PROVIDER_SET_NAME, config.settings)
     config.DEFAULT_CONFIG_FILE, config.LOCAL_CONFIG_FILE = folder / "playbook.default.json", folder / "playbook.local.json"
-    config.PLAYBOOK_ROOT, config.PROFILE_NAME, config.WORKER_SET_NAME = folder, "", config.DEFAULT_WORKER_SET_NAME
+    config.PLAYBOOK_ROOT, config.PROFILE_NAME, config.PROVIDER_SET_NAME = folder, "", config.DEFAULT_PROVIDER_SET_NAME
 
     return previous
 
 
 def _give_back(previous: tuple) -> None:
     (config.DEFAULT_CONFIG_FILE, config.LOCAL_CONFIG_FILE, config.PLAYBOOK_ROOT, config.PROFILE_NAME,
-     config.WORKER_SET_NAME, config.settings) = previous
+     config.PROVIDER_SET_NAME, config.settings) = previous
 
 
 def _read_refusal(values: dict) -> str:
@@ -61,14 +61,14 @@ def _read_refusal(values: dict) -> str:
     return "it was accepted"
 
 
-def test_a_worker_set_overrides_only_what_it_names():
+def test_a_provider_set_overrides_only_what_it_names():
     folder = Path(tempfile.mkdtemp())
     _write_files(folder=folder, default_values=_DEFAULT_FILE_VALUES)
     previous = _use_folder(folder)
     try:
-        config.apply_worker_set("second-host")
+        config.apply_provider_set("second-host")
         on_pc = config.settings
-        config.apply_worker_set("Mac")
+        config.apply_provider_set("Mac")
         on_mac = config.settings
     finally:
         _give_back(previous)
@@ -82,72 +82,72 @@ def test_a_worker_set_overrides_only_what_it_names():
                   on_mac.hosts["lmstudio"].url == "http://mac.example:1234/v1" and on_mac.budgets.max_attempts == 3
                   and "frame" not in on_mac.models,
                   f"{on_mac.hosts["lmstudio"].url}, {on_mac.budgets.max_attempts}, {sorted(on_mac.models)}")
-    harness.check("a note inside a set is dropped, never read as a setting", on_pc.worker_sets["second-host"].get("_note") is None)
+    harness.check("a note inside a set is dropped, never read as a setting", on_pc.provider_sets["second-host"].get("_note") is None)
 
 
-def test_the_default_worker_set_is_the_settings_files_as_they_are():
+def test_the_default_provider_set_is_the_settings_files_as_they_are():
     folder = Path(tempfile.mkdtemp())
     _write_files(folder=folder, default_values=_DEFAULT_FILE_VALUES)
     previous = _use_folder(folder)
     try:
-        config.apply_worker_set("")
+        config.apply_provider_set("")
         in_force = config.settings
-        name_in_force = config.WORKER_SET_NAME
+        name_in_force = config.PROVIDER_SET_NAME
     finally:
         _give_back(previous)
-    harness.check("no name takes `defaultWorkerSet`, which is `default` unless the files say otherwise",
+    harness.check("no name takes `defaultProviderSet`, which is `default` unless the files say otherwise",
                   name_in_force == "default" and in_force.hosts["lmstudio"].url == "http://localhost:1234/v1"
                   and in_force.budgets.max_attempts == 3,
                   f"{name_in_force}, {in_force.hosts["lmstudio"].url}, {in_force.budgets.max_attempts}")
-    harness.check("the sets stay readable beside the default one", sorted(in_force.worker_sets) == ["Mac", "second-host"],
-                  str(sorted(in_force.worker_sets)))
+    harness.check("the sets stay readable beside the default one", sorted(in_force.provider_sets) == ["Mac", "second-host"],
+                  str(sorted(in_force.provider_sets)))
 
 
-def test_the_default_worker_set_setting_names_the_set_a_job_takes_when_none_is_chosen():
+def test_the_default_provider_set_setting_names_the_set_a_job_takes_when_none_is_chosen():
     folder = Path(tempfile.mkdtemp())
-    _write_files(folder=folder, default_values={**_DEFAULT_FILE_VALUES, "defaultWorkerSet": "Mac"})
+    _write_files(folder=folder, default_values={**_DEFAULT_FILE_VALUES, "defaultProviderSet": "Mac"})
     previous = _use_folder(folder)
     try:
-        config.apply_worker_set("")
-        name_in_force, host = config.WORKER_SET_NAME, config.settings.hosts["lmstudio"].url
+        config.apply_provider_set("")
+        name_in_force, host = config.PROVIDER_SET_NAME, config.settings.hosts["lmstudio"].url
     finally:
         _give_back(previous)
-    harness.check("an empty name takes the set `defaultWorkerSet` names", name_in_force == "Mac"
+    harness.check("an empty name takes the set `defaultProviderSet` names", name_in_force == "Mac"
                   and host == "http://mac.example:1234/v1", f"{name_in_force}, {host}")
 
 
-def test_a_bad_worker_set_is_refused_by_its_name():
-    wrong_value = _read_refusal({"workerSets": {"second-host": {"budgets": {"maxAttempts": "many"}}}})
-    harness.check("a set with a wrong value is refused under its name and the key", "workerSets.second-host" in wrong_value
+def test_a_bad_provider_set_is_refused_by_its_name():
+    wrong_value = _read_refusal({"providerSets": {"second-host": {"budgets": {"maxAttempts": "many"}}}})
+    harness.check("a set with a wrong value is refused under its name and the key", "providerSets.second-host" in wrong_value
                   and "budgets.maxAttempts" in wrong_value, wrong_value)
-    unknown_key = _read_refusal({"workerSets": {"second-host": {"noSuchSetting": 1}}})
+    unknown_key = _read_refusal({"providerSets": {"second-host": {"noSuchSetting": 1}}})
     harness.check("a set with a key the settings do not have is refused under its name",
-                  "workerSets.second-host" in unknown_key and "noSuchSetting" in unknown_key, unknown_key)
-    named_default = _read_refusal({"workerSets": {"default": {"hosts": {"lmstudio": {"url": "http://x/v1"}}}}})
+                  "providerSets.second-host" in unknown_key and "noSuchSetting" in unknown_key, unknown_key)
+    named_default = _read_refusal({"providerSets": {"default": {"hosts": {"lmstudio": {"url": "http://x/v1"}}}}})
     harness.check("a set named `default` is refused: the default set is the files as they are",
-                  "workerSets.default" in named_default, named_default)
-    nested_sets = _read_refusal({"workerSets": {"second-host": {"workerSets": {"Mac": {}}}}})
-    harness.check("a set holding `workerSets` is refused", "workerSets.second-host" in nested_sets and "workerSets" in nested_sets,
+                  "providerSets.default" in named_default, named_default)
+    nested_sets = _read_refusal({"providerSets": {"second-host": {"providerSets": {"Mac": {}}}}})
+    harness.check("a set holding `providerSets` is refused", "providerSets.second-host" in nested_sets and "providerSets" in nested_sets,
                   nested_sets)
-    not_an_object = _read_refusal({"workerSets": {"second-host": "http://second-host.example"}})
-    harness.check("a set that is not an object is refused", "workerSets.second-host" in not_an_object, not_an_object)
-    unknown_default = _read_refusal({"workerSets": {"second-host": {}}, "defaultWorkerSet": "spare"})
-    harness.check("`defaultWorkerSet` naming no set is refused with the sets that exist",
-                  "defaultWorkerSet" in unknown_default and "second-host" in unknown_default, unknown_default)
+    not_an_object = _read_refusal({"providerSets": {"second-host": "http://second-host.example"}})
+    harness.check("a set that is not an object is refused", "providerSets.second-host" in not_an_object, not_an_object)
+    unknown_default = _read_refusal({"providerSets": {"second-host": {}}, "defaultProviderSet": "spare"})
+    harness.check("`defaultProviderSet` naming no set is refused with the sets that exist",
+                  "defaultProviderSet" in unknown_default and "second-host" in unknown_default, unknown_default)
 
 
-def test_an_unknown_worker_set_is_refused_by_name_and_leaves_the_settings_in_force():
+def test_an_unknown_provider_set_is_refused_by_name_and_leaves_the_settings_in_force():
     folder = Path(tempfile.mkdtemp())
     _write_files(folder=folder, default_values=_DEFAULT_FILE_VALUES)
     previous = _use_folder(folder)
     try:
-        config.apply_worker_set("Mac")
+        config.apply_provider_set("Mac")
         try:
-            config.apply_worker_set("spare")
+            config.apply_provider_set("spare")
             refusal = "it was accepted"
         except ValueError as error:
             refusal = str(error)
-        name_in_force, host = config.WORKER_SET_NAME, config.settings.hosts["lmstudio"].url
+        name_in_force, host = config.PROVIDER_SET_NAME, config.settings.hosts["lmstudio"].url
     finally:
         _give_back(previous)
     harness.check("the refusal names the set and the sets that exist", "'spare'" in refusal and "second-host" in refusal
@@ -156,8 +156,8 @@ def test_an_unknown_worker_set_is_refused_by_name_and_leaves_the_settings_in_for
                   f"{name_in_force}, {host}")
 
 
-def test_the_worker_set_survives_a_speed_choice_and_a_profile():
-    """Merge order, last wins: default settings, local file, profile, worker set, speed values."""
+def test_the_provider_set_survives_a_speed_choice_and_a_profile():
+    """Merge order, last wins: default settings, local file, profile, provider set, speed values."""
 
     folder = Path(tempfile.mkdtemp())
     _write_files(folder=folder, default_values=_DEFAULT_FILE_VALUES,
@@ -165,14 +165,14 @@ def test_the_worker_set_survives_a_speed_choice_and_a_profile():
                                  "hosts": {"lmstudio": {"url": "http://profile.example:1234/v1"}}})
     previous = _use_folder(folder)
     try:
-        config.apply_worker_set("second-host")
+        config.apply_provider_set("second-host")
         config.apply_speed_values({"budgets.askWhyAfterRejection": False})
         after_speed = config.settings
         config.load_profile("strict")
         after_profile = config.settings
         config.apply_speed_values({"budgets.maxAttempts": 7})
         after_both = config.settings
-        profile_in_force, name_in_force = config.PROFILE_NAME, config.WORKER_SET_NAME
+        profile_in_force, name_in_force = config.PROFILE_NAME, config.PROVIDER_SET_NAME
     finally:
         _give_back(previous)
     harness.check("a speed choice keeps the set's host and attempts",
@@ -195,10 +195,10 @@ def test_a_profile_alone_wins_over_the_default_settings_and_the_set_is_the_defau
     previous = _use_folder(folder)
     try:
         config.load_profile("strict")
-        attempts, name_in_force = config.settings.budgets.max_attempts, config.WORKER_SET_NAME
+        attempts, name_in_force = config.settings.budgets.max_attempts, config.PROVIDER_SET_NAME
     finally:
         _give_back(previous)
-    harness.check("with no worker set chosen a profile loads as before", attempts == 9 and name_in_force == "default",
+    harness.check("with no provider set chosen a profile loads as before", attempts == 9 and name_in_force == "default",
                   f"{attempts}, {name_in_force}")
 
 
@@ -208,19 +208,19 @@ def test_the_shipped_default_file_holds_no_set_and_a_set_laid_over_it_keeps_its_
     changes only the values it names."""
 
     shipped_default = json.loads(config.DEFAULT_CONFIG_FILE.read_text(encoding="utf-8"))
-    harness.check("the default settings file holds `workerSets` and `defaultWorkerSet`",
-                  "workerSets" in shipped_default and "defaultWorkerSet" in shipped_default, f"{sorted(shipped_default)[:3]}")
-    shipped_sets = {name: values for name, values in shipped_default["workerSets"].items() if not name.startswith("_")}
+    harness.check("the default settings file holds `providerSets` and `defaultProviderSet`",
+                  "providerSets" in shipped_default and "defaultProviderSet" in shipped_default, f"{sorted(shipped_default)[:3]}")
+    shipped_sets = {name: values for name, values in shipped_default["providerSets"].items() if not name.startswith("_")}
     harness.check("the shipped default file holds no set, and strict is a profile file beside it",
                   shipped_sets == {} and (config.PLAYBOOK_ROOT / "playbook.strict.json").is_file(),
                   f"{sorted(shipped_sets)}")
     built = config.read_settings_files(config.DEFAULT_CONFIG_FILE, Path(tempfile.mkdtemp()) / "none.json")
-    harness.check("the file builds into settings", config.Settings(**built).default_worker_set == "default")
+    harness.check("the file builds into settings", config.Settings(**built).default_provider_set == "default")
     host = "http://second-host.example:8090/v1"
-    with_set = {**built, "workerSets": {"second-host": {"hosts": {"second-llama": {"url": host}}, "models": {
+    with_set = {**built, "providerSets": {"second-host": {"hosts": {"second-llama": {"url": host}}, "models": {
         "frame": {"spec": "openai-compatible:qwen3.6-35b-a3b-mtp", "host": "second-llama"},
         "document": {"spec": "openai-compatible:qwen3.6-35b-a3b-mtp", "host": "second-llama"}}}}}
-    on_second = config.Settings(**config.merge_worker_set(with_set, "second-host"))
+    on_second = config.Settings(**config.merge_provider_set(with_set, "second-host"))
     plain = config.Settings(**built)
     harness.check("a set points the frame and document models at its host, other values kept",
                   all(on_second.models[name].spec == "openai-compatible:qwen3.6-35b-a3b-mtp"
@@ -240,15 +240,15 @@ def test_the_hosts_a_run_calls_are_the_sets():
         "frame": {"spec": "lmstudio:qwen3.6-35b-a3b-mtp"}}})
     previous = _use_folder(folder)
     try:
-        config.apply_worker_set("second-host")
+        config.apply_provider_set("second-host")
         pc_model = config.settings.resolve_model("frame")
         on_pc = chat_model_service.resolve_host_url(pc_model)
-        config.apply_worker_set("Mac")
+        config.apply_provider_set("Mac")
         on_mac = chat_model_service.resolve_host_url(config.settings.resolve_model("frame"))
-        next_on_mac = settings_service.read_next_job_settings(worker_set="Mac").hosts["lmstudio"].url
+        next_on_mac = settings_service.read_next_job_settings(provider_set="Mac").hosts["lmstudio"].url
         next_default = settings_service.read_next_job_settings().hosts["lmstudio"].url
         try:
-            settings_service.read_next_job_settings(worker_set="spare")
+            settings_service.read_next_job_settings(provider_set="spare")
             refusal = "it was accepted"
         except ValueError as error:
             refusal = str(error)

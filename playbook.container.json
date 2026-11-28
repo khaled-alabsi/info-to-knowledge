@@ -14,7 +14,7 @@
     "A Linux container has no Metal graphics, so every Apple-only part is replaced by the one the program already",
     "offers on other systems: faster-whisper on the CPU for the transcript, Tesseract for board text and scanned PDF",
     "pages. The model hosts are reached by URL: host.containers.internal is the machine that runs the container (its",
-    "LM Studio or Ollama); a worker set, or a host added to hosts and named in a model's host, can reach any other machine, as on the Mac."
+    "LM Studio or Ollama); a provider set, or a host added to hosts and named in a model's host, can reach any other machine, as on the Mac."
   ],
   "audio": {
     "engine": "faster-whisper"

@@ -50,8 +50,8 @@ function buildDefaultHandlers(): Map<string, Handler> {
   handlers.set("PUT /lists", (request) => ({ json: { lists: (request.body as { lists: unknown[] }).lists } }));
   // what a run takes when the form chooses nothing
   handlers.set("GET /run-defaults", json(data.RUN_DEFAULTS));
-  // the worker sets the settings define: only the default, so no run form offers a choice until a test gives sets
-  handlers.set("GET /worker-sets", json({ default_set: "default", sets: [{ name: "default", changes: [] }] }));
+  // the provider sets the settings define: only the default, so no run form offers a choice until a test gives sets
+  handlers.set("GET /provider-sets", json({ default_set: "default", sets: [{ name: "default", changes: [] }] }));
 
   // 2. What the run form, the run view and the settings ask for
   handlers.set("GET /profiles", json(data.SETTINGS_PROFILES));

@@ -53,10 +53,10 @@ export function rankPill(pillClass: string): number {
 }
 
 // A started run's pill names the phase it stopped in ("phase 3 ›"), and its title the phase's name; any other state
-// names the state; a running run's pill names its worker set when one is given ("running · Mac ›")
-function labelStatePill(state: InboxItem["state"], stoppedPhase: number, isBlocked = false, workerSet = ""): string {
+// names the state; a running run's pill names its provider set when one is given ("running · Mac ›")
+function labelStatePill(state: InboxItem["state"], stoppedPhase: number, isBlocked = false, providerSet = ""): string {
   if (state === "started" && stoppedPhase > 0) return `${isBlocked ? "blocked in phase" : "phase"} ${stoppedPhase} ›`;
-  if (state === "running" && workerSet) return `${formatRunState(state)} · ${workerSet} ›`;
+  if (state === "running" && providerSet) return `${formatRunState(state)} · ${providerSet} ›`;
 
   return `${formatRunState(state)} ›`;
 }
@@ -974,10 +974,10 @@ export default function InboxPanel({
   // the last job of each run folder and each video, later ones replacing earlier ones, for the row's last state
   const lastJobsOfFolders = new Map(jobs.map((job) => [job.request.output_root, job] as const));
   const lastJobsOfVideos = new Map(jobs.map((job) => [job.request.video, job] as const));
-  // a running pill names its run's worker set only while the running runs use more than one set, so the owner sees
+  // a running pill names its run's provider set only while the running runs use more than one set, so the owner sees
   // which machine runs which recording; with one set the name tells nothing
-  const isSeveralSetsRunning = new Set(runs.filter((run) => run.is_live).map((run) => run.worker_set || "default")).size > 1;
-  const nameRunningSet = (run: { worker_set?: string }) => (isSeveralSetsRunning ? run.worker_set || "default" : "");
+  const isSeveralSetsRunning = new Set(runs.filter((run) => run.is_live).map((run) => run.provider_set || "default")).size > 1;
+  const nameRunningSet = (run: { provider_set?: string }) => (isSeveralSetsRunning ? run.provider_set || "default" : "");
   // the class of the pill a row shows, as its row renders it below, which also orders the rows of each section
   const classifyItemPill = (item: InboxItem) => {
     const lead = leadRun(item);

@@ -60,7 +60,7 @@
     }
   },
   "video": {
-    "_comment": "The video workflow: quality runs phases 3 to 6 as they always ran; direct-draft (the Fast speed's) has phase 3 write each batch of framesProcessing.framesPerCall frames straight into a draft already in chapters, no check, and phase 4 make one small call that titles and summarises it, with the quality workflow's models; fast-processing has phase 3 describe each frame from its image alone, frameFollowUps frames to a session, no check, and phase 4 write the document in one call, each with the model the worker set's frames processing and document writing jobs name (frameModel and documentModel, when set, name another); phases 5 and 6 are off in both. A run line's --workflow, or the run form's Workflow, chooses one per run.",
+    "_comment": "The video workflow: quality runs phases 3 to 6 as they always ran; direct-draft (the Fast speed's) has phase 3 write each batch of framesProcessing.framesPerCall frames straight into a draft already in chapters, no check, and phase 4 make one small call that titles and summarises it, with the quality workflow's models; fast-processing has phase 3 describe each frame from its image alone, frameFollowUps frames to a session, no check, and phase 4 write the document in one call, each with the model the provider set's frames processing and document writing jobs name (frameModel and documentModel, when set, name another); phases 5 and 6 are off in both. A run line's --workflow, or the run form's Workflow, chooses one per run.",
     "workflow": "quality",
     "directDraft": {
       "frameWidth": 1280,
@@ -111,7 +111,7 @@
   },
   "models": {
     "frame": {
-      "_comment": "LM Studio on this machine (the host lmstudio in hosts). A model served by another machine is a model of its own in the library, linked from a worker set (see workerSets and playbook.local.example.json).",
+      "_comment": "LM Studio on this machine (the host lmstudio in hosts). A model served by another machine is a model of its own in the library, linked from a provider set (see providerSets and playbook.local.example.json).",
       "spec": "lmstudio:qwen3.6-35b-a3b-mtp",
       "suits": ["frames"],
       "numCtx": 183040,
@@ -293,9 +293,9 @@
     "retryPauseSeconds": 60,
     "onFailure": "continue"
   },
-  "workerSets": {
-    "_note": "named worker sets: a set links each job (a phase of a run, the fast workflow's document model) to a model of the models library by its name, e.g. \"gpu-box\": {\"phaseModels\": {\"frames_processing\": \"gpu-box-frame\"}}, and the jobs it does not name keep the default models. Jobs on different sets run at the same time, jobs on one set one after another. The default set is these files as they are and has no entry. The shipped file holds no set and names no machine and no host: yours go in playbook.local.json (see playbook.local.example.json)."
+  "providerSets": {
+    "_note": "named provider sets: a set links each job (a phase of a run, the fast workflow's document model) to a model of the models library by its name, e.g. \"gpu-box\": {\"phaseModels\": {\"frames_processing\": \"gpu-box-frame\"}}, and the jobs it does not name keep the default models. Jobs on different sets run at the same time, jobs on one set one after another. The default set is these files as they are and has no entry. The shipped file holds no set and names no machine and no host: yours go in playbook.local.json (see playbook.local.example.json)."
   },
-  "defaultWorkerSet": "default",
+  "defaultProviderSet": "default",
   "machine": "this machine"
 }

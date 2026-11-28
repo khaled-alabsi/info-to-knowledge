@@ -33,7 +33,7 @@ from services import fast_turn_service
 from services import inbox_move_service
 from services import run_activity_service
 from services import run_speed_service
-from services import run_worker_set_service
+from services import run_provider_set_service
 from services import inbox_service
 from services import inbox_tags_service
 from services import ingesting_profile_service
@@ -595,8 +595,8 @@ def _summarise_folder(root_name: str,
             # the phase a live run is in (its first phase not complete), so the running count's menu names it; 0 for a
             # run not going
             "live_phase": _find_stopped_phase(folder, record) if is_live else 0,
-            # the worker set the run chose, so the running count's menu names it; empty for the default set
-            "worker_set": run_worker_set_service.read_chosen_worker_set(folder) or "",
+            # the provider set the run chose, so the running count's menu names it; empty for the default set
+            "provider_set": run_provider_set_service.read_chosen_provider_set(folder) or "",
             # a phase recorded blocked or failed: a resume asks the blocked step again
             "is_blocked": any(status in ("blocked", "failed") for status in (record.get("phases") or {}).values()),
             # made by Branch or Convert from another run: listed apart from its video's own run
@@ -620,7 +620,7 @@ def _list_video_runs(folders: list[dict],
                      resolved_video: str) -> list[dict]:
     # a folder made from another run by Branch or Convert is listed apart, never folded into its video's row
     return [{key: folder[key] for key in ("root", "name", "status", "is_live", "has_document", "topic", "display_name", "state_at",
-                                    "stopped_phase", "has_phase_output", "is_blocked", "worker_set")}
+                                    "stopped_phase", "has_phase_output", "is_blocked", "provider_set")}
             for folder in folders
             if folder["video"] and not folder["is_derived"] and str(Path(folder["video"]).resolve()) == resolved_video]
 
@@ -952,8 +952,8 @@ def describe_run_folder(root_name: str,
             "workflow": "" if is_audio else workflow,
             # the Workflow speed chosen for the run, {"preset", "values", "name"}, None when the settings decided
             "speed": None if is_audio else run_speed_service.read_chosen_speed(folder),
-            # the worker set the run keeps (its models and hosts); empty when it kept none
-            "worker_set": run_worker_set_service.read_chosen_worker_set(folder) or "",
+            # the provider set the run keeps (its models and hosts); empty when it kept none
+            "provider_set": run_provider_set_service.read_chosen_provider_set(folder) or "",
             # how often each phase 4 and 5 step blocked, was accepted and was reset (`i2k blocks` prints the same)
             "step_outcomes": list_step_outcomes(folder),
             "blocked_items": sorted(blocked_items),

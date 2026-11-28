@@ -13,21 +13,21 @@ from services import run_speed_service
 def test_a_test_that_lays_the_default_speed_over_the_settings_leaves_the_next_test_the_settings_it_had_defect():
     # Defect: a case that started a new video run in the suite's process laid Balanced over the settings, the review
     # went off for every case file after it, and 22 review checks failed only when the whole suite ran. Fix: the runner
-    # gives each test back the settings, the profile and the worker set it found.
+    # gives each test back the settings, the profile and the provider set it found.
     was_on = config.settings.review.is_on
-    profile_name, worker_set_name = config.PROFILE_NAME, config.WORKER_SET_NAME
+    profile_name, provider_set_name = config.PROFILE_NAME, config.PROVIDER_SET_NAME
 
     def start_a_new_video_run():
         speed = run_speed_service.resolve_speed(run_speed_service.DEFAULT_PRESET, {})
         config.apply_speed_values(speed["values"])
         config.settings.review.is_on = not was_on
-        config.WORKER_SET_NAME = "Gateway-box"
+        config.PROVIDER_SET_NAME = "Gateway-box"
 
     run_tests.run_case(start_a_new_video_run, "lays the default speed")
     harness.check("the review switch is as it was before the test", config.settings.review.is_on == was_on,
                   str(config.settings.review.is_on))
-    harness.check("the profile and the worker set are as they were",
-                  (config.PROFILE_NAME, config.WORKER_SET_NAME) == (profile_name, worker_set_name), config.WORKER_SET_NAME)
+    harness.check("the profile and the provider set are as they were",
+                  (config.PROFILE_NAME, config.PROVIDER_SET_NAME) == (profile_name, provider_set_name), config.PROVIDER_SET_NAME)
 
 
 def test_a_test_that_crashes_is_one_failing_check_and_still_gives_the_settings_back_defect():

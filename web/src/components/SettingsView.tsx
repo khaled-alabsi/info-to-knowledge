@@ -13,7 +13,7 @@ import { useSettingsProfiles } from "./RunChoices";
 import SettingRowItem, { readEditorValue } from "./SettingRowItem";
 import type { SettingEditContext } from "./SettingRowItem";
 import Spinner from "./Spinner";
-import WorkerSetsPanel, { WORKER_SET_KEYS } from "./WorkerSetsPanel";
+import ProviderSetsPanel, { PROVIDER_SET_KEYS } from "./ProviderSetsPanel";
 
 // A change typed but not saved yet: its row, and the editor's value as it stands (text, or a checkbox's state)
 export type SettingDraft = { row: SettingRow; raw: string | boolean };
@@ -60,15 +60,15 @@ export async function saveDrafts(drafts: SettingDrafts, profile: string): Promis
   return { left, message: [done, ...refusals].filter(Boolean).join(" · "), isError: refusals.length > 0 };
 }
 
-// The page's sections in setup order: the model servers with the models that run on each, the worker sets that link jobs to
+// The page's sections in setup order: the model servers with the models that run on each, the provider sets that link jobs to
 // models, then the rest by the person's job (`SECTION_GROUPS`, the servers group's own rows standing in the first two)
 const SERVERS = "servers";
-const WORKER_SETS = "worker-sets";
+const PROVIDER_SETS = "provider-sets";
 const OTHER = "other";
 const HOST_PREFIXES = ["hosts", "providers"];
 const SECTION_INTROS: Record<string, string> = {
   [SERVERS]: "",
-  [WORKER_SETS]: "",
+  [PROVIDER_SETS]: "",
   [OTHER]: "Settings no other section lists.",
 };
 
@@ -76,18 +76,18 @@ type Section = { id: string; title: string; intro: string };
 
 const SECTIONS: Section[] = [
   { id: SERVERS, title: "Model servers", intro: SECTION_INTROS[SERVERS] },
-  { id: WORKER_SETS, title: "Worker sets", intro: SECTION_INTROS[WORKER_SETS] },
+  { id: PROVIDER_SETS, title: "Provider sets", intro: SECTION_INTROS[PROVIDER_SETS] },
   ...SECTION_GROUPS.filter((group) => group.id !== "machines-and-models")
     .map((group) => ({ id: group.id, title: group.title, intro: group.intro })),
   { id: OTHER, title: "Other settings", intro: SECTION_INTROS[OTHER] },
 ];
 
-// The section a setting stands in; the models, the worker sets' links and the fast workflow's models have panels of their
+// The section a setting stands in; the models, the provider sets' links and the fast workflow's models have panels of their
 // own and never a row in a section
 function readSectionId(row: SettingRow, jobKeys: Set<string>): string {
   const prefix = readSettingPrefix(row.key);
   if (prefix === MODELS_KEY) return SERVERS;
-  if (WORKER_SET_KEYS.has(row.key) || prefix === PHASE_MODELS_KEY || jobKeys.has(row.key)) return WORKER_SETS;
+  if (PROVIDER_SET_KEYS.has(row.key) || prefix === PHASE_MODELS_KEY || jobKeys.has(row.key)) return PROVIDER_SETS;
   if (HOST_PREFIXES.includes(prefix)) return SERVERS;
   return findSectionGroup(row.key)?.id ?? OTHER;
 }
@@ -222,21 +222,21 @@ export default function SettingsView({ profile, onProfileChange, drafts, onDraft
 
   const modelNames = [...new Set(allRows.filter((row) => readPath(row)[0] === MODELS_KEY && readPath(row).length === 3)
     .map((row) => readPath(row)[1]))];
-  const setNames = Object.keys(asTree(allRows.find((row) => row.key === "workerSets")?.value));
+  const setNames = Object.keys(asTree(allRows.find((row) => row.key === "providerSets")?.value));
   const sectionRows = (id: string) => visible.filter((row) => readSectionId(row, jobKeys) === id && matchesSearch(row, needle));
-  // The servers (with their models) and the worker sets stand on their own panels, so they show whenever the settings hold
+  // The servers (with their models) and the provider sets stand on their own panels, so they show whenever the settings hold
   // them; a section of rows shows when it has a row, and a search keeps the sections holding a match
   const serverNames = Object.keys(asTree(allRows.find((row) => row.key === "hosts")?.value));
   const isShown = (id: string) => {
     if (id === SERVERS) return (serverNames.length + modelNames.length + newRows.length > 0) && (!needle || "model servers".includes(needle)
       || serverNames.some((name) => name.toLowerCase().includes(needle)) || modelNames.some((name) => name.toLowerCase().includes(needle)));
-    if (id === WORKER_SETS) return allRows.some((row) => row.key === "workerSets")
-      && (!needle || "worker sets".includes(needle) || sectionRows(id).length > 0 || setNames.some((name) => name.toLowerCase().includes(needle)));
+    if (id === PROVIDER_SETS) return allRows.some((row) => row.key === "providerSets")
+      && (!needle || "provider sets".includes(needle) || sectionRows(id).length > 0 || setNames.some((name) => name.toLowerCase().includes(needle)));
     return sectionRows(id).length > 0;
   };
   // the number beside a title counts the cards the section shows
   const countOf = (id: string): number => id === SERVERS ? countServerCards(allRows, context, newRows)
-    : id === WORKER_SETS ? setNames.length + 1
+    : id === PROVIDER_SETS ? setNames.length + 1
     : listSettingCards(SECTIONS.find((section) => section.id === id) ?? { id, title: id }, sectionRows(id)).length;
   const shownSections = SECTIONS.filter((section) => isShown(section.id));
 
@@ -325,8 +325,8 @@ export default function SettingsView({ profile, onProfileChange, drafts, onDraft
               <ServerCards rows={allRows} context={context} newRows={newRows} onAdd={addModel}
                 onDiscard={(name) => onDraft(`${MODELS_KEY}.${name}`, null)} onEditNew={editNewModel} onRemove={removeModel} />
             )}
-            {section.id === WORKER_SETS && <WorkerSetsPanel rows={allRows} drafts={drafts} onEdit={edit} />}
-            {section.id !== SERVERS && section.id !== WORKER_SETS && cards.map((card) => (
+            {section.id === PROVIDER_SETS && <ProviderSetsPanel rows={allRows} drafts={drafts} onEdit={edit} />}
+            {section.id !== SERVERS && section.id !== PROVIDER_SETS && cards.map((card) => (
               // a card never repeats its section's title: the settings are split by what they do, and each card is closed until
               // opened, like the section, so an opened section shows its card titles alone
               <details key={card.title} className="settings-prefix-group" aria-label={card.title}

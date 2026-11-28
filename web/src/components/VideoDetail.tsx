@@ -13,7 +13,7 @@ import type { RangeValue } from "./RangeEditor";
 import { describeDefault, describeModels, PdfChoices, useIngestingProfiles, usePhaseModels, useRunDefaults }
   from "./RunChoices";
 import WorkflowSpeedChoice, { readSpeedOffPhases, readSpeedWorkflow } from "./WorkflowSpeedChoice";
-import { nameWorkerSet, useWorkerSets } from "./WorkerSetChoice";
+import { nameProviderSet, useProviderSets } from "./ProviderSetChoice";
 import { RunTags } from "./RunTags";
 
 // The page of an inbox video no run has used yet: the detail view before its run, so a click on a new video opens a page.
@@ -123,7 +123,7 @@ export default function VideoDetail({
     fetchJson<Phase[]>(`/phases?${query}`).then(setFlowPhases).catch(() => setFlowPhases(null));
   }, [flowMedium, speedWorkflow, selection.ingesting_profile, flowPass, speedOffKey]);
   // The ingesting profiles with what each is for; none answered shows only Automatic
-  const workerSets = useWorkerSets();
+  const providerSets = useProviderSets();
   const { phaseModels, error: modelsError } = usePhaseModels();
   const { profiles, error: profilesError } = useIngestingProfiles();
   const isPdf = item.video.toLowerCase().endsWith(".pdf");
@@ -185,7 +185,7 @@ export default function VideoDetail({
                   <Dropdown label={<Icon name="settings" size={16} />} variant="primary" align="right"
                     title="phases, settings and models" panelClassName="wide">
                     {() => <PhaseSelector phases={flowPhases ?? phases} phaseModels={phaseModels}
-                      selection={selection} onChange={setSelection} isTagsShown={false} isWorkerSetShown={false} />}
+                      selection={selection} onChange={setSelection} isTagsShown={false} isProviderSetShown={false} />}
                   </Dropdown>
                 </div>
               )}
@@ -294,16 +294,16 @@ export default function VideoDetail({
                   <WorkflowSpeedChoice selection={selection} onChange={setSelection} defaults={runDefaults} />
                 </div>
               )}
-              {/* Which worker set runs it, in the row itself: behind Start run's gear the owner never found it */}
-              {workerSets && workerSets.sets.length > 1 && (
-                <label className="field-select" title="Worker set: the machine and models this run uses">
-                  <small>Worker set</small>
-                  <select aria-label="worker set" value={selection.worker_set ?? ""}
-                    onChange={(event) => setSelection({ ...selection, worker_set: event.target.value })}>
-                    <option value="">{nameWorkerSet(workerSets.sets.find((entry) => entry.name === workerSets.default_set)
-                      ?? { name: workerSets.default_set })} (default)</option>
-                    {workerSets.sets.filter((entry) => entry.name !== workerSets.default_set).map((entry) => (
-                      <option key={entry.name} value={entry.name}>{nameWorkerSet(entry)}</option>
+              {/* Which provider set runs it, in the row itself: behind Start run's gear the owner never found it */}
+              {providerSets && providerSets.sets.length > 1 && (
+                <label className="field-select" title="Provider set: the machine and models this run uses">
+                  <small>Provider set</small>
+                  <select aria-label="provider set" value={selection.provider_set ?? ""}
+                    onChange={(event) => setSelection({ ...selection, provider_set: event.target.value })}>
+                    <option value="">{nameProviderSet(providerSets.sets.find((entry) => entry.name === providerSets.default_set)
+                      ?? { name: providerSets.default_set })} (default)</option>
+                    {providerSets.sets.filter((entry) => entry.name !== providerSets.default_set).map((entry) => (
+                      <option key={entry.name} value={entry.name}>{nameProviderSet(entry)}</option>
                     ))}
                   </select>
                 </label>

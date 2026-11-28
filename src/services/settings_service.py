@@ -381,15 +381,15 @@ def _read_raw_file(path: Path) -> dict:
 
 
 def read_next_job_settings(profile: str = "",
-                           worker_set: str = "") -> config.Settings:
-    """The settings a job started now on `profile` (the default settings when empty) and the worker set `worker_set` (the
-    settings' `defaultWorkerSet` when empty) would read. A set no `workerSets` entry holds raises `ValueError` naming the
+                           provider_set: str = "") -> config.Settings:
+    """The settings a job started now on `profile` (the default settings when empty) and the provider set `provider_set` (the
+    settings' `defaultProviderSet` when empty) would read. A set no `providerSets` entry holds raises `ValueError` naming the
     sets that exist."""
 
     merged = _merge_layers(_build_layers(profile))
-    name = worker_set or merged.get("defaultWorkerSet", config.DEFAULT_WORKER_SET_NAME)
+    name = provider_set or merged.get("defaultProviderSet", config.DEFAULT_PROVIDER_SET_NAME)
 
-    return config.Settings(**config.merge_worker_set(merged, name))
+    return config.Settings(**config.merge_provider_set(merged, name))
 
 
 def list_settings(profile: str = "") -> list[dict]:
@@ -459,7 +459,7 @@ def save_setting(key: str,
 def remove_setting(key_parts: list[str],
                    profile: str = "") -> OperationResult:
     """The entry or value at `key_parts` taken out of the owner's own settings file, or out of `profile`'s file; the
-    entry a model, a worker set or a host is. An entry the shipped default settings hold cannot be taken out of the
+    entry a model, a provider set or a host is. An entry the shipped default settings hold cannot be taken out of the
     owner's file (the shipped file is never written), and nothing is written when the settings would not load without
     it."""
 

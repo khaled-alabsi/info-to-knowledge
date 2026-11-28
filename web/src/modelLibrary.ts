@@ -8,7 +8,7 @@ import { PHASE_LABELS, readSettingLabel } from "./settingsLabels";
 
 export const MODELS_KEY = "models";
 export const PHASE_MODELS_KEY = "phaseModels";
-export const SETS_KEY = "workerSets";
+export const SETS_KEY = "providerSets";
 export const DEFAULT_SET = "default";
 
 export type Tree = Record<string, unknown>;
@@ -150,7 +150,7 @@ export function readDefaultJobModel(job: Job): string {
   return typeof resolved === "string" ? resolved : "";
 }
 
-// The model a job calls in a worker set: what the set names, or "" when the set leaves it to the default set
+// The model a job calls in a provider set: what the set names, or "" when the set leaves it to the default set
 export function readSetJobModel(set: Tree, job: Job): string {
   let node: unknown = set;
   for (const part of job.path) node = isTree(node) ? node[part] : undefined;
@@ -159,7 +159,7 @@ export function readSetJobModel(set: Tree, job: Job): string {
 
 export type ModelUse = { set: string; jobs: string[] };
 
-// The worker sets that call a model, each with the jobs it calls it for: "default" first when its jobs do, then each set
+// The provider sets that call a model, each with the jobs it calls it for: "default" first when its jobs do, then each set
 // naming the model in a job of its own
 export function listModelUses(rows: SettingRow[], sets: Tree, name: string): ModelUse[] {
   const jobs = listJobs(rows);
@@ -173,7 +173,7 @@ export function listModelUses(rows: SettingRow[], sets: Tree, name: string): Mod
   return uses;
 }
 
-// The names of the worker sets that call a model
+// The names of the provider sets that call a model
 export function listModelUsers(rows: SettingRow[], sets: Tree, name: string): string[] {
   return listModelUses(rows, sets, name).map((use) => use.set);
 }

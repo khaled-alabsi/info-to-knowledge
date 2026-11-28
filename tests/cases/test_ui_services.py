@@ -68,7 +68,7 @@ from services import phase_file_service
 from services import run_status_service
 from services import worker_feedback_service
 from services import run_store_service
-from services import run_worker_set_service
+from services import run_provider_set_service
 from services import upload_service
 from services import inbox_tags_service
 from services import web_api_service
@@ -154,14 +154,14 @@ def test_the_queue_runs_jobs_in_order_and_records_each_exit_code():
                   console)
 
 
-def test_a_waiting_job_moved_up_passes_the_job_before_it_on_its_own_worker_set_defect():
-    # Defect: the queue shows each worker set's jobs in their own group, but "run sooner" swapped a job with the job
+def test_a_waiting_job_moved_up_passes_the_job_before_it_on_its_own_provider_set_defect():
+    # Defect: the queue shows each provider set's jobs in their own group, but "run sooner" swapped a job with the job
     # before it in the whole queue, often another set's, so nothing moved in its group. Fix: it passes the job before
     # it on its own set.
     queue_dir = Path(tempfile.mkdtemp())
     queued = job_queue_service.queue_jobs(queue_dir, [
-        RunJobRequest(video=Path(f"/in/{name}.mp4"), output_root=Path(f"/out/{name}"), worker_set=worker_set)
-        for name, worker_set in (("host-1", "second-host"), ("mac-1", "Mac"), ("host-2", "second-host"))])
+        RunJobRequest(video=Path(f"/in/{name}.mp4"), output_root=Path(f"/out/{name}"), provider_set=provider_set)
+        for name, provider_set in (("host-1", "second-host"), ("mac-1", "Mac"), ("host-2", "second-host"))])
     job_queue_service.move_job(queue_dir, queued[2].job_id, "up")
     order = [job.job_id for job in job_queue_service.list_jobs(queue_dir) if job.status == "queued"]
     harness.check("the second-host job moved up runs before the second-host job it passed, the Mac job keeps its place",
@@ -948,9 +948,9 @@ def test_a_started_run_names_the_phase_its_own_page_would_resume_from():
                   run["stopped_phase"] == first_open == 4, f"stopped_phase {run['stopped_phase']}, first open {first_open}")
 
 
-def test_a_listed_run_names_its_worker_set_so_the_running_menu_can_show_it_defect():
-    # Defect: the running count opened whichever running run came first, and the run list carried no worker set to
-    # tell three running runs apart. Fix: each listed run names its worker set and, while it runs, its phase.
+def test_a_listed_run_names_its_provider_set_so_the_running_menu_can_show_it_defect():
+    # Defect: the running count opened whichever running run came first, and the run list carried no provider set to
+    # tell three running runs apart. Fix: each listed run names its provider set and, while it runs, its phase.
     root = Path(tempfile.mkdtemp())
     folder = root / "output" / "second-host-run"
     paths = RunPaths(repository=root, module="call.mp4", output_root_override=folder)
@@ -958,19 +958,19 @@ def test_a_listed_run_names_its_worker_set_so_the_running_menu_can_show_it_defec
                                               RunIdentity.for_run("2026-10-01_09-00", paths), budgets={}, models=[])
     store.set_phase("transcribe", "complete")
     store.save()
-    run_worker_set_service.write_chosen_worker_set(folder, "second-host")
+    run_provider_set_service.write_chosen_provider_set(folder, "second-host")
     previous = _swap_run_roots({"output": root / "output"})
     try:
         run = next(run for run in run_status_service.list_run_folders() if run["name"] == "second-host-run")
     finally:
         _swap_run_roots(previous)
-    harness.check("the listed run names the worker set it chose", run["worker_set"] == "second-host", str(run["worker_set"]))
+    harness.check("the listed run names the provider set it chose", run["provider_set"] == "second-host", str(run["provider_set"]))
     harness.check("a run not going names no live phase", run["live_phase"] == 0, str(run["live_phase"]))
-    # Defect: the Inbox's own run entries copied 11 fields of each run without its worker set, so every running pill
-    # said "running · default". Fix: they carry the worker set too.
+    # Defect: the Inbox's own run entries copied 11 fields of each run without its provider set, so every running pill
+    # said "running · default". Fix: they carry the provider set too.
     entries = run_status_service._list_video_runs([run], str(Path(run["video"]).resolve())) if run["video"] else []
-    harness.check("the Inbox's entry of the run names its worker set",
-                  [entry.get("worker_set") for entry in entries] == ["second-host"], f"video {run['video']!r}, entries {entries}")
+    harness.check("the Inbox's entry of the run names its provider set",
+                  [entry.get("provider_set") for entry in entries] == ["second-host"], f"video {run['video']!r}, entries {entries}")
 
 
 def test_a_branch_of_an_inbox_video_stands_apart_and_a_blocked_run_says_so():

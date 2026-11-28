@@ -433,7 +433,7 @@ export default function App({ account = null, onSignOut }: { account?: Account |
             <span className="pill failed" title={listsError}>server not answering</span>
           ) : (
             <>
-              {/* the running count is a menu: each running run by name with its phase and worker set, so the owner
+              {/* the running count is a menu: each running run by name with its phase and provider set, so the owner
                   picks the run (it once opened whichever came first), then Pause all and Stop all for every run at
                   once (the owner: "buttons in the UI: kill all or stop all, pause all") */}
               {liveRun ? (
@@ -442,7 +442,7 @@ export default function App({ account = null, onSignOut }: { account?: Account |
                   items={[
                     ...liveRuns.map((run) => ({
                       label: run.display_name || run.name, icon: "eye", group: "Open a run",
-                      hint: [run.live_phase ? `phase ${run.live_phase}` : "", `worker set ${run.worker_set || "default"}`]
+                      hint: [run.live_phase ? `phase ${run.live_phase}` : "", `provider set ${run.provider_set || "default"}`]
                         .filter(Boolean).join(" · "),
                       onSelect: () => {
                         if (isSettingsOpen) closeSettings();

@@ -46,6 +46,8 @@ _TUPLE_FIELDS = ("worker_indexes", "tags", "phase_models")
 # Fields a request no longer has, which an older `ui/jobs.json` still holds: `pdf_reader`, the PDF reader choice
 # removed with MinerU
 _RETIRED_FIELDS = ("pdf_reader",)
+# A field a request held under another name before the rename, as {old name: new name}: `worker_set` became `provider_set`
+_RENAMED_FIELDS = {"worker_set": "provider_set"}
 
 
 @dataclass(frozen=True)
@@ -92,10 +94,10 @@ class RunJobRequest:
     # `--workflow`: the video workflow from phase 3 on (quality, direct-draft or fast-processing); empty leaves the
     # folder's or the settings'
     workflow: str = ""
-    # `--worker-set`: the worker set (an entry of the settings' `workerSets`, or `default`) the run is on, whose models and
+    # `--provider-set`: the provider set (an entry of the settings' `providerSets`, or `default`) the run is on, whose models and
     # hosts it calls; jobs of one set run one after another, jobs of different sets at the same time. Empty leaves the
-    # folder's set, else the settings' `defaultWorkerSet`
-    worker_set: str = ""
+    # folder's set, else the settings' `defaultProviderSet`
+    provider_set: str = ""
     # `--speed-preset` and `--speed-setting KEY=VALUE` pairs: the run's Workflow speed preset and the values changed
     # from it; empty leaves the folder's or the settings'
     speed_preset: str = ""
@@ -120,7 +122,7 @@ class RunJobRequest:
                   values: dict) -> RunJobRequest:
         """The request back from its JSON form."""
 
-        kept = {name: value for name, value in values.items() if name not in _RETIRED_FIELDS}
+        kept = {_RENAMED_FIELDS.get(name, name): value for name, value in values.items() if name not in _RETIRED_FIELDS}
 
         return cls(**{**kept, "video": Path(values["video"]), "output_root": Path(values["output_root"]),
                       **{name: tuple(values.get(name) or ()) for name in _TUPLE_FIELDS}})

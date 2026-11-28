@@ -9,17 +9,17 @@ import Icon from "./Icon";
 import OptionMenu from "./OptionMenu";
 import type { SettingDrafts } from "./SettingsView";
 
-// The worker sets as the owner thinks of them: a set only links each job (a phase, or a job a provider does such as speech
+// The provider sets as the owner thinks of them: a set only links each job (a phase, or a job a provider does such as speech
 // to text) to a model of the models library, one menu a job, each listing only the models that can do that job. The
 // machine a set runs on is not chosen: it is the provider its models run on. The default set is the settings as they are;
 // every other set holds only what it changes, a job it leaves out staying the default set's. One card a set, built from
-// the settings that hold them: `workerSets` (each set's links), `defaultWorkerSet` (the set a job takes when none is
+// the settings that hold them: `providerSets` (each set's links), `defaultProviderSet` (the set a job takes when none is
 // chosen) and `machine` (an older file's machine of the default set, still read but no longer shown or written). Every
 // card has a Copy button: it makes a new set from the card's links and asks for its name.
 
-const CHOSEN_KEY = "defaultWorkerSet";
+const CHOSEN_KEY = "defaultProviderSet";
 const MACHINE_KEY = "machine";
-export const WORKER_SET_KEYS = new Set([SETS_KEY, CHOSEN_KEY, MACHINE_KEY]);
+export const PROVIDER_SET_KEYS = new Set([SETS_KEY, CHOSEN_KEY, MACHINE_KEY]);
 
 type Leaf = { path: string[]; value: unknown };
 
@@ -110,7 +110,7 @@ function buildDefaultSetCopy(jobs: Job[], drafts: SettingDrafts): Tree {
   return copy;
 }
 
-export default function WorkerSetsPanel({ rows, drafts, onEdit }: {
+export default function ProviderSetsPanel({ rows, drafts, onEdit }: {
   rows: SettingRow[];
   drafts: SettingDrafts;
   onEdit: (row: SettingRow, raw: string) => void;
@@ -175,12 +175,12 @@ export default function WorkerSetsPanel({ rows, drafts, onEdit }: {
   ];
 
   return (
-    <div className="worker-sets">
-      <p className="muted">A worker set gives each job a model. Each job's menu lists, by server, only the models that can do
+    <div className="provider-sets">
+      <p className="muted">A provider set gives each job a model. Each job's menu lists, by server, only the models that can do
         that job. The default set is the settings as they are. Every other set lists only the jobs it changes; a job it does
         not list uses the default set's model.</p>
       {chosenRow && (
-        <div className="worker-set-chosen">
+        <div className="provider-set-chosen">
           <OptionMenu name="Used when a job names no set" prefix="Used when a job names no set:" value={chosen}
             options={names.map((name) => ({ value: name, label: name, hint: "", group: "" }))}
             onChoose={(name) => onEdit(chosenRow, name)} />
@@ -194,20 +194,20 @@ export default function WorkerSetsPanel({ rows, drafts, onEdit }: {
             && !jobPaths.has(leaf.path.join("\u0001")));
         const isCopying = copying?.from === name;
         return (
-          <div key={name} className="worker-set" aria-label={`worker set ${name}`} role="group">
-            <div className="worker-set-head">
+          <div key={name} className="provider-set" aria-label={`provider set ${name}`} role="group">
+            <div className="provider-set-head">
               <h4>{name}</h4>
-              <div className="worker-set-actions">
+              <div className="provider-set-actions">
                 <button type="button" className="btn" onClick={() => setCopying({ from: name, name: "" })}
-                  aria-label={`copy worker set ${name}`}><Icon name="copy" size={14} /> Copy</button>
+                  aria-label={`copy provider set ${name}`}><Icon name="copy" size={14} /> Copy</button>
                 {!isDefault && (
                   <button type="button" className="btn danger" onClick={() => removeSet(name)}
-                    aria-label={`remove worker set ${name}`}><Icon name="trash" size={14} /> Remove</button>
+                    aria-label={`remove provider set ${name}`}><Icon name="trash" size={14} /> Remove</button>
                 )}
               </div>
             </div>
             {isCopying && (
-              <div className="worker-set-add copy-form">
+              <div className="provider-set-add copy-form">
                 <input type="text" aria-label={`name of the copy of ${name}`} placeholder={`name of the copy of ${name}`}
                   autoFocus value={copying.name} onChange={(event) => setCopying({ ...copying, name: event.target.value })}
                   onKeyDown={(event) => { if (event.key === "Enter") copySet(); }} />
@@ -251,14 +251,14 @@ export default function WorkerSetsPanel({ rows, drafts, onEdit }: {
                 {jobs.every((job) => readSetJobModel(overrides, job) === "") && otherLeaves.length === 0 && (
                   <p className="muted">It changes nothing yet: it runs exactly like the default set.</p>
                 )}
-                {otherLeaves.length > 0 && <h5 className="worker-set-subhead">Other values this set changes</h5>}
+                {otherLeaves.length > 0 && <h5 className="provider-set-subhead">Other values this set changes</h5>}
                 {otherLeaves.map((leaf) => {
                   const fallback = findDefault(rows, leaf.path);
                   const key = leaf.path.join(".");
                   const label = leaf.path[0] === MODELS_KEY && leaf.path.length === 3
                     ? `${leaf.path[1]}: ${readSettingLabel(key)}` : readSettingLabel(key);
                   return (
-                    <div key={key} className="worker-set-value">
+                    <div key={key} className="provider-set-value">
                       <span className="job-title">{label}</span>
                       <input type="text" aria-label={`${name}: ${key}`} value={renderValue(leaf.value)}
                         onChange={(event) => writeSets({ ...sets, [name]: setLeaf(overrides, leaf.path,
@@ -276,10 +276,10 @@ export default function WorkerSetsPanel({ rows, drafts, onEdit }: {
           </div>
         );
       })}
-      <div className="worker-set-add">
-        <input type="text" aria-label="new worker set name" placeholder="new set's name" value={newSet}
+      <div className="provider-set-add">
+        <input type="text" aria-label="new provider set name" placeholder="new set's name" value={newSet}
           onChange={(event) => setNewSet(event.target.value)} />
-        <button type="button" className="btn" onClick={addSet} disabled={!newSetName || isNewNameTaken}>+ Add worker set</button>
+        <button type="button" className="btn" onClick={addSet} disabled={!newSetName || isNewNameTaken}>+ Add provider set</button>
         {newSetName && isNewNameTaken && <small className="error">a set has this name</small>}
       </div>
     </div>

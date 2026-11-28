@@ -1,4 +1,4 @@
-"""The model library and the worker sets that link to it: a worker set names, per job (each phase that calls a model), the
+"""The model library and the provider sets that link to it: a provider set names, per job (each phase that calls a model), the
 library model it uses; the models themselves are entries of `models`, added and removed one by one. The fast workflow has
 no models of its own unless `video.fastProcessing` names them: it calls the set's frames processing and document writing
 models. A set written the older way, overriding `models.frame` itself, is read the same as before."""
@@ -44,22 +44,22 @@ def _write_files(folder: Path,
 
 def _use_folder(folder: Path) -> tuple:
     previous = (config.DEFAULT_CONFIG_FILE, config.LOCAL_CONFIG_FILE, config.PLAYBOOK_ROOT, config.PROFILE_NAME,
-                config.WORKER_SET_NAME, config.settings)
+                config.PROVIDER_SET_NAME, config.settings)
     config.DEFAULT_CONFIG_FILE, config.LOCAL_CONFIG_FILE = folder / "playbook.default.json", folder / "playbook.local.json"
-    config.PLAYBOOK_ROOT, config.PROFILE_NAME, config.WORKER_SET_NAME = folder, "", config.DEFAULT_WORKER_SET_NAME
+    config.PLAYBOOK_ROOT, config.PROFILE_NAME, config.PROVIDER_SET_NAME = folder, "", config.DEFAULT_PROVIDER_SET_NAME
 
     return previous
 
 
 def _give_back(previous: tuple) -> None:
     (config.DEFAULT_CONFIG_FILE, config.LOCAL_CONFIG_FILE, config.PLAYBOOK_ROOT, config.PROFILE_NAME,
-     config.WORKER_SET_NAME, config.settings) = previous
+     config.PROVIDER_SET_NAME, config.settings) = previous
 
 
-def _read_models_of_set(worker_set: str) -> dict:
+def _read_models_of_set(provider_set: str) -> dict:
     """What each job of the set calls: every phase's model and the fast workflow's document model, as the settings hold it."""
 
-    loaded = settings_service.read_next_job_settings(worker_set=worker_set)
+    loaded = settings_service.read_next_job_settings(provider_set=provider_set)
     calls = {phase: loaded.resolve_phase_model(phase).model_dump() for phase in _PHASES}
     calls["fast document"] = loaded.resolve_model(loaded.resolve_fast_model_name(config.FINALIZE_PHASE)).model_dump()
 
@@ -71,7 +71,7 @@ def test_a_set_linking_jobs_to_library_models_runs_the_same_models_as_the_older_
     # model copied from them, and a job must call exactly the model it called before
     folder = Path(tempfile.mkdtemp())
     _write_files(folder, {"hosts": {"gpu-box": {"url": "http://gpu-box.local:8090/v1"}}, "models": _LIBRARY,
-                          "workerSets": {"Office-old": _OLD_SET, "Office": _NEW_SET}})
+                          "providerSets": {"Office-old": _OLD_SET, "Office": _NEW_SET}})
     previous = _use_folder(folder)
     try:
         old_calls = _read_models_of_set("Office-old")
@@ -91,7 +91,7 @@ def test_a_set_linking_jobs_to_library_models_runs_the_same_models_as_the_older_
 def test_a_set_that_links_one_job_leaves_the_other_jobs_on_the_default_models():
     folder = Path(tempfile.mkdtemp())
     _write_files(folder, {"hosts": {"gpu-box": {"url": "http://gpu-box.local:8090/v1"}}, "models": _LIBRARY,
-                          "workerSets": {"frames-on-gpu": {"phaseModels": {"frames_processing": "gpu-frame"}}}})
+                          "providerSets": {"frames-on-gpu": {"phaseModels": {"frames_processing": "gpu-frame"}}}})
     previous = _use_folder(folder)
     try:
         calls = _read_models_of_set("frames-on-gpu")
@@ -108,11 +108,11 @@ def test_the_fast_workflow_calls_the_sets_own_models_unless_it_names_its_own():
     # are empty by default and then follow the set's frames processing and document writing jobs
     folder = Path(tempfile.mkdtemp())
     _write_files(folder, {"hosts": {"gpu-box": {"url": "http://gpu-box.local:8090/v1"}}, "models": _LIBRARY,
-                          "workerSets": {"Office": _NEW_SET}})
+                          "providerSets": {"Office": _NEW_SET}})
     previous = _use_folder(folder)
     try:
-        on_office = settings_service.read_next_job_settings(worker_set="Office")
-        on_default = settings_service.read_next_job_settings(worker_set="default")
+        on_office = settings_service.read_next_job_settings(provider_set="Office")
+        on_default = settings_service.read_next_job_settings(provider_set="default")
     finally:
         _give_back(previous)
     harness.check("on the Office set, phase 3 describes with the set's frame model and phase 4 writes with its document model",
@@ -182,12 +182,12 @@ def test_a_job_linked_to_a_removed_model_names_it_when_a_run_reads_the_job():
     # reads the job, the same as a phase named after a model that is gone
     folder = Path(tempfile.mkdtemp())
     _write_files(folder, {"models": {"mine": {"spec": "lmstudio:small"}},
-                          "workerSets": {"S": {"phaseModels": {"review": "mine"}}}})
+                          "providerSets": {"S": {"phaseModels": {"review": "mine"}}}})
     previous = _use_folder(folder)
     try:
         settings_service.remove_setting(key_parts=["models", "mine"])
         try:
-            settings_service.read_next_job_settings(worker_set="S").resolve_phase_model("review")
+            settings_service.read_next_job_settings(provider_set="S").resolve_phase_model("review")
             refusal = "it was accepted"
         except ValueError as error:
             refusal = str(error)

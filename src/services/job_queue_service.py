@@ -4,8 +4,8 @@ ONE QUEUE FOR BOTH FRONT ENDS. The web page and the terminal UI reach it through
 two runs never start at once whichever window asked for them. The queue is `ui/jobs.json` beside the
 playbook, rewritten whole on every change; the console of each job is `ui/jobs/<job id>.log`.
 
-ONE LANE PER MACHINE. A job runs on a worker set (its request's, else the one its run folder kept, else the settings'
-`defaultWorkerSet`), and its lane is the machine that set names (`machine`; the set's own name when it names none). Jobs
+ONE LANE PER MACHINE. A job runs on a provider set (its request's, else the one its run folder kept, else the settings'
+`defaultProviderSet`), and its lane is the machine that set names (`machine`; the set's own name when it names none). Jobs
 of one machine run one after another, whichever of its sets they use, so two sets on one machine never load two models
 on its card at once; jobs of different machines run at the same time. A job that holds the queue after its last failed
 try holds its own lane only; the person's pause stops every lane.
@@ -40,7 +40,7 @@ from services import control_signal_service
 from services import run_name_service
 from services import run_reset_service
 from services import run_status_service
-from services import run_worker_set_service
+from services import run_provider_set_service
 from services import settings_service
 from utils import process_utils
 from utils import json_store_utils
@@ -247,8 +247,8 @@ def build_run_command(request: RunJobRequest) -> list[str]:
         command += ["--speed-preset", request.speed_preset]
     for pair in request.speed_settings:
         command += ["--speed-setting", pair]
-    if request.worker_set:
-        command += ["--worker-set", request.worker_set]
+    if request.provider_set:
+        command += ["--provider-set", request.provider_set]
     for pair in request.phase_models:
         command += ["--phase-model", pair]
     if request.is_resuming:
@@ -410,14 +410,14 @@ def send_interrupt(queue_dir: Path,
 def move_job(queue_dir: Path,
              job_id: str,
              direction: str) -> RunJob:
-    """A waiting job swapped with the waiting job of its own worker set before it (`up`) or after it (`down`), so it
+    """A waiting job swapped with the waiting job of its own provider set before it (`up`) or after it (`down`), so it
     runs sooner or later on that set; the first or last waiting job of the set stays where it is. A job of another set
     is never passed: sets run side by side, so passing it would change nothing on screen or in what runs next."""
 
     with _lock:
         jobs = _load_jobs(queue_dir)
         job = _find_job(jobs, job_id)
-        default_set = read_default_worker_set()
+        default_set = read_default_provider_set()
         lane = read_job_lane(job, default_set)
         waiting = [index for index, candidate in enumerate(jobs)
                    if candidate.status == run_job.JOB_QUEUED and read_job_lane(candidate, default_set) == lane]
@@ -640,28 +640,28 @@ def resume_queue(queue_dir: Path) -> None:
     _wake.set()
 
 
-def read_default_worker_set(profile_name: str = "") -> str:
-    """The worker set a job with none chosen is on: the `defaultWorkerSet` of the settings files with the profile
+def read_default_provider_set(profile_name: str = "") -> str:
+    """The provider set a job with none chosen is on: the `defaultProviderSet` of the settings files with the profile
     `profile_name` on top (the server's own profile when empty), read as they are now. A profile that names no
-    `defaultWorkerSet` leaves the default settings' one in force."""
+    `defaultProviderSet` leaves the default settings' one in force."""
 
     return str(config.read_layers(profile_name=profile_name or config.PROFILE_NAME,
-                                  worker_set_name=config.DEFAULT_WORKER_SET_NAME).get(
-        "defaultWorkerSet", config.DEFAULT_WORKER_SET_NAME))
+                                  provider_set_name=config.DEFAULT_PROVIDER_SET_NAME).get(
+        "defaultProviderSet", config.DEFAULT_PROVIDER_SET_NAME))
 
 
-def read_job_worker_set(job: RunJob,
+def read_job_provider_set(job: RunJob,
                         default_set: str) -> str:
-    """The worker set a job runs on: the one its request names, else the one its run folder kept, else the
-    `defaultWorkerSet` of the job's own profile when it names one, else `default_set`."""
+    """The provider set a job runs on: the one its request names, else the one its run folder kept, else the
+    `defaultProviderSet` of the job's own profile when it names one, else `default_set`."""
 
-    return (job.request.worker_set or run_worker_set_service.read_chosen_worker_set(Path(job.request.output_root))
-            or (read_default_worker_set(job.request.profile) if job.request.profile else default_set))
+    return (job.request.provider_set or run_provider_set_service.read_chosen_provider_set(Path(job.request.output_root))
+            or (read_default_provider_set(job.request.profile) if job.request.profile else default_set))
 
 
 def read_job_lane(job: RunJob,
                   default_set: str) -> str:
-    """The lane a job runs in: the machine its worker set names, so jobs of two sets on one machine wait for each
+    """The lane a job runs in: the machine its provider set names, so jobs of two sets on one machine wait for each
     other."""
 
     files = [config.DEFAULT_CONFIG_FILE, config.LOCAL_CONFIG_FILE]
@@ -669,33 +669,33 @@ def read_job_lane(job: RunJob,
         files.append(config.build_profile_path(job.request.profile))
     stamps = tuple((str(path), path.stat().st_mtime_ns if path.is_file() else 0) for path in files)
 
-    return _read_set_machine(read_job_worker_set(job, default_set), job.request.profile, stamps)
+    return _read_set_machine(read_job_provider_set(job, default_set), job.request.profile, stamps)
 
 
 @lru_cache(maxsize=64)
-def _read_set_machine(worker_set: str,
+def _read_set_machine(provider_set: str,
                       profile: str,
                       file_stamps: tuple[tuple[str, int], ...]) -> str:
-    """The machine `worker_set` runs on (`config.read_set_machine`: the `machine` an old file names, else the provider its
+    """The machine `provider_set` runs on (`config.read_set_machine`: the `machine` an old file names, else the provider its
     frames processing model runs on), its own name when that is empty or the set is gone from the files. `file_stamps` (each
     settings file's path and change time) makes another file, or a file saved since the last call, read again."""
 
     try:
-        merged = config.read_layers(profile_name=profile or config.PROFILE_NAME, worker_set_name=worker_set)
+        merged = config.read_layers(profile_name=profile or config.PROFILE_NAME, provider_set_name=provider_set)
     except (ValueError, OSError):
-        return worker_set
+        return provider_set
 
-    return config.read_set_machine(merged) or worker_set
+    return config.read_set_machine(merged) or provider_set
 
 
 def _select_next_job(jobs: list[RunJob],
                      lane: str | None = None) -> RunJob | None:
     """The job whose turn it is: one waiting for its retry before any queued job, and nothing while that retry's pause
-    runs or while a job holds the queue. With a `lane`, only the jobs of that worker set count: its own retry, its own
+    runs or while a job holds the queue. With a `lane`, only the jobs of that provider set count: its own retry, its own
     block, its own queue; with none, every job is one lane."""
 
     if lane is not None:
-        default_set = read_default_worker_set()
+        default_set = read_default_provider_set()
         jobs = [job for job in jobs if read_job_lane(job, default_set) == lane]
     if any(job.status == run_job.JOB_BLOCKED for job in jobs):
         return None
@@ -709,7 +709,7 @@ def _select_next_job(jobs: list[RunJob],
 def _list_lanes(jobs: list[RunJob]) -> list[str]:
     """The lanes with a job that may still run (queued, waiting for its retry, holding the queue), oldest job first."""
 
-    default_set = read_default_worker_set()
+    default_set = read_default_provider_set()
     lanes: list[str] = []
     for job in jobs:
         if job.status in (run_job.JOB_QUEUED, run_job.JOB_RETRYING, run_job.JOB_BLOCKED):
@@ -806,7 +806,7 @@ def run_next_job(queue_dir: Path,
                  lane: str | None = None) -> RunJob | None:
     """Run the job whose turn it is to its end and record how it ended: a failed job again before any other, then the
     oldest queued one. None when another run is still going (a job of the queue in this lane, or a run started on the
-    command line), a retry's pause runs, a job holds the queue, or nothing is queued. With a `lane` (a worker set), only
+    command line), a retry's pause runs, a job holds the queue, or nothing is queued. With a `lane` (a provider set), only
     that lane's jobs count, and a job of another lane running does not hold this one back. Blocks while the child runs."""
 
     # STEP 1: under the lock, pick the job, unless another run still runs: one of the queue's own, or one typed on the
@@ -823,7 +823,7 @@ def run_next_job(queue_dir: Path,
             _rename_ended_run_folders(jobs, [lost.request.output_root])
             if line:
                 _write_console_line(queue_dir, lost.job_id, line)
-        default_set = read_default_worker_set() if lane is not None else ""
+        default_set = read_default_provider_set() if lane is not None else ""
         lane_jobs = jobs if lane is None else [job for job in jobs if read_job_lane(job, default_set) == lane]
         if any(job.status == run_job.JOB_RUNNING and process_utils.is_process_alive(job.pid) for job in lane_jobs):
             return None

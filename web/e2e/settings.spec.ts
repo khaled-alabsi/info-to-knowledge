@@ -1,6 +1,6 @@
 // The Settings tab: settings grouped by section and card, a change shown as a draft until the top bar's Save settings writes
 // it, a search that opens the groups holding a match, a profile's own file, and the two model sections: the model servers (one
-// card each, holding its models) and the worker sets (one menu per job).
+// card each, holding its models) and the provider sets (one menu per job).
 import { expect, test } from "./fixtures/mockApi";
 import type { Locator, Page } from "@playwright/test";
 import { SETTINGS } from "./fixtures/data";
@@ -139,10 +139,10 @@ test("each LLM pass's extra wishes have their own box in the PDF card, inside th
 });
 
 // The model sections: each server is a card with its address, token variable and jobs, and the models that run on it inside;
-// each worker set is a card of only the values it changes, beside the default's
-const WORKER_SET_ROWS = [...SETTINGS,
-  { key: "workerSets", value: { spare: { machine: "the office", framesProcessing: { framesPerCall: 5 } } }, kind: "json", source: "playbook.local.json", comment: "" },
-  { key: "defaultWorkerSet", value: "default", kind: "text", source: "code", comment: "" },
+// each provider set is a card of only the values it changes, beside the default's
+const PROVIDER_SET_ROWS = [...SETTINGS,
+  { key: "providerSets", value: { spare: { machine: "the office", framesProcessing: { framesPerCall: 5 } } }, kind: "json", source: "playbook.local.json", comment: "" },
+  { key: "defaultProviderSet", value: "default", kind: "text", source: "code", comment: "" },
   { key: "machine", value: "the laptop", kind: "text", source: "playbook.local.json", comment: "" },
   { key: "hosts", value: { lmstudio: { url: "http://localhost:1234/v1" }, "gpu-box": { url: "http://gpu-box.local:8090/v1" } },
     kind: "json", source: "playbook.local.json", comment: "" },
@@ -159,7 +159,7 @@ const WORKER_SET_ROWS = [...SETTINGS,
     resolved: null, resolved_note: "found from the recording" }];
 
 test("a server card holds its address, its models and its jobs, a new model is added on its server, all inside the screen", async ({ page, api }) => {
-  api.answer("GET /settings", { json: WORKER_SET_ROWS });
+  api.answer("GET /settings", { json: PROVIDER_SET_ROWS });
   await openSettings(page);
   await page.getByRole("heading", { name: "Model servers", exact: true, level: 3 }).click();
 
@@ -203,27 +203,27 @@ test("a server card holds its address, its models and its jobs, a new model is a
 });
 
 for (const size of SCREEN_WIDTHS) {
-  test(`each worker set is a card of only the values it changes, and a change is saved as the set's override, at ${size.width} px`,
+  test(`each provider set is a card of only the values it changes, and a change is saved as the set's override, at ${size.width} px`,
     async ({ page, api }) => {
-      api.answer("GET /settings", { json: WORKER_SET_ROWS });
+      api.answer("GET /settings", { json: PROVIDER_SET_ROWS });
       await page.setViewportSize(size);
       await openSettings(page);
-      await page.getByRole("heading", { name: "Worker sets", level: 3 }).click();
+      await page.getByRole("heading", { name: "Provider sets", level: 3 }).click();
 
       // the default set shows each job with the library model it runs and where; another set shows what it leaves as the default's
-      const fallback = page.getByRole("group", { name: "worker set default" });
+      const fallback = page.getByRole("group", { name: "provider set default" });
       await expectInsideScreen(page, fallback);
       await expect(fallback.getByText("Runs on lmstudio · acme-vision-35b")).toBeVisible();
       await expect(fallback.getByRole("button", { name: "default: Frames processing: the frame model" })).toBeVisible();
       const chosen = page.getByRole("button", { name: "Used when a job names no set: default" });
       await expectInsideScreen(page, chosen);
-      const spare = page.getByRole("group", { name: "worker set spare" });
+      const spare = page.getByRole("group", { name: "provider set spare" });
       await expectInsideScreen(page, spare);
       const link = spare.getByRole("button", { name: "spare: Frames processing: same as default set: frame" });
       await expectInsideScreen(page, link);
       // a set has no Machine box: the machine is read from the servers its models run on
       await expect(spare.getByRole("button", { name: /^Machine of/ })).toHaveCount(0);
-      await expect(spare.getByRole("button", { name: "remove worker set spare" })).toBeVisible();
+      await expect(spare.getByRole("button", { name: "remove provider set spare" })).toBeVisible();
       await expect(spare.getByText("default: 7")).toBeVisible();
 
       // a job is linked to a library model from the list of the library's names
@@ -239,36 +239,36 @@ for (const size of SCREEN_WIDTHS) {
       await page.getByRole("button", { name: "Save settings (1)" }).click();
       const sent = api.sentTo("PUT /settings");
       await expect.poll(() => sent.length).toBe(1);
-      expect(sent[0].body).toMatchObject({ key: "workerSets", new_value: { spare: {
+      expect(sent[0].body).toMatchObject({ key: "providerSets", new_value: { spare: {
         phaseModels: { frames_processing: "frame-gpu" }, framesProcessing: { framesPerCall: 6 } } } });
     });
 }
 
-test("Copy on a worker set card creates a new set from it and asks for its name", async ({ page, api }) => {
-  api.answer("GET /settings", { json: WORKER_SET_ROWS });
+test("Copy on a provider set card creates a new set from it and asks for its name", async ({ page, api }) => {
+  api.answer("GET /settings", { json: PROVIDER_SET_ROWS });
   await openSettings(page);
-  await page.getByRole("heading", { name: "Worker sets", level: 3 }).click();
-  const spare = page.getByRole("group", { name: "worker set spare" });
-  await spare.getByRole("button", { name: "copy worker set spare" }).click();
+  await page.getByRole("heading", { name: "Provider sets", level: 3 }).click();
+  const spare = page.getByRole("group", { name: "provider set spare" });
+  await spare.getByRole("button", { name: "copy provider set spare" }).click();
   const create = spare.getByRole("button", { name: "Create copy" });
   await expect(create).toBeDisabled();
   await spare.getByRole("textbox", { name: "name of the copy of spare" }).fill("spare");
   await expect(spare.getByText("a set has this name")).toBeVisible();
   await spare.getByRole("textbox", { name: "name of the copy of spare" }).fill("spare two");
   await create.click();
-  await expect(page.getByRole("group", { name: "worker set spare two" })).toBeVisible();
+  await expect(page.getByRole("group", { name: "provider set spare two" })).toBeVisible();
   await page.getByRole("button", { name: "Save settings (1)" }).click();
   const sent = api.sentTo("PUT /settings");
   await expect.poll(() => sent.length).toBe(1);
-  expect(sent[0].body).toMatchObject({ key: "workerSets", new_value: {
+  expect(sent[0].body).toMatchObject({ key: "providerSets", new_value: {
     spare: { machine: "the office" }, "spare two": { machine: "the office", framesProcessing: { framesPerCall: 5 } } } });
 });
 
-test("the page keeps two model sections, Model servers then Worker sets, and a server's model is removed after asking", async ({ page, api }) => {
-  api.answer("GET /settings", { json: WORKER_SET_ROWS });
+test("the page keeps two model sections, Model servers then Provider sets, and a server's model is removed after asking", async ({ page, api }) => {
+  api.answer("GET /settings", { json: PROVIDER_SET_ROWS });
   await openSettings(page);
   const headings = await page.getByRole("heading", { level: 3 }).allInnerTexts();
-  const order = ["Model servers", "Worker sets"].map((title) => headings.findIndex((heading) => heading.startsWith(title)));
+  const order = ["Model servers", "Provider sets"].map((title) => headings.findIndex((heading) => heading.startsWith(title)));
   expect(order.every((at) => at >= 0)).toBe(true);
   expect([...order].sort((first, second) => first - second)).toEqual(order);
   // the old sections are gone
@@ -288,7 +288,7 @@ test("the page keeps two model sections, Model servers then Worker sets, and a s
 });
 
 test("a server is added and removed as a card, never as JSON text, at every width", async ({ page, api }) => {
-  api.answer("GET /settings", { json: WORKER_SET_ROWS });
+  api.answer("GET /settings", { json: PROVIDER_SET_ROWS });
   await openSettings(page);
   await page.getByRole("heading", { name: "Model servers", exact: true, level: 3 }).click();
   const remove = page.getByRole("button", { name: "remove server gpu-box" });
@@ -312,8 +312,8 @@ test("a server is added and removed as a card, never as JSON text, at every widt
 });
 
 // A model card shows its model's name as a field inside its server's card, its text keeps clear of the card's left border on a
-// phone, and a worker set links a job (speech to text) only to the models whose server does that job
-const PROVIDER_ROWS = [...WORKER_SET_ROWS.filter((row) => row.key !== "hosts"),
+// phone, and a provider set links a job (speech to text) only to the models whose server does that job
+const PROVIDER_ROWS = [...PROVIDER_SET_ROWS.filter((row) => row.key !== "hosts"),
   { key: "hosts", kind: "json", source: "playbook.local.json", comment: "", value: {
     lmstudio: { url: "http://localhost:1234/v1", kinds: ["chat"] },
     "gpu-box": { url: "http://gpu-box.local:8090/v1", kinds: ["chat", "speech"] } } },
@@ -342,8 +342,8 @@ for (const size of SCREEN_WIDTHS) {
       const title = await card.locator("summary strong").boundingBox();
       expect(box && title && title.x - box.x).toBeGreaterThanOrEqual(8);
 
-      await page.getByRole("heading", { name: "Worker sets", level: 3 }).click();
-      const spare = page.getByRole("group", { name: "worker set spare" });
+      await page.getByRole("heading", { name: "Provider sets", level: 3 }).click();
+      const spare = page.getByRole("group", { name: "provider set spare" });
       const speech = spare.getByRole("button", { name: /^spare: Speech to text/ });
       await scrollIntoViewSettled(page, speech);
       await speech.click();
@@ -356,13 +356,13 @@ for (const size of SCREEN_WIDTHS) {
       await page.getByRole("button", { name: "Save settings (1)" }).click();
       const sent = api.sentTo("PUT /settings");
       await expect.poll(() => sent.length).toBe(1);
-      expect(sent[0].body).toMatchObject({ key: "workerSets", new_value: { spare: {
+      expect(sent[0].body).toMatchObject({ key: "providerSets", new_value: { spare: {
         providers: { speech: { libraryModel: "whisper-gpu" } } } } });
     });
 }
 
 // The owner: the model sections made no sense. Exactly two: the model servers (each server with the models on it and the jobs
-// it does) and the worker sets, mapping every job to a model that can do it
+// it does) and the provider sets, mapping every job to a model that can do it
 const TWO_SECTION_ROWS = [...PROVIDER_ROWS.filter((row) => !row.key.startsWith("phaseModels.")),
   ...["frames_preparing", "frames_processing", "finalize", "review"].map((phase) => ({
     key: `phaseModels.${phase}`, path: ["phaseModels", phase], value: "", kind: "text", source: "code", comment: "", resolved: "frame" })),
@@ -386,8 +386,8 @@ for (const size of SCREEN_WIDTHS) {
       await page.setViewportSize(size);
       await openSettings(page);
       const headings = await page.getByRole("heading", { level: 3 }).allInnerTexts();
-      expect(headings.slice(0, 2).map((heading) => heading.replace(/\s+\d.*$/s, "").trim())).toEqual(["Model servers", "Worker sets"]);
-      for (const title of ["Model servers", "Worker sets"]) await page.getByRole("heading", { name: title, exact: true, level: 3 }).click();
+      expect(headings.slice(0, 2).map((heading) => heading.replace(/\s+\d.*$/s, "").trim())).toEqual(["Model servers", "Provider sets"]);
+      for (const title of ["Model servers", "Provider sets"]) await page.getByRole("heading", { name: title, exact: true, level: 3 }).click();
 
       // a server card holds its jobs as tick boxes, and the models that run on it
       const gpu = page.getByRole("group", { name: "server gpu-box" });
@@ -403,7 +403,7 @@ for (const size of SCREEN_WIDTHS) {
       await expectInsideScreen(page, small.getByRole("checkbox", { name: "Filtering frames, small-filter" }));
 
       // frames preparing offers the filter model, frames processing the picture reader, never the other way round
-      const spare = page.getByRole("group", { name: "worker set spare" });
+      const spare = page.getByRole("group", { name: "provider set spare" });
       await expectInsideScreen(page, spare);
       const preparing = spare.getByRole("button", { name: /^spare: Frames preparing/ });
       await scrollIntoViewSettled(page, preparing);
@@ -438,10 +438,10 @@ for (const size of SCREEN_WIDTHS) {
 }
 
 test("a set's value set back to the default leaves the set changing nothing", async ({ page, api }) => {
-  api.answer("GET /settings", { json: WORKER_SET_ROWS });
+  api.answer("GET /settings", { json: PROVIDER_SET_ROWS });
   await openSettings(page);
-  await page.getByRole("heading", { name: "Worker sets", level: 3 }).click();
-  const spare = page.getByRole("group", { name: "worker set spare" });
+  await page.getByRole("heading", { name: "Provider sets", level: 3 }).click();
+  const spare = page.getByRole("group", { name: "provider set spare" });
   await spare.getByRole("button", { name: "stop changing framesProcessing.framesPerCall in spare" }).click();
   await expect(spare).toContainText("It changes nothing yet");
   await expect(page.getByRole("button", { name: "Save settings (1)" })).toBeVisible();
@@ -452,7 +452,7 @@ test("a set's value set back to the default leaves the set changing nothing", as
 for (const size of SCREEN_WIDTHS) {
   test(`a setting with no value of its own says what a run uses, never an empty line, at ${size.width} px`,
     async ({ page, api }) => {
-      api.answer("GET /settings", { json: WORKER_SET_ROWS });
+      api.answer("GET /settings", { json: PROVIDER_SET_ROWS });
       await page.setViewportSize(size);
       await openSettings(page);
       await openCard(page, "Audio", "Speech to text");
@@ -466,7 +466,7 @@ for (const size of SCREEN_WIDTHS) {
       await page.getByRole("heading", { name: "Model servers", exact: true, level: 3 }).click();
       const frame = page.getByRole("group", { name: "model frame", exact: true });
       await frame.locator("summary").first().click();
-      // a library model names the worker sets and jobs that use it, never a job of its own, and carries no "changed" badge
+      // a library model names the provider sets and jobs that use it, never a job of its own, and carries no "changed" badge
       await expect(frame.getByText("Used by: default (Frames processing)")).toBeVisible();
       await expect(frame.getByText("Reads the frames")).toHaveCount(0);
       await expect(frame.getByText("changed", { exact: true })).toHaveCount(0);

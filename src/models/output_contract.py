@@ -167,10 +167,12 @@ RUN_WORKFLOW_FILE = "run-workflow.json"
 # The Workflow speed chosen for the run, its preset and the values it sets, written when a job names one and laid over
 # the settings at every start of the run (`services/run_speed_service.py`). No file: the settings decide.
 RUN_SPEED_FILE = "run-speed.json"
-# The worker set the run was started on (`{"name": "<name>"}`), written once nothing can refuse the run and laid over the
-# settings at every start of the run (`services/run_worker_set_service.py`). No file: the settings'
-# `defaultWorkerSet` decides.
-RUN_WORKER_SET_FILE = "run-worker-set.json"
+# The provider set the run was started on (`{"name": "<name>"}`), written once nothing can refuse the run and laid over the
+# settings at every start of the run (`services/run_provider_set_service.py`). No file: the settings'
+# `defaultProviderSet` decides.
+RUN_PROVIDER_SET_FILE = "run-provider-set.json"
+# The name a run folder made before the rename holds the same record under: read when the new file is missing, never written.
+RETIRED_RUN_WORKER_SET_FILE = "run-worker-set.json"
 # A fast-processing run's phase 3: one section per frame, its number, time, speech and the description its worker
 # submitted, appended as each frame is described; phase 4 reads it whole
 FRAME_DESCRIPTIONS_FILE = "03_frame-descriptions.md"

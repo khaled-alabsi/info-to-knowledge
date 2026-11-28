@@ -28,7 +28,7 @@ function toolbar(): HTMLElement {
   return parts.length === 1 ? parts[0]! : (document.querySelector<HTMLElement>(".detail") ?? holder);
 }
 
-const WORKER_SETS = { default_set: "default", sets: [{ name: "default", changes: [], machine: "main machine" },
+const PROVIDER_SETS = { default_set: "default", sets: [{ name: "default", changes: [], machine: "main machine" },
   { name: "Mac", changes: ["models"], machine: "laptop" }, { name: "gpu-box", changes: ["models"], machine: "gpu-box" }] };
 
 function lastJobRequest(calls: { url: string; body: unknown }[]) {
@@ -203,10 +203,10 @@ describe("RunDetail action bar", () => {
     expect(onChanged).toHaveBeenCalled();
   });
 
-  it("an unblock waits for the worker set to be chosen, and queues on the one chosen defect", async () => {
-    // Defect: pressing Unblock queued the run at once, so the owner could not choose to run it or on which worker set.
-    // Fix: Unblock opens a window with the worker sets; only its button queues, on the set chosen there.
-    const calls = installServer({ "POST /api/jobs": [makeJob({ job_id: "job-5" })], "GET /api/worker-sets": WORKER_SETS });
+  it("an unblock waits for the provider set to be chosen, and queues on the one chosen defect", async () => {
+    // Defect: pressing Unblock queued the run at once, so the owner could not choose to run it or on which provider set.
+    // Fix: Unblock opens a window with the provider sets; only its button queues, on the set chosen there.
+    const calls = installServer({ "POST /api/jobs": [makeJob({ job_id: "job-5" })], "GET /api/provider-sets": PROVIDER_SETS });
     renderRun();
     sendUpdate({ phases: makePhaseRows(["complete", "complete", "complete", "blocked", "not run"]) });
     await userEvent.click(within(toolbar()).getByRole("button", { name: "Unblock phase 4 · document writing…" }));
@@ -214,13 +214,13 @@ describe("RunDetail action bar", () => {
     expect(screen.getByRole("radio", { name: "default · main machine (default)" })).toBeInTheDocument();
     expect(lastJobRequest(calls)).toBeUndefined();
     await userEvent.click(screen.getByRole("button", { name: "Run it now" }));
-    expect(lastJobRequest(calls)).toMatchObject({ is_resuming: true, worker_set: "gpu-box" });
+    expect(lastJobRequest(calls)).toMatchObject({ is_resuming: true, provider_set: "gpu-box" });
   });
 
   it("an unblock window closed with Not now queues nothing defect", async () => {
     // Defect: the Unblock button looked like it starts the run, and its window had no clear way to say no.
     // Fix: the button opens a window with "Run it now" and "Not now: leave the run blocked".
-    const calls = installServer({ "POST /api/jobs": [makeJob({ job_id: "job-6" })], "GET /api/worker-sets": WORKER_SETS });
+    const calls = installServer({ "POST /api/jobs": [makeJob({ job_id: "job-6" })], "GET /api/provider-sets": PROVIDER_SETS });
     renderRun();
     sendUpdate({ phases: makePhaseRows(["complete", "complete", "complete", "blocked", "not run"]) });
     await userEvent.click(within(toolbar()).getByRole("button", { name: "Unblock phase 4 · document writing…" }));
@@ -229,34 +229,34 @@ describe("RunDetail action bar", () => {
     expect(lastJobRequest(calls)).toBeUndefined();
   });
 
-  it("a run that never chose a worker set shows the default set and its machine defect", async () => {
-    // Defect: the run page showed a worker set only when the run had chosen one, so a run on the default set showed none.
-    // Fix: every run shows a Worker set pill; a run with no choice names the default set and its machine.
-    installServer({ "GET /api/worker-sets": WORKER_SETS });
+  it("a run that never chose a provider set shows the default set and its machine defect", async () => {
+    // Defect: the run page showed a provider set only when the run had chosen one, so a run on the default set showed none.
+    // Fix: every run shows a Provider set pill; a run with no choice names the default set and its machine.
+    installServer({ "GET /api/provider-sets": PROVIDER_SETS });
     renderRun();
     sendUpdate({});
-    expect(await screen.findByText("Worker set: default · main machine")).toBeInTheDocument();
+    expect(await screen.findByText("Provider set: default · main machine")).toBeInTheDocument();
   });
 
   it("a set on the machine of its own name says its name once defect", async () => {
-    // Defect: the set "gpu-box" on the machine "gpu-box" read "Worker set: gpu-box · gpu-box". Fix: a machine of the set's own name is left out.
-    installServer({ "GET /api/worker-sets": WORKER_SETS });
+    // Defect: the set "gpu-box" on the machine "gpu-box" read "Provider set: gpu-box · gpu-box". Fix: a machine of the set's own name is left out.
+    installServer({ "GET /api/provider-sets": PROVIDER_SETS });
     renderRun();
-    sendUpdate({ worker_set: "gpu-box" });
-    expect(await screen.findByText("Worker set: gpu-box")).toBeInTheDocument();
+    sendUpdate({ provider_set: "gpu-box" });
+    expect(await screen.findByText("Provider set: gpu-box")).toBeInTheDocument();
     expect(screen.queryByText(/gpu-box · gpu-box/)).not.toBeInTheDocument();
   });
 
-  it("a stopped run resumes on the worker set chosen in the Resume menu defect", async () => {
-    // Defect: a stopped run that was not finished could resume only on its own worker set; the menu offered profiles.
-    // Fix: the Resume arrow's menu lists every worker set, the main machine's default one named with its machine.
-    const calls = installServer({ "POST /api/jobs": [makeJob({ job_id: "job-8" })], "GET /api/worker-sets": WORKER_SETS });
+  it("a stopped run resumes on the provider set chosen in the Resume menu defect", async () => {
+    // Defect: a stopped run that was not finished could resume only on its own provider set; the menu offered profiles.
+    // Fix: the Resume arrow's menu lists every provider set, the main machine's default one named with its machine.
+    const calls = installServer({ "POST /api/jobs": [makeJob({ job_id: "job-8" })], "GET /api/provider-sets": PROVIDER_SETS });
     renderRun();
     sendUpdate({});
-    await userEvent.click(within(toolbar()).getByRole("button", { name: "resume with another worker set or other settings" }));
-    expect(await screen.findByRole("menuitem", { name: /worker set: default · main machine/ })).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("menuitem", { name: /worker set: Mac · laptop/ }));
-    expect(lastJobRequest(calls)).toMatchObject({ is_resuming: true, worker_set: "Mac" });
+    await userEvent.click(within(toolbar()).getByRole("button", { name: "resume with another provider set or other settings" }));
+    expect(await screen.findByRole("menuitem", { name: /provider set: default · main machine/ })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("menuitem", { name: /provider set: Mac · laptop/ }));
+    expect(lastJobRequest(calls)).toMatchObject({ is_resuming: true, provider_set: "Mac" });
   });
 
   it("failed phase counts as blocked", () => {

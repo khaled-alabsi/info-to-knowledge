@@ -140,7 +140,7 @@ export const CHOICE_HELP = {
           + "of the words." },
     ],
   },
-  workerSet: {
+  providerSet: {
     intro: "The machine and models the run calls. A set changes only the settings it names, such as which computer's "
       + "language model answers; everything else stays as the settings have it.",
     options: [

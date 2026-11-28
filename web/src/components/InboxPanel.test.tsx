@@ -360,14 +360,14 @@ describe("InboxPanel list", () => {
     expect(screen.queryByRole("button", { name: /Jonas-weekly-r3/ })).not.toBeInTheDocument();
   });
 
-  it("names each running video's worker set in its pill while runs go on more than one set, and none with one set defect", () => {
-    // Defect: three videos ran on three worker sets and each pill said only "running ›", so the owner could not see
+  it("names each running video's provider set in its pill while runs go on more than one set, and none with one set defect", () => {
+    // Defect: three videos ran on three provider sets and each pill said only "running ›", so the owner could not see
     // which machine ran which. Fix: with more than one set running, the pill says "running · Mac ›".
-    const runningOn = (name: string, workerSet: string) => makeInboxItem(`${name}.mp4`, "running", { runs: [
+    const runningOn = (name: string, providerSet: string) => makeInboxItem(`${name}.mp4`, "running", { runs: [
       { root: "output", name, status: "running", is_live: true, has_document: false, topic: "", display_name: "", stopped_phase: 0,
-        worker_set: workerSet }] });
-    const runs = [makeRun({ root: "output", name: "Gateway", is_live: true, status: "running", worker_set: "Mac" }),
-      makeRun({ root: "output", name: "Weekly", is_live: true, status: "running", worker_set: "" })];
+        provider_set: providerSet }] });
+    const runs = [makeRun({ root: "output", name: "Gateway", is_live: true, status: "running", provider_set: "Mac" }),
+      makeRun({ root: "output", name: "Weekly", is_live: true, status: "running", provider_set: "" })];
     const { unmount } = renderInbox([runningOn("Gateway", "Mac"), runningOn("Weekly", "")], runs);
     expect(screen.getByRole("button", { name: /^running · Mac › open the run of Gateway/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^running · default › open the run of Weekly/ })).toBeInTheDocument();

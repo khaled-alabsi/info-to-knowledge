@@ -72,7 +72,7 @@ Phases: `1` transcribe, `2` frames, `3` frame notes, `4` document, `5` review.
 
 ## Hosts and models
 
-`i2k run --worker-set NAME` puts a run on one worker set (`default` or a name in the settings' `workerSets`): its models and
+`i2k run --provider-set NAME` puts a run on one provider set (`default` or a name in the settings' `providerSets`): its models and
 hosts are the settings with that set's changes on top. The folder keeps the set, so a resume with no flag goes on with it.
 An unknown name is refused with the names that exist. Runs on different sets go at the same time; runs on one set go one
 after another.
@@ -82,7 +82,7 @@ after another.
 ./i2k models    # which model each role resolved to
 ```
 
-To use another machine's LM Studio for one run: `PB_HOSTS__LMSTUDIO__URL=http://<other-machine-address>:1234/v1 ./i2k run ...`; to keep it, add a worker set that sets that host.
+To use another machine's LM Studio for one run: `PB_HOSTS__LMSTUDIO__URL=http://<other-machine-address>:1234/v1 ./i2k run ...`; to keep it, add a provider set that sets that host.
 
 ## Checks
 

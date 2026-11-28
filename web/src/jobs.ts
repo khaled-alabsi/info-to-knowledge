@@ -50,7 +50,7 @@ export function describeJob(job: Job): string {
   // the choices a job runs with beside its phases (the owner, queuing 32 videos fast: each read "every phase" alone)
   const choices = [request.profile ? `profile ${request.profile}` : "",
     request.workflow === "fast-processing" || request.workflow === "direct-draft" ? "Fast" : request.workflow === "quality" ? "Quality" : "",
-    request.worker_set ? `set ${request.worker_set}` : "",
+    request.provider_set ? `set ${request.provider_set}` : "",
     request.speed_preset ? `${nameSpeedPreset(request.speed_preset)}${request.speed_settings?.length ? " (changed)" : ""}` : ""]
     .filter(Boolean);
   return [parts.join(" · ") || "every phase", ...choices].join(" · ");
@@ -109,7 +109,7 @@ export function readJobSelection(request: JobRequest): PhaseSelection {
     worker_indexes: request.worker_indexes, is_resuming: request.is_resuming, is_dry_run: request.is_dry_run,
     profile: request.profile ?? "", tags: request.tags ?? [], ingesting_profile: request.ingesting_profile ?? "",
     is_run_as_audio: request.is_run_as_audio ?? false, workflow: request.workflow ?? "",
-    worker_set: request.worker_set ?? "",
+    provider_set: request.provider_set ?? "",
     speed_preset: request.speed_preset ?? "", speed_settings: readSpeedSettings(request.speed_settings ?? []),
     pdf_mode: request.pdf_mode ?? "", pdf_ocr_engine: request.pdf_ocr_engine ?? "",
     document_pass: request.document_pass ?? "", document_wishes: request.document_wishes ?? "",

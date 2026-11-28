@@ -19,7 +19,7 @@ export const PHASE_LABELS: Record<string, string> = {
 export const MODEL_FIELD_LABELS: Record<string, SettingLabel> = {
   spec: { label: "Model name", help: "The model's name on its server." },
   host: { label: "Server", help: "Which model server this model runs on." },
-  suits: { label: "Jobs it suits", help: "The kinds of work a worker set offers this model for; with none ticked it is offered for every job." },
+  suits: { label: "Jobs it suits", help: "The kinds of work a provider set offers this model for; with none ticked it is offered for every job." },
   framesPerCall: { label: "Frames per call on this model", help: "How many frames this model reads in one call; empty uses the general setting." },
   numCtx: { label: "Context window (tokens)", help: "How much text the model can read in one call." },
   temperature: { label: "Randomness", help: "Higher values make the answers more varied and lower values make them more repeatable." },
@@ -38,7 +38,7 @@ export const ADVANCED_MODEL_FIELDS: string[] = [
   "numCtx", "temperature", "topP", "sampling", "numPredict", "maxTokens", "requestTimeoutS", "apiKey", "structuredMethod",
 ];
 
-// The jobs a provider can do (the `kinds` of a provider) and what the page calls each: each is a job of a worker set, linked
+// The jobs a provider can do (the `kinds` of a provider) and what the page calls each: each is a job of a provider set, linked
 // to a model of the library like a phase is
 export const PROVIDER_KINDS: Record<string, string> = {
   chat: "Scanned page reader",
@@ -98,8 +98,8 @@ export const SETTING_LABELS: Record<string, SettingLabel> = {
   // Machines and models
   hosts: { label: "Model servers", help: "Every model server by name with its address, the name of the variable holding its access token and the jobs it can do; a model picks the server it runs on by this name." },
   speedPresets: { label: "Speed presets", help: "The choices in the Workflow speed menu, each a name and the settings it sets." },
-  workerSets: { label: "Worker sets", help: "Named groups of settings that give each job a model, so jobs on different sets can run on different providers at the same time." },
-  defaultWorkerSet: { label: "Default worker set", help: "The worker set a job takes when none is chosen." },
+  providerSets: { label: "Provider sets", help: "Named groups of settings that give each job a model, so jobs on different sets can run on different providers at the same time." },
+  defaultProviderSet: { label: "Default provider set", help: "The provider set a job takes when none is chosen." },
   machine: { label: "This machine's name", help: "An older settings file's name for the default set's machine, still read; the machine is now the provider the set's models run on.", hidden: true },
 
   // Frames
@@ -179,12 +179,12 @@ export const SETTING_LABELS: Record<string, SettingLabel> = {
 
   // Video
   "video.workflow": { label: "Video workflow", help: "How a video is processed when a run names no workflow: quality, direct draft or the earlier fast workflow." },
-  "video.fastProcessing.frameModel": { label: "Frame describer", help: "The fast workflow describes frames with the model its worker set gives to frames processing.", hidden: true },
+  "video.fastProcessing.frameModel": { label: "Frame describer", help: "The fast workflow describes frames with the model its provider set gives to frames processing.", hidden: true },
   "video.fastProcessing.frameFollowUps": { label: "Frames per session", help: "How many frames one description session handles before it starts fresh." },
   "video.fastProcessing.frameWidth": { label: "Frame width when describing (pixels)", help: "Frames are sent to the describer at this width." },
   "video.fastProcessing.isFrameThinkingOn": { label: "Think before describing a frame", help: "Whether the describer thinks before it describes a frame; off makes each frame a short call." },
   "video.fastProcessing.frameMaxTokens": { label: "Longest frame description (tokens)", help: "The most one frame's description may write, so a looping reply cannot run for minutes." },
-  "video.fastProcessing.documentModel": { label: "Document writer", help: "The fast workflow writes the document with the model its worker set gives to document writing.", hidden: true },
+  "video.fastProcessing.documentModel": { label: "Document writer", help: "The fast workflow writes the document with the model its provider set gives to document writing.", hidden: true },
   "video.fastProcessing.isDocumentThinkingOn": { label: "Think before writing", help: "Whether the document writer thinks before it writes." },
   "video.directDraft.frameWidth": { label: "Frame width when writing (pixels)", help: "Frames are sent to the writer at this width." },
   "video.directDraft.lastSectionChars": { label: "Earlier text shown (characters)", help: "How much of the draft's last section each batch is shown, so long sections do not slow every call." },
@@ -269,7 +269,7 @@ export const SECTION_GROUPS: SectionGroup[] = [
     id: "machines-and-models",
     title: "Model servers",
     intro: "Where each model runs, which models there are, and which model each job uses.",
-    prefixes: ["machine", "hosts", "workerSets", "defaultWorkerSet", "models", "phaseModels", "providers"],
+    prefixes: ["machine", "hosts", "providerSets", "defaultProviderSet", "models", "phaseModels", "providers"],
   },
   {
     id: "frames",

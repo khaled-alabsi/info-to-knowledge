@@ -19,7 +19,7 @@ export interface InboxItem {
   // each run's `stopped_phase`: the first phase of its flow a started run has not completed; 0 for a run going or done;
   // `is_blocked` when a phase is recorded blocked or failed
   runs: { root: string; name: string; status: string; is_live: boolean; has_document: boolean; topic: string; display_name: string;
-    stopped_phase: number; is_blocked?: boolean; worker_set?: string }[];
+    stopped_phase: number; is_blocked?: boolean; provider_set?: string }[];
   // a meeting recorded in several files: its parts in the order they are read; empty for a single video
   parts: { name: string; size_bytes: number; start_s?: number }[];
   topic: string;
@@ -80,8 +80,8 @@ export interface RunSummary {
   stopped_phase: number;
   // the phase a live run is in; 0 or absent for a run not going
   live_phase?: number;
-  // the worker set the run chose; "" or absent for the default set
-  worker_set?: string;
+  // the provider set the run chose; "" or absent for the default set
+  provider_set?: string;
   // a phase recorded blocked or failed: a resume asks the blocked step again
   is_blocked?: boolean;
   // made by Branch or Convert from another run: a run of its own, never folded into its video's row
@@ -162,8 +162,8 @@ export interface RunDetail extends RunSummary {
   workflow?: string;
   // the Workflow speed chosen for the run; none when the settings decided
   speed?: RunSpeed | null;
-  // the worker set the run keeps ("" when it kept none: it runs on the settings' default)
-  worker_set?: string;
+  // the provider set the run keeps ("" when it kept none: it runs on the settings' default)
+  provider_set?: string;
   // the run and phase this run was branched from, null for a run that is no branch
   branch?: { from: string; phase: number; at: string } | null;
   // phase 2's stages in order, each with how far it is: the rules count seconds of video, the classifier and the model frames
@@ -317,8 +317,8 @@ export interface JobRequest {
   range_end?: string;
   range_pages?: string;
   workflow?: string;
-  // the worker set the job is on ("" leaves the run folder's, else the settings' default)
-  worker_set?: string;
+  // the provider set the job is on ("" leaves the run folder's, else the settings' default)
+  provider_set?: string;
   // the Workflow speed preset, and `KEY=VALUE` pairs of the settings changed from it
   speed_preset?: string;
   speed_settings?: string[];
@@ -355,7 +355,7 @@ export interface Job {
   tries?: number;
   // when a job waiting for its retry starts again
   retry_at?: string;
-  // the worker set a job that may still run goes on (its request's, its run folder's or its profile's); "" once ended
+  // the provider set a job that may still run goes on (its request's, its run folder's or its profile's); "" once ended
   lane?: string;
 }
 
@@ -376,8 +376,8 @@ export interface PhaseSelection {
   is_run_as_audio: boolean;
   // the video workflow from phase 3 on, "quality", "direct-draft" or "fast-processing"; "" leaves the run folder's or the settings'
   workflow?: string;
-  // the worker set the run is on, whose models and hosts it calls: "" leaves the run folder's, else the settings' default
-  worker_set?: string;
+  // the provider set the run is on, whose models and hosts it calls: "" leaves the run folder's, else the settings' default
+  provider_set?: string;
   // the Workflow speed preset ("" leaves the run folder's or the settings'), and the settings changed from it by hand
   speed_preset?: string;
   speed_settings?: Record<string, SpeedValue>;
@@ -594,9 +594,9 @@ export interface RunDefaults {
   document_wishes?: Partial<Record<DocumentPass, string>>;
 }
 
-// The worker sets a run can be on (`GET /api/worker-sets`): `default` first, then each set the settings name, with the
+// The provider sets a run can be on (`GET /api/provider-sets`): `default` first, then each set the settings name, with the
 // settings it changes; `default_set` is the one a run with no choice is on
-export interface WorkerSets {
+export interface ProviderSets {
   default_set: string;
   // machine: where the set runs, in the owner's words ("main machine"); empty when the settings name none
   sets: { name: string; changes: string[]; machine?: string }[];

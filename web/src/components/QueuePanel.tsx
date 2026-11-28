@@ -52,9 +52,9 @@ export default function QueuePanel({
   const running = jobs.filter((job) => job.status === "running" || job.status === "retrying" || job.status === "blocked");
   const waiting = jobs.filter((job) => job.status === "queued");
   const finished = [...jobs].reverse().filter((job) => !isJobOpen(job));
-  // With jobs on more than one worker set, each set gets its own group: its running job, then its waiting jobs
+  // With jobs on more than one provider set, each set gets its own group: its running job, then its waiting jobs
   // numbered in the order that set runs them, since the sets run side by side. With one set, one plain list.
-  const nameLane = (job: Job) => job.lane || job.request.worker_set || "default";
+  const nameLane = (job: Job) => job.lane || job.request.provider_set || "default";
   const lanes = [...new Set([...running, ...waiting].map(nameLane))];
   // kept open or closed when the tab is left: with nothing waiting, it is all the tab shows
   const [isFinishedOpen, setIsFinishedOpen] = usePersistentState("finishedJobsOpen", false);

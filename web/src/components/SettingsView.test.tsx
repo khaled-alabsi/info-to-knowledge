@@ -47,9 +47,9 @@ async function openSettings() {
 
 describe("Settings", () => {
   const SET_ROWS = [...ROWS,
-    { key: "workerSets", value: { PC: { machine: "the desktop", phaseModels: { review: "small.v2" }, budgets: { maxAttempts: 5 } } },
+    { key: "providerSets", value: { PC: { machine: "the desktop", phaseModels: { review: "small.v2" }, budgets: { maxAttempts: 5 } } },
       kind: "json", source: "local", comment: "" },
-    { key: "defaultWorkerSet", value: "default", kind: "text", source: "code", comment: "" },
+    { key: "defaultProviderSet", value: "default", kind: "text", source: "code", comment: "" },
     { key: "machine", value: "the laptop", kind: "text", source: "local", comment: "" },
     { key: "hosts", value: { lmstudio: { url: "http://localhost:1234/v1" }, "other-mac": { url: "http://other-mac:1234/v1" } },
       kind: "json", source: "local", comment: "" },
@@ -66,18 +66,18 @@ describe("Settings", () => {
     });
   }
 
-  it("lists the model servers, then the worker sets, before every other section, each header a title and a count of its cards defect", async () => {
+  it("lists the model servers, then the provider sets, before every other section, each header a title and a count of its cards defect", async () => {
     // The owner: "I still see the model section" and "where 1 from?": the page has two model sections, the servers (each card
-    // holding its models) and the worker sets, and the number beside a title counts the cards the section shows
+    // holding its models) and the provider sets, and the number beside a title counts the cards the section shows
     serveSets();
     await openSettings();
     const titles = screen.getAllByRole("heading", { level: 3 }).map((heading) => heading.textContent);
-    expect(titles.slice(0, 2)).toEqual(["Model servers", "Worker sets"]);
+    expect(titles.slice(0, 2)).toEqual(["Model servers", "Provider sets"]);
     for (const hidden of ["General", "Machines", "Models", "Model providers", "Model providers and models"]) expect(titles).not.toContain(hidden);
     // a header is its title and its card count, nothing else: two servers, and the default set with the second set
     const header = (title: string) => screen.getByRole("heading", { name: title }).closest("summary") as HTMLElement;
     expect(header("Model servers").textContent).toBe("Model servers2");
-    expect(header("Worker sets").textContent).toBe("Worker sets2");
+    expect(header("Provider sets").textContent).toBe("Provider sets2");
     expect(document.body.textContent).not.toMatch(/\d+ changed|· \d/);
   });
 
@@ -127,7 +127,7 @@ describe("Settings", () => {
   it("has two model sections: servers holding their models, and sets mapping each job to a model, in plain words defect", async () => {
     // The owner, third time: "models section is wrong, I see no logic for it". The providers section held 20 loose rows (a
     // speech server, its model, its wait, a library model, ...); a card showed backticked keys. The servers section is now
-    // one card a server with its models inside, every job is a menu in a worker set, and no help shows a code key
+    // one card a server with its models inside, every job is a menu in a provider set, and no help shows a code key
     const comment = "The `libraryModel` of `providers.speech` over `host` and `timeoutS` below. \"\" keeps `host`";
     const providerRows = ["chat", "speech", "diarization", "embeddings", "decision"].flatMap((kind) => [
       { key: `providers.${kind}.libraryModel`, path: ["providers", kind, "libraryModel"], value: "", kind: "text", source: "code", comment },
@@ -149,18 +149,18 @@ describe("Settings", () => {
     });
     await openSettings();
     const titles = screen.getAllByRole("heading", { level: 3 }).map((heading) => heading.textContent);
-    expect(titles.slice(0, 2)).toEqual(["Model servers", "Worker sets"]);
-    for (const title of ["Model servers", "Worker sets", "Video"]) await userEvent.click(screen.getByRole("heading", { name: title }));
+    expect(titles.slice(0, 2)).toEqual(["Model servers", "Provider sets"]);
+    for (const title of ["Model servers", "Provider sets", "Video"]) await userEvent.click(screen.getByRole("heading", { name: title }));
     const servers = screen.getByRole("group", { name: "Model servers" }) as HTMLElement;
     // the servers section holds each server's card with its models inside, and nothing about a job
     expect(within(servers).getAllByRole("group", { name: /^server / })).toHaveLength(2);
     const lmstudio = within(servers).getByRole("group", { name: "server lmstudio" });
     expect(within(lmstudio).getByRole("group", { name: "model frame" })).toBeInTheDocument();
     expect(within(lmstudio).getByRole("textbox", { name: "address of lmstudio" })).toHaveValue("http://localhost:1234/v1");
-    // a job is chosen in a worker set, never in a server's card
+    // a job is chosen in a provider set, never in a server's card
     expect(within(servers).queryByRole("button", { name: /^default: / })).not.toBeInTheDocument();
     // every job is one menu in each set
-    const fallback = screen.getByRole("group", { name: "worker set default" });
+    const fallback = screen.getByRole("group", { name: "provider set default" });
     for (const job of ["Speech to text", "Scanned page reader", "Speaker detection", "Frame vectors", "Decision filter", "Review"]) {
       expect(within(fallback).getByRole("button", { name: new RegExp(`^default: ${job}`) })).toBeInTheDocument();
     }
@@ -183,12 +183,12 @@ describe("Settings", () => {
     expect(text).not.toMatch(/Library model/);
   });
 
-  it("shows each worker set as a card linking each job to a library model, and a change is a draft saved with the rest", async () => {
-    // The worker sets stood as a box of values to type per set; each set now links each job to a model picked by its name
+  it("shows each provider set as a card linking each job to a library model, and a change is a draft saved with the rest", async () => {
+    // The provider sets stood as a box of values to type per set; each set now links each job to a model picked by its name
     const calls = serveSets();
     await openSettings();
-    await userEvent.click(screen.getByRole("heading", { name: "Worker sets" }));
-    const pc = screen.getByRole("group", { name: "worker set PC" });
+    await userEvent.click(screen.getByRole("heading", { name: "Provider sets" }));
+    const pc = screen.getByRole("group", { name: "provider set PC" });
     // the older machine key is read and kept in the file, never shown or chosen
     expect(screen.queryByRole("button", { name: /^Machine of/ })).not.toBeInTheDocument();
     expect(within(pc).getByRole("button", { name: "PC: Review: lmstudio: small.v2" })).toBeInTheDocument();
@@ -196,7 +196,7 @@ describe("Settings", () => {
     await userEvent.click(screen.getByRole("menuitemradio", { name: /^same as default set/ }));
     await userEvent.click(screen.getByRole("button", { name: "Save settings (1)" }));
     const body = calls.find((call) => call.method === "PUT")?.body as { key: string; new_value: { PC: Record<string, unknown> } };
-    expect(body.key).toBe("workerSets");
+    expect(body.key).toBe("providerSets");
     expect(body.new_value.PC.phaseModels).toBeUndefined();
     expect(body.new_value.PC.machine).toBe("the desktop");
   });
@@ -218,8 +218,8 @@ describe("Settings", () => {
           comment: "" }],
     });
     await openSettings();
-    await userEvent.click(screen.getByRole("heading", { name: "Worker sets" }));
-    const pc = screen.getByRole("group", { name: "worker set PC" });
+    await userEvent.click(screen.getByRole("heading", { name: "Provider sets" }));
+    const pc = screen.getByRole("group", { name: "provider set PC" });
     await userEvent.click(within(pc).getByRole("button", { name: /^PC: Speech to text/ }));
     const offered = screen.getAllByRole("menuitemradio").map((item) => item.textContent ?? "");
     expect(offered).toHaveLength(2);
@@ -230,15 +230,15 @@ describe("Settings", () => {
     expect(screen.queryByRole("menuitemradio", { name: /whisper/ })).not.toBeInTheDocument();
   });
 
-  it("copies a worker set from its card, a draft named by the person", async () => {
+  it("copies a provider set from its card, a draft named by the person", async () => {
     const calls = serveSets();
     await openSettings();
-    await userEvent.click(screen.getByRole("heading", { name: "Worker sets" }));
-    const pc = screen.getByRole("group", { name: "worker set PC" });
-    await userEvent.click(within(pc).getByRole("button", { name: "copy worker set PC" }));
+    await userEvent.click(screen.getByRole("heading", { name: "Provider sets" }));
+    const pc = screen.getByRole("group", { name: "provider set PC" });
+    await userEvent.click(within(pc).getByRole("button", { name: "copy provider set PC" }));
     await userEvent.type(within(pc).getByRole("textbox", { name: "name of the copy of PC" }), "PC strict");
     await userEvent.click(within(pc).getByRole("button", { name: "Create copy" }));
-    expect(screen.getByRole("group", { name: "worker set PC strict" })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "provider set PC strict" })).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Save settings (1)" }));
     const body = calls.find((call) => call.method === "PUT")?.body as { new_value: Record<string, unknown> };
     expect(body.new_value["PC strict"]).toEqual(body.new_value.PC);

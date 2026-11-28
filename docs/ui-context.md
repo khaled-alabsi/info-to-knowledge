@@ -191,11 +191,11 @@ JSON fields are snake_case, matching the job records.
   130 or -2 (the interrupt arrived while the run was still loading) `stopped`, anything else `crashed`.
 - A `running` job whose process is gone when the queue is read again (the server was restarted in between) becomes `lost`.
   `cancelled` is a queued job taken off. Interrupt sends the job's process SIGINT, as Ctrl-C would.
-- One lane per worker set: a job runs in the lane of its request's set, else its run folder's kept set, else the settings'
-  `defaultWorkerSet`. A dispatcher thread starts one waiter thread for each lane that has a job to run and none waiting;
+- One lane per provider set: a job runs in the lane of its request's set, else its run folder's kept set, else the settings'
+  `defaultProviderSet`. A dispatcher thread starts one waiter thread for each lane that has a job to run and none waiting;
   `run_next_job(queue_dir, lane)` looks only at that lane's jobs. A lane with a live running job starts nothing, a block or
   a retry pause holds its own lane, a run folder in use by a running job of another lane waits, and the pause is global.
-- The run settings (one run, a ticked batch, and a resume) hold a Worker set choice, shown only when the settings define a
+- The run settings (one run, a ticked batch, and a resume) hold a Provider set choice, shown only when the settings define a
   set besides the default; the queue row names a job's set and a run's page shows the set it keeps.
 - Seams for tests: `set_command_prefix` (a stand-in for `main.py`) and `set_run_lister` (a fixed process list).
 
