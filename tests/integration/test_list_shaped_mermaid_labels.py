@@ -31,7 +31,7 @@ def test_a_document_diagram_with_list_shaped_labels_is_mended_to_draw_defect():
     harness.check("a numbered arrow label is written (2)", '|"(2) ask the model"|' in mended, mended)
     harness.check("a label numbered with a bracket is written (3)", '"(3) return the vector"' in mended, mended)
     harness.check("a bulleted arrow label loses its dash", '|"run the query"|' in mended, mended)
-    harness.check("a numbered box label is written (1)", "L[(1) Results listed]" in mended, mended)
+    harness.check("a numbered box label is written (1)", 'L["(1) Results listed"]' in mended, mended)
     harness.check("the text outside the diagram stays", "1.5 GB of vectors" in mended, mended)
     block = mended.split("```mermaid\n", 1)[1].split("```", 1)[0]
     harness.check("the mended diagram passes the check", not mermaid_text_utils.find_syntax_problems(block), block)

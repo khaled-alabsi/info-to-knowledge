@@ -539,9 +539,18 @@ def _rewrite_list_labels(line: str) -> str:
     so Mermaid draws it (a flowchart's arrows labelled "2. generate embedding" reached the reader as errors)."""
 
     line = _QUOTED.sub(lambda match: f'"{_rewrite_list_label(match.group(0)[1:-1])}"', line)
-    line = _UNQUOTED_EDGE_LABEL.sub(lambda match: f"|{_rewrite_list_label(match.group(1))}|", line)
+    line = _UNQUOTED_EDGE_LABEL.sub(lambda match: f"|{_wrap_rewritten_label(match.group(1))}|", line)
 
-    return _UNQUOTED_BOX_LABEL.sub(lambda match: f"[{_rewrite_list_label(match.group(1))}]", line)
+    return _UNQUOTED_BOX_LABEL.sub(lambda match: f"[{_wrap_rewritten_label(match.group(1))}]", line)
+
+
+def _wrap_rewritten_label(label: str) -> str:
+    """A bare label opening as a list item, rewritten and wrapped in quotes: its "(1)" is a bracket, which a bare label
+    cannot hold (a public talk's arrows written "1. User searches" became `|(1) User searches|`, which does not draw)."""
+
+    rewritten = _rewrite_list_label(label)
+
+    return label if rewritten == label else f'"{rewritten.strip()}"'
 
 
 def repair_diagram(source: str) -> str:

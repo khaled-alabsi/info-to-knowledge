@@ -122,7 +122,9 @@ def test_the_common_mermaid_mistakes_are_mended_and_each_mended_diagram_passes_t
              # A label opening as a list item, drawn by Mermaid as "Unsupported markdown: list"
              ('flowchart LR\n    B -->|"2. generate embedding"| M["AI model"]', '|"(2) generate embedding"|'),
              ('flowchart LR\n    B -->|3) return| M["- Layer 1"]', '|"(3) return"| M["Layer 1"]'),
-             ('flowchart LR\n    A[1. Install] --> B["1.5 GB kept"]', 'A[(1) Install] --> B["1.5 GB kept"]'),
+             ('flowchart LR\n    A[1. Install] --> B["1.5 GB kept"]', 'A["(1) Install"] --> B["1.5 GB kept"]'),
+             # A bare arrow label "1. Search" was rewritten "(1) Search" with no quotes, a bracket Mermaid cannot draw
+             ('flowchart LR\n    W["Web"] -->|1. Search for product| S["Server"]', '|"(1) Search for product"|'),
              ('flowchart TD\n    subgraph G["Group"]\n        A["The end here"]\n    end\n    A --> B["Stop"]', "    end\n")]
     for source, expected in cases:
         mended = mermaid_text_utils.repair_diagram(source)
