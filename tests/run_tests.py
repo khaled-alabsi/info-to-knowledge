@@ -13,6 +13,7 @@ import os
 import shutil
 import sys
 import tempfile
+import time
 import traceback
 from pathlib import Path
 
@@ -100,10 +101,11 @@ def main() -> int:
     config.settings.frames.is_redundancy_filter_on = False
     config.settings.frames.is_similarity_recheck_on = False
     # The words Tesseract reads on a frame are kept on disk by the frame's content, in the git-ignored real media: five
-    # integration files read every frame of a real recording again in each run, 1.3 to 5 s a frame (DEFECTS 499)
-    if "--integration" in sys.argv:
-        text_detection_service.set_words_cache_dir(ROOT / "real_media" / ".words-cache")
+    # integration files read every frame of a real recording again in each run, 1.3 to 5 s a frame (DEFECTS 499). The
+    # unit tests' drawn frames are read again on every run too, so they use the same cache
+    text_detection_service.set_words_cache_dir(ROOT / "real_media" / ".words-cache")
     chosen = discover(wanted, is_integration="--integration" in sys.argv)
+    durations: list[tuple[float, str]] = []
     if wanted and not chosen:
         return 2
     for module_name in chosen:
@@ -123,7 +125,13 @@ def main() -> int:
             func = getattr(module, attr)
             if not callable(func):
                 continue
+            started = time.monotonic()
             run_case(func, f"{module_name}.{attr}")
+            durations.append((time.monotonic() - started, f"{module_name}.{attr}"))
+    if "--slowest" in sys.argv:
+        # the test functions that took longest, so the slow ones are found by measure, never by guess
+        for seconds, name in sorted(durations, reverse=True)[:25]:
+            print(f"  {seconds:7.2f} s  {name}")
     if verbose:
         for name, _ in harness.PASSED:
             print(f"  pass  {name}")

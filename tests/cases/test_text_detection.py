@@ -37,6 +37,7 @@ def test_a_frame_s_words_are_read_once_across_processes_with_a_words_cache_defec
         return original(*args, **kwargs)
 
     text_detection_service._read_words_in_image = counting
+    previous_cache = text_detection_service._WORDS_CACHE_DIR
     text_detection_service.set_words_cache_dir(folder / "cache")
     try:
         first = text_detection_service.find_words(frame, 60)
@@ -44,7 +45,8 @@ def test_a_frame_s_words_are_read_once_across_processes_with_a_words_cache_defec
         second = text_detection_service.find_words(frame, 60)
     finally:
         text_detection_service._read_words_in_image = original
-        text_detection_service.set_words_cache_dir(None)
+        # the suite's own words cache, given back so every later case file reads through it
+        text_detection_service.set_words_cache_dir(previous_cache)
     harness.check("read once, the second process takes the kept words", len(reads) == 1, str(len(reads)))
     harness.check("the same words both times", bool(second) and first == second, str(second))
 
@@ -114,6 +116,10 @@ def test_a_file_is_read_once_until_it_changes():
     original = text_detection_service._read_words_in_image
     text_detection_service._read_words_in_image = lambda frame, min_confidence=0, is_read_larger=False: (
         reads.append(1) or [{"text": "Gateway", "box": [1, 2, 30, 12], "block": 1, "line": 1}])
+    # no words cache on disk here: the made-up words would be kept for every blank image of this size, and a second run
+    # would read them from disk instead of reading the file
+    previous_cache = text_detection_service._WORDS_CACHE_DIR
+    text_detection_service.set_words_cache_dir(None)
     try:
         first = text_detection_service.find_words(image)
         first[0]["box"][0] = 99
@@ -122,6 +128,7 @@ def test_a_file_is_read_once_until_it_changes():
         text_detection_service.find_words(image)
     finally:
         text_detection_service._read_words_in_image = original
+        text_detection_service.set_words_cache_dir(previous_cache)
     harness.check("read once, a caller's change not kept, read again once changed",
                   len(reads) == 2 and second[0]["box"][0] == 1, f"reads {len(reads)}, {second}")
 

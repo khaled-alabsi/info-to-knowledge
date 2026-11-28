@@ -176,13 +176,17 @@ def test_frames_preparing_reads_the_transcript_from_disk_and_gives_every_frame_i
                                                        "text": "eins zwei", "segments": segments})
     previous = dict(config.settings.frames)
     config.settings.frames.selection_mode, config.settings.frames.min_scene_seconds = "scene", 0.0
-    config.settings.frames.is_knowledge_filter_on = False    # the filter has its own case file
+    # the filter, the text-only mark and the board stage have their own case files; any one of them on starts the real
+    # frame classifier, which took this test 19 of its 20 s
+    config.settings.frames.is_knowledge_filter_on = False
+    config.settings.frames.is_text_only_mark_on = False
+    config.settings.frames.is_board_stage_on = False
     try:
         items = frame_preparation_service.prepare_frames(ctx)["items"]
     finally:
-        config.settings.frames.selection_mode = previous["selection_mode"]
-        config.settings.frames.min_scene_seconds = previous["min_scene_seconds"]
-        config.settings.frames.is_knowledge_filter_on = previous["is_knowledge_filter_on"]
+        for key in ("selection_mode", "min_scene_seconds", "is_knowledge_filter_on", "is_text_only_mark_on",
+                    "is_board_stage_on"):
+            setattr(config.settings.frames, key, previous[key])
     harness.check("one item per frame, each carrying both slices",
                   len(items) == 3 and all({"transcriptBefore", "transcriptCurrent"} <= set(item) for item in items),
                   json.dumps(items)[:300])

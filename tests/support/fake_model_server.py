@@ -192,11 +192,16 @@ class _FakeModelHandler(BaseHTTPRequestHandler):
         return
 
 
+SHUTDOWN_CHECK_SECONDS = 0.01
+
+
 @contextlib.contextmanager
 def serving(server: ThreadingHTTPServer):
     """Run `server` on a thread for the length of the block, then stop it and free its port."""
 
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    # `serve_forever` sees a shutdown only when its wait for a request ends, half a second by default: every stop cost a
+    # test 0.5 s, about 40 tests of the suite. A request still wakes it at once; only the stop is checked this often
+    thread = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": SHUTDOWN_CHECK_SECONDS}, daemon=True)
     thread.start()
     try:
         yield server

@@ -7,6 +7,7 @@ otherwise shows up as an import cycle or an untestable node much later.
 
 import ast
 import builtins
+import functools
 import json
 import sys
 import tempfile
@@ -912,24 +913,25 @@ def test_no_module_imports_a_name_it_never_uses():
                               f"`{bound}` is imported here and read nowhere in the module")
 
 
-def _module_for(alias: str, tree: ast.Module) -> str | None:
-    """The dotted module an alias refers to, if it was imported from inside `src/`."""
+def _list_import_aliases(tree: ast.Module) -> dict[str, str]:
+    """Each alias a module imports and the dotted module it names, the first import of an alias met winning: built once
+    a file, since walking the whole file again for each of its attributes took this check 60 s."""
 
+    aliases: dict[str, str] = {}
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom) and node.module:
             for imported in node.names:
-                if (imported.asname or imported.name) == alias:
-                    return f"{node.module}.{imported.name}"
+                aliases.setdefault(imported.asname or imported.name, f"{node.module}.{imported.name}")
         elif isinstance(node, ast.Import):
             for imported in node.names:
-                if (imported.asname or imported.name.split(".")[0]) == alias:
-                    return imported.name
+                aliases.setdefault(imported.asname or imported.name.split(".")[0], imported.name)
 
-    return None
+    return aliases
 
 
-def _public_names(module: str) -> set[str] | None:
-    """Everything a local module defines at its top level, or None if it is not local."""
+@functools.lru_cache(maxsize=None)
+def _public_names(module: str) -> frozenset[str] | None:
+    """Everything a local module defines at its top level, or None if it is not local; read once a module."""
 
     base = SRC.joinpath(*module.split("."))
     path = base.with_suffix(".py") if base.with_suffix(".py").is_file() else base / "__init__.py"
@@ -948,7 +950,7 @@ def _public_names(module: str) -> set[str] | None:
         if isinstance(node, (ast.Import, ast.ImportFrom)):
             names |= {a.asname or a.name.split(".")[0] for a in node.names}
 
-    return names
+    return frozenset(names)
 
 
 def test_every_attribute_taken_from_a_local_module_exists():
@@ -964,10 +966,11 @@ def test_every_attribute_taken_from_a_local_module_exists():
 
     for path in _source_modules():
         tree = ast.parse(path.read_text(encoding="utf-8"))
+        aliases = _list_import_aliases(tree)
         for node in ast.walk(tree):
             if not isinstance(node, ast.Attribute) or not isinstance(node.value, ast.Name):
                 continue
-            module = _module_for(node.value.id, tree)
+            module = aliases.get(node.value.id)
             if module is None:
                 continue
             names = _public_names(module)
