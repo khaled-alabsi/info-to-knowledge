@@ -1,7 +1,6 @@
-import type { ReactNode } from "react";
 import type { SettingRow } from "../api";
 import { describeRunValue } from "../settingRunValue";
-import { readChoiceLabel, readSettingHelp, readSettingLabel } from "../settingsLabels";
+import { listFixedChoices, readChoiceLabel, readSettingHelp, readSettingLabel } from "../settingsLabels";
 import OptionMenu from "./OptionMenu";
 import type { SettingDrafts } from "./SettingsView";
 import StructuredValueEditor from "./StructuredValueEditor";
@@ -23,12 +22,6 @@ export type SettingEditContext = {
   typedKeys: string[];
   setTyped: (key: string, isTyped: boolean) => void;
 };
-
-// A comment's `code` spans drawn as code, the rest as plain text
-function renderComment(comment: string): ReactNode[] {
-  return comment.split(/(`[^`]+`)/).map((part, index) =>
-    part.startsWith("`") && part.endsWith("`") && part.length > 2 ? <code key={index}>{part.slice(1, -1)}</code> : part);
-}
 
 function parseJson(raw: string): unknown {
   try {
@@ -57,23 +50,28 @@ export default function SettingRowItem({ row, context, label }: { row: SettingRo
     return String(draft.raw) || specRow.default_host;
   };
   const help = readSettingHelp(row.key);
+  // every control is named by the label the page shows beside it, never by the key the settings file holds
+  const name = label ?? readSettingLabel(row.key);
   const structured = row.kind === "json" ? parseJson(String(raw)) : undefined;
+  // a text setting chosen from a short fixed list is a menu, never a typing box
+  const fixed = row.kind === "text" && !row.choice_options && !(row.choices && row.choices.length > 0)
+    ? listFixedChoices(row.key, String(raw)) : null;
   return (
     <div className={`setting-row${drafts[row.key] ? " edited" : ""}`}>
       <div className="setting-text">
         <div className="setting-name">
-          <span className="setting-label">{label ?? readSettingLabel(row.key)}</span>
+          <span className="setting-label">{name}</span>
           {/* only a change typed here and not saved yet is marked; a saved value carries no mark */}
           {drafts[row.key] && <span className="pill warn" title="typed here, not saved yet">unsaved</span>}
         </div>
-        {(help || row.comment) && <p className="muted setting-comment">{help || renderComment(row.comment)}</p>}
+        {help && <p className="muted setting-comment">{help}</p>}
       </div>
       <div className={`setting-control ${row.choice_options ? "choice" : row.kind}`}>
         {row.kind === "bool" ? (
-          <input type="checkbox" aria-label={row.key} checked={Boolean(raw)} onChange={(event) => edit(row, event.target.checked)} />
+          <input type="checkbox" aria-label={name} checked={Boolean(raw)} onChange={(event) => edit(row, event.target.checked)} />
         ) : row.choice_options ? (
           <>
-            <OptionMenu name={row.key} options={row.choice_options} value={String(raw)}
+            <OptionMenu name={name} options={row.choice_options} value={String(raw)}
               host={readModelHost(row)}
               onOther={row.is_open_choice ? () => setTyped(row.key, true) : undefined}
               onChoose={(value, option) => {
@@ -85,23 +83,33 @@ export default function SettingRowItem({ row, context, label }: { row: SettingRo
                 edit(hostRow, option.host === row.default_host ? "" : option.host);
               }} />
             {isTyped && (
-              <input type="text" aria-label={`${row.key}, your own value`} autoFocus value={String(raw)}
-                placeholder="type a value" onChange={(event) => edit(row, event.target.value)} />
+              <input type="text" aria-label={`${name}, your own value`} autoFocus value={String(raw)}
+                placeholder="Type a value" onChange={(event) => edit(row, event.target.value)} />
             )}
           </>
         ) : row.choices && row.choices.length > 0 ? (
-          <OptionMenu name={row.key} value={String(raw)} onChoose={(value) => edit(row, value)}
+          <OptionMenu name={name} value={String(raw)} onChoose={(value) => edit(row, value)}
             options={row.choices.map((choice) => ({ value: choice, label: readChoiceLabel(row.key, choice), hint: "", group: "" }))} />
+        ) : fixed ? (
+          <>
+            <OptionMenu name={name} options={fixed.options.map((option) => ({ ...option, group: "" }))} value={String(raw)}
+              onOther={fixed.isOpen ? () => setTyped(row.key, true) : undefined}
+              onChoose={(value) => { setTyped(row.key, false); edit(row, value); }} />
+            {fixed.isOpen && typedKeys.includes(row.key) && (
+              <input type="text" aria-label={`${name}, your own value`} autoFocus value={String(raw)}
+                placeholder="Type a value" onChange={(event) => edit(row, event.target.value)} />
+            )}
+          </>
         ) : row.kind === "long-text" ? (
-          <textarea aria-label={row.key} value={String(raw ?? "")} rows={4}
+          <textarea aria-label={name} value={String(raw ?? "")} rows={4}
             placeholder={describeRunValue(row)} onChange={(event) => edit(row, event.target.value)} />
         ) : row.kind === "json" ? (
           structured === undefined
             ? <p className="muted">This value cannot be shown as a table.</p>
-            : <StructuredValueEditor settingKey={row.key} label={row.key} value={structured}
+            : <StructuredValueEditor settingKey={row.key} label={name} value={structured}
                 onChange={(next) => edit(row, JSON.stringify(next, null, 2))} />
         ) : (
-          <input type={row.kind === "number" ? "number" : "text"} aria-label={row.key} value={String(raw)}
+          <input type={row.kind === "number" ? "number" : "text"} aria-label={name} value={String(raw)}
             placeholder={row.value === null || row.value === "" ? describeRunValue(row) : undefined}
             onChange={(event) => edit(row, event.target.value)} />
         )}

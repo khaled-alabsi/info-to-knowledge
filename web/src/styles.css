@@ -1025,6 +1025,10 @@ button.instruction-marker:hover { text-decoration: underline; }
   /* the counts and the settings button share the top bar's width with the logo */
   .top-stats { min-width: 0; flex-wrap: wrap; justify-content: flex-end; gap: 4px 10px; }
   .settings-button { margin-left: 0; }
+  /* on a phone "Close" alone keeps the top bar one row: the counts and the button fit beside the logo */
+  .close-more { display: none; }
+  .top-stats { column-gap: 2px; }
+  .top-stats > .btn { padding-left: 6px; padding-right: 6px; }
   /* the sidebar no longer scrolls inside itself, so the Process bar sticks to the window's bottom */
   .tab-body { overflow: visible; }
   html { scroll-padding-bottom: 110px; }
@@ -1447,6 +1451,11 @@ p.transcript-suggestions { padding: 10px 12px; }
 .model-card > summary { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; padding: 10px 12px; cursor: pointer; }
 .model-card-name { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
 .model-card-run { overflow-wrap: anywhere; font-size: 13px; }
+/* on a phone a model's summary is its name and two short lines, each cut with "…" when long, never five lines of wrapped words */
+@media (max-width: 640px) {
+  .model-card > summary { flex-direction: column; align-items: stretch; gap: 2px; }
+  .model-card-run { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
 .model-card-body { padding: 0 12px 12px; display: flex; flex-direction: column; min-width: 0; }
 .model-card-body .setting-row { grid-template-columns: minmax(0, 1fr) minmax(0, 260px); padding-left: 0; }
 /* on a phone the label and its help stand on top at full width, the field under them */
@@ -1478,6 +1487,9 @@ p.transcript-suggestions { padding: 10px 12px; }
 .setting-control.json textarea { width: 100%; font-family: var(--mono, ui-monospace, Menlo, monospace); font-size: 13px;
   line-height: 1.5; resize: vertical; white-space: pre; overflow-x: auto; }
 .settings-section { border-top: 1px solid var(--border); }
+.settings-section-loading { padding: 10px 0; color: var(--muted); }
+.settings-section-loading h3 { margin: 0; font-size: 15px; }
+.job-fixed { font-size: 14px; overflow-wrap: anywhere; }
 /* only the section's own heading line: a model card's summary inside the section keeps its inner padding */
 .settings-section > summary { display: flex; gap: 8px; align-items: baseline; padding: 10px 0; cursor: pointer; }
 .settings-section > summary h3 { margin: 0; font-size: 15px; }
@@ -1497,13 +1509,25 @@ p.transcript-suggestions { padding: 10px 12px; }
 .setting-control.choice { flex-direction: column; align-items: stretch; gap: 6px; min-width: 0; }
 .btn.setting-choice { width: 100%; justify-content: space-between; min-width: 0; font-weight: 400; }
 .btn.setting-choice .btn-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.menu button[role="menuitemradio"] .icon { margin-left: auto; color: var(--accent, currentColor); }
+.menu button[role="menuitemradio"] .menu-check { margin-left: auto; color: var(--accent, currentColor); display: flex; }
 /* a heading here is a host's address, which upper case would garble */
 .setting-menu .menu-group { text-transform: none; letter-spacing: 0; }
 /* the Models group's "+ Add model" and its form: one line of controls, each its own size */
 .setting-row.add-model { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .setting-row.add-model input[type="text"] { flex: 1; min-width: 180px; height: 36px; box-sizing: border-box; }
 .setting-row.add-model > .btn, .setting-row.add-model > .field-select { height: 36px; box-sizing: border-box; }
+/* the add button stands exactly under the left edge of the cards above it, and a typing box is only as wide as its words */
+.setting-row.add-model { padding-left: 0; padding-right: 0; border-top: none; }
+.setting-row.add-model input[type="text"] { max-width: 24rem; }
+.provider-set-add input { max-width: 24rem; }
+.server-field input[type="text"] { max-width: 36rem; }
+.model-library-empty { margin: 0; }
+/* a map of values edited as labelled fields: the name on the left, the value beside it, a trash icon at the end */
+.structured-fields { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.structured-field { display: grid; grid-template-columns: minmax(0, 12rem) minmax(0, 14rem) auto; gap: 6px 12px; align-items: center; }
+.structured-field > .setting-label { overflow-wrap: anywhere; }
+@media (max-width: 640px) { .structured-field { grid-template-columns: minmax(0, 1fr) auto; }
+  .structured-field > .setting-label { grid-column: 1 / -1; } }
 
 /* A running run's settings changed after it read them: an information line, not a warning */
 .settings-note { display: flex; gap: 8px; align-items: center; margin: 0; padding: 8px 12px; border-radius: var(--radius); background: var(--info-soft); color: var(--info); font-size: 13px; }

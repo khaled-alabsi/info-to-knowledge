@@ -1,9 +1,10 @@
 import type { SettingRow } from "./api";
+import { readChoiceLabel } from "./settingsLabels";
 
 // What the Settings page says for a setting with no value of its own: the value a run uses (the server's `resolved`)
 // with where it comes from (`resolved_note`), never an empty box or "(not set)"
 
-type RunValueFields = Pick<SettingRow, "kind"> & Partial<Pick<SettingRow, "resolved" | "resolved_note">>;
+type RunValueFields = Pick<SettingRow, "kind"> & Partial<Pick<SettingRow, "key" | "resolved" | "resolved_note">>;
 
 export function isEmptyValue(value: unknown): boolean {
   return value === null || value === undefined || value === "";
@@ -13,7 +14,10 @@ export function isEmptyValue(value: unknown): boolean {
 // row the server knows nothing to say for reads "automatic", or "not used" for a text box of extra wishes
 export function describeRunValue(row: RunValueFields): string {
   const { resolved, resolved_note: note } = row;
-  if (!isEmptyValue(resolved)) return note ? `${String(resolved)} (${note})` : String(resolved);
+  if (!isEmptyValue(resolved)) {
+    const value = row.key ? readChoiceLabel(row.key, String(resolved)) : String(resolved);
+    return note ? `${value} (${note})` : value;
+  }
   if (note) return note;
   return row.kind === "long-text" ? "not used" : "automatic";
 }
@@ -34,7 +38,8 @@ export function isOwnerChange(source: string): boolean {
   return source !== "code" && source !== "default";
 }
 
-// A provider as a person says it: its name, never its network address; a short name such as "gpu" is an abbreviation, so "GPU"
+// A provider as a person says it: its name exactly as written in the settings, never its network address, and the same
+// spelling on the server's card, in every menu and under every job
 export function describeHost(name: string): string {
-  return name.length <= 3 ? name.toUpperCase() : name;
+  return name;
 }

@@ -28,7 +28,7 @@ export const MODEL_FIELD_LABELS: Record<string, SettingLabel> = {
   numPredict: { label: "Reply limit if none set (tokens)", help: "The most the model may write in one reply, thinking included, when no longest reply is set." },
   maxTokens: { label: "Longest reply (tokens)", help: "The most the model may write in one reply, thinking included; empty leaves the limit to the server." },
   requestTimeoutS: { label: "Longest wait for one reply (seconds)", help: "How long the program waits for one answer before it gives up." },
-  apiKey: { label: "Access key", help: "Only for a local server that insists on a key; keep real keys out of the settings." },
+  apiKey: { label: "Login key", help: "Only for a local server that insists on a key; keep real keys out of the settings." },
   structuredMethod: { label: "Answer format", help: "How the program asks the model for answers in a fixed form; leave it empty unless a model gives broken answers." },
   reasoning: { label: "Keep thinking text", help: "Nothing reads this setting any more.", hidden: true },
 };
@@ -124,7 +124,7 @@ export const SETTING_LABELS: Record<string, SettingLabel> = {
   "frames.knowledgeClassifierCommand": { label: "Frame filter program", help: "The program that sorts each frame into people, text or other." },
   "frames.knowledgeClassifierWeights": { label: "Frame filter's trained data", help: "The trained data the frame filter program works with." },
   "frames.knowledgeFilterModel": { label: "Frame filter model", help: "Which model decides that a frame holds no knowledge." },
-  "frames.decisionFilterPython": { label: "Decision filter program", help: "The program that runs the decision filter model." },
+  "frames.decisionFilterPython": { label: "Helper for the decision filter", help: "The helper program that runs the decision filter model." },
   "frames.decisionFilterCut": { label: "Decision filter cut-off (0 to 1)", help: "Frames the decision filter scores below this chance of holding knowledge are dropped." },
   "frames.isTextOnlyMarkOn": { label: "Mark text-only frames", help: "Marks frames that show only printed text, so they are sent to the model as text instead of as a picture." },
   "frames.isBoardStageOn": { label: "Compare board frames", help: "Compares each task board frame with the board frame kept before it and drops the ones that barely changed." },
@@ -160,9 +160,9 @@ export const SETTING_LABELS: Record<string, SettingLabel> = {
   "audio.engine": { label: "Speech engine", help: "Which program turns speech into text." },
   "audio.whisperModel": { label: "Speech model size", help: "The size of the speech recognition model; larger is more accurate and slower." },
   "audio.language": { label: "Spoken language", help: "Leave empty to detect the language; set one only for audio the detection gets wrong." },
-  "audio.fasterWhisper.device": { label: "Processor for the Faster-Whisper engine", help: "Which processor the Faster-Whisper speech engine runs on." },
-  "audio.fasterWhisper.computeType": { label: "Calculation detail of the Faster-Whisper engine", help: "How precisely the Faster-Whisper speech engine calculates; finer is slower." },
-  "audio.fasterWhisper.beamSize": { label: "Wordings tried per phrase (Faster-Whisper)", help: "How many wordings the Faster-Whisper speech engine weighs for each phrase; higher can be more accurate and slower." },
+  "audio.fasterWhisper.device": { label: "Processor for the standard speech engine", help: "Which processor the standard speech engine runs on." },
+  "audio.fasterWhisper.computeType": { label: "Standard engine precision", help: "How precisely the standard speech engine calculates; finer is slower." },
+  "audio.fasterWhisper.beamSize": { label: "Wordings tried per phrase (standard engine)", help: "How many wordings the standard speech engine weighs for each phrase; higher can be more accurate and slower." },
   "audio.fasterWhisper.vadMinSilenceMs": { label: "Silence to skip (milliseconds)", help: "Silences at least this long are skipped, which saves time on long meetings." },
   "audio.mlx.repositories": { label: "Where speech models are downloaded from", help: "Where each speech model size is downloaded from for the Mac speech engine." },
   "audio.mlx.chunkSeconds": { label: "Audio per call (seconds)", help: "How much audio goes to the graphics chip at once; values that are too long can freeze the Mac's screen." },
@@ -321,7 +321,7 @@ export const SECTION_SUBGROUPS: Record<string, SubGroup[]> = {
       "frames.maxCount", "frames.jpegQuality", "frames.maxWidth", "frames.trimBars", "frames.faceModel", "frames.personModel"] },
     { title: "Screen watching", keys: ["frames.changeToCapture", "frames.stillSeconds", "frames.busySeconds",
       "frames.boxEverySeconds", "frames.passThroughSeconds", "frames.buildStepChange"] },
-    { title: "Frame preparing", keys: ["frames.isKnowledgeFilterOn", "frames.knowledgeClassifierCommand",
+    { title: "Frames preparing", keys: ["frames.isKnowledgeFilterOn", "frames.knowledgeClassifierCommand",
       "frames.knowledgeClassifierWeights", "frames.knowledgeFilterModel", "frames.decisionFilterPython", "frames.decisionFilterCut",
       "frames.isRedundancyFilterOn", "frames.redundancyModel", "frames.redundancyFramesPerCall", "frames.redundancyFrameWidth",
       "frames.redundancyMaxMissingWords", "frames.redundancyMinWords", "frames.isSimilarityRecheckOn",
@@ -329,7 +329,7 @@ export const SECTION_SUBGROUPS: Record<string, SubGroup[]> = {
     { title: "Text and boards", keys: ["frames.isTextOnlyMarkOn", "framesProcessing.isTextOnlyFrameSentAsText",
       "frames.isBoardStageOn", "frames.boardHandler", "frames.boardTextReader", "frames.textReaderLanguages"] },
     { title: "What the model is told", keys: ["prompt", "frames.tagsChars"] },
-    { title: "Frame processing", keys: ["framesProcessing.framesPerCall", "framesProcessing.isCritiqueOn",
+    { title: "Frames processing", keys: ["framesProcessing.framesPerCall", "framesProcessing.isCritiqueOn",
       "framesProcessing.isCritiqueRepairOn", "framesProcessing.isPdfCritiqueOn", "framesProcessing.isPdfFigureCritiqueOn",
       "framesProcessing.isOpenQuestionsOn", "framesProcessing.isPdfOpenQuestionsOn", "framesProcessing.repairCalls",
       "framesProcessing.singleFrameAttempts", "framesProcessing.minSentFrameWidth"] },
@@ -343,12 +343,12 @@ export const SECTION_SUBGROUPS: Record<string, SubGroup[]> = {
     { title: "Takeaways", keys: ["audio.takeaway"] },
   ],
   video: [
-    { title: "Which workflow", keys: ["video.workflow"] },
+    // the workflow and the speed menu are one setting each: one card holds both, never a card of one setting
+    { title: "Workflow and speed choices", keys: ["video.workflow", "speedPresets"] },
     { title: "Describing frames", keys: ["video.fastProcessing.frameFollowUps", "video.fastProcessing.frameWidth",
       "video.fastProcessing.isFrameThinkingOn", "video.fastProcessing.frameMaxTokens", "video.fastProcessing.frameModel"] },
     { title: "Writing the document", keys: ["video.fastProcessing.documentModel", "video.fastProcessing.isDocumentThinkingOn",
       "video.directDraft"] },
-    { title: "Speed menu", keys: ["speedPresets"] },
   ],
   document: [
     { title: "Outline", keys: ["document.chunkEntries", "document.chunkCharacters", "document.momentSpeechChars",
@@ -363,8 +363,8 @@ export const SECTION_SUBGROUPS: Record<string, SubGroup[]> = {
     { title: "Tags", keys: ["tags"] },
   ],
   "review-and-quality": [
-    { title: "Review", keys: ["review"] },
-    { title: "Critique collection", keys: ["critiqueCollection"] },
+    // the critique collection is one setting: it joins the review's card
+    { title: "Checking the finished document", keys: ["review", "critiqueCollection"] },
   ],
   "advanced-limits": [
     { title: "Tries and stopping", keys: ["budgets.maxAttempts", "budgets.askWhyAfterRejection", "budgets.runSteps",
@@ -390,11 +390,11 @@ export function readSettingPrefix(key: string): string {
 // The words a menu shows for each stored value of a setting, so the page never offers a code word as a choice
 export const CHOICE_LABELS: Record<string, Record<string, string>> = {
   "frames.mode": { interval: "At a fixed rate", scene: "At scene changes", change: "When the screen changes" },
-  "frames.knowledgeFilterModel": { "google-SigLIP-2": "SigLIP 2 from Google", "liquidai-d1-2B": "d1 2B from Liquid AI" },
+  "frames.knowledgeFilterModel": { "google-SigLIP-2": "Google's picture sorter", "liquidai-d1-2B": "Liquid AI's picture sorter" },
   "frames.boardHandler": { "image-diff-only": "The changed area enlarged", "text-diff-integration": "The frame with its text changes",
     "text-only-integration": "The text alone" },
   "frames.boardTextReader": { auto: "Automatic", apple: "Apple's reader", tesseract: "Tesseract" },
-  "audio.engine": { "faster-whisper": "Faster-Whisper", mlx: "Mac speech engine (MLX)" },
+  "audio.engine": { "faster-whisper": "Standard speech engine", mlx: "Speech engine for Mac" },
   "audio.fasterWhisper.device": { auto: "Automatic", cpu: "Main processor", mps: "Mac graphics chip", cuda: "NVIDIA graphics card" },
   "audio.diarization.device": { auto: "Automatic", cpu: "Main processor", mps: "Mac graphics chip", cuda: "NVIDIA graphics card" },
   "video.workflow": { quality: "Quality", "direct-draft": "Direct draft", "fast-processing": "Fast" },
@@ -409,7 +409,67 @@ export const CHOICE_LABELS: Record<string, Record<string, string>> = {
 
 // The label of one stored value of a setting, or the value itself when no words are written for it
 export function readChoiceLabel(key: string, value: string): string {
-  return CHOICE_LABELS[key]?.[value] ?? value;
+  const field = key.startsWith("models.") ? key.slice(key.lastIndexOf(".") + 1) : "";
+  return CHOICE_LABELS[key]?.[value] ?? MODEL_FIELD_CHOICE_LABELS[field]?.[value] ?? value;
+}
+
+// The words for the values of a field every model has, by the field's name
+const MODEL_FIELD_CHOICE_LABELS: Record<string, Record<string, string>> = {
+  structuredMethod: { function_calling: "Function calls", json_schema: "A fixed answer shape", json_mode: "Plain JSON text" },
+};
+
+export type FixedChoice = { value: string; label: string; hint: string };
+
+// The settings whose values come from a short fixed list although the server sends them as free text: each is chosen from a
+// menu, one row a choice with a grey line under its name. `isOpen` also offers "Other…" for a value of one's own
+export const FIXED_CHOICES: Record<string, { options: FixedChoice[]; isOpen?: boolean }> = {
+  "audio.fasterWhisper.device": { options: [
+    { value: "cpu", label: "Main processor", hint: "works on every computer" },
+    { value: "cuda", label: "NVIDIA graphics card", hint: "much faster when the computer has one" },
+    { value: "auto", label: "Automatic", hint: "takes the graphics card when there is one" },
+  ] },
+  "audio.fasterWhisper.computeType": { options: [
+    { value: "float32", label: "Most precise", hint: "slowest, the most memory" },
+    { value: "float16", label: "Precise", hint: "needs a graphics card" },
+    { value: "int8_float16", label: "Fast and precise", hint: "needs a graphics card" },
+    { value: "int8", label: "Fastest", hint: "least precise, the least memory" },
+  ] },
+  "audio.whisperModel": { options: [
+    { value: "tiny", label: "Tiny", hint: "fastest, least accurate" },
+    { value: "base", label: "Base", hint: "fast, simple recordings" },
+    { value: "small", label: "Small", hint: "a good start for clear speech" },
+    { value: "medium", label: "Medium", hint: "more accurate, slower" },
+    { value: "large", label: "Large", hint: "accurate, slow" },
+    { value: "large-v3", label: "Large, third version", hint: "accurate, slow" },
+    { value: "large-v3-turbo", label: "Large, fast version", hint: "nearly as accurate as large, much quicker" },
+  ] },
+  "audio.diarization.model": { isOpen: true, options: [
+    { value: "pyannote/speaker-diarization-community-1", label: "Community speaker finder",
+      hint: "the standard one; its terms are accepted once on its web page" },
+  ] },
+};
+
+// The languages the text reader may be given, by the name it knows each by
+export const TEXT_READER_LANGUAGES: FixedChoice[] = [
+  { value: "eng", label: "English", hint: "" }, { value: "deu", label: "German", hint: "" },
+  { value: "fra", label: "French", hint: "" }, { value: "spa", label: "Spanish", hint: "" },
+  { value: "ita", label: "Italian", hint: "" }, { value: "nld", label: "Dutch", hint: "" },
+  { value: "por", label: "Portuguese", hint: "" }, { value: "pol", label: "Polish", hint: "" },
+  { value: "rus", label: "Russian", hint: "" }, { value: "tur", label: "Turkish", hint: "" },
+  { value: "ara", label: "Arabic", hint: "" }, { value: "jpn", label: "Japanese", hint: "" },
+  { value: "chi_sim", label: "Chinese, simplified", hint: "" },
+];
+
+// The choices a setting's value may be picked from, as menu options: the fixed list, else the words written for its values;
+// a value the list does not hold stays in it, so a value set in a file still shows
+export function listFixedChoices(key: string, current: string): { options: FixedChoice[]; isOpen: boolean } | null {
+  const fixed = FIXED_CHOICES[key];
+  const words = CHOICE_LABELS[key];
+  const options = fixed ? fixed.options : words ? Object.entries(words).map(([value, label]) => ({ value, label, hint: "" })) : null;
+  if (!options) return null;
+  const kept = current === "" || options.some((option) => option.value === current)
+    ? options : [...options, { value: current, label: current, hint: "set in your own file" }];
+  return { options: kept, isOpen: Boolean(fixed?.isOpen) };
 }
 
 // The group of the page that holds a key, or undefined for a prefix no group lists

@@ -3,6 +3,7 @@ import type { SettingRow } from "../api";
 import { asTree, describeModelReplies, describeModelRun, describeModelUses, isModelRemovable, isTree, listModelNames, listModelUses, MODELS_KEY, readModelRows,
   readPath, SETS_KEY } from "../modelLibrary";
 import type { ModelUse, Tree } from "../modelLibrary";
+import { isOwnerChange } from "../settingRunValue";
 import { ADVANCED_MODEL_FIELDS, isSettingHidden, readSettingHelp, readSettingLabel } from "../settingsLabels";
 import Icon from "./Icon";
 import OptionMenu from "./OptionMenu";
@@ -143,7 +144,9 @@ function ModelCard({ name, rows, context, isNew, drafted, sourceRows, users, isC
   const shown = (field: string) => fields[field] && !isSettingHidden(fields[field].key);
   const mainFields = hasServer ? MAIN_FIELDS : MAIN_FIELDS_NO_SERVER;
   const main = mainFields.filter(shown);
-  const advanced = Object.keys(fields).filter((field) => !MAIN_FIELDS_NO_SERVER.includes(field) && shown(field))
+  // the second reply limit shows only when the owner's file sets it: one limit is enough for everyone else
+  const advanced = Object.keys(fields).filter((field) => !MAIN_FIELDS_NO_SERVER.includes(field) && shown(field)
+    && (field !== "numPredict" || isOwnerChange(fields[field].source)))
     .sort((first, second) => ADVANCED_MODEL_FIELDS.indexOf(first) - ADVANCED_MODEL_FIELDS.indexOf(second));
   const run = describeModelRun(rows, name, isNew ? drafted : undefined);
   const replies = describeModelReplies(rows, name, isNew ? drafted : undefined);
@@ -156,7 +159,7 @@ function ModelCard({ name, rows, context, isNew, drafted, sourceRows, users, isC
           <strong>{name}</strong>
           {(isNew || isEdited) && <span className="pill warn">unsaved</span>}
         </span>
-        <span className="muted model-card-run">{hasServer ? "" : `${run.host} · `}{run.model} · reads {run.context} at once</span>
+        <span className="muted model-card-run">{hasServer ? "" : `${run.host} · `}{run.model} · reads {run.context}</span>
         {replies && <span className="muted model-card-run">{replies}</span>}
       </summary>
       <div className="model-card-body">
@@ -250,6 +253,7 @@ export default function ModelLibrary({ rows, context, host, names, newRows, take
             onEditNew={(field, value) => onEditNew(newName, field, value)} />
         );
       })}
+      {savedNames.length === 0 && newRows.length === 0 && <p className="muted model-library-empty">No models yet.</p>}
       {savedNames.map((each) => (
         <ModelCard key={each} name={each} rows={rows} context={context} isNew={false} hasServer={hasServer}
           users={listModelUses(rows, sets, each)} isConfirming={asking === each}
@@ -263,10 +267,10 @@ export default function ModelLibrary({ rows, context, host, names, newRows, take
         </div>
       ) : (
         <div className="setting-row edited add-model">
-          <input type="text" aria-label={`New model's name on ${where}`} placeholder="name, as frame-other-mac" autoFocus
+          <input type="text" aria-label={`New model's name on ${where}`} placeholder="New model's name" autoFocus
             value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })}
             onKeyDown={(event) => { if (event.key === "Enter") add(); }} />
-          <OptionMenu name={`Copy of, for ${where}`} prefix="Copy of" value={form.source}
+          <OptionMenu name={`Copy of, for ${where}`} prefix="Copy of" icon="copy" value={form.source}
             onChoose={(source) => setForm({ ...form, source })}
             options={sources.map((each) => ({ value: each, label: each, hint: describeModelRun(rows, each).host, group: "" }))} />
           <button type="button" className="btn primary" onClick={add} disabled={!name || taken.has(name)}>Add</button>

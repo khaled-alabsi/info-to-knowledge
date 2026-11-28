@@ -7,9 +7,11 @@ import Icon from "./Icon";
 // when given), opening the options under their headings, the chosen one ticked, and "Other…" at the end when `onOther`
 // is given. Used for every list of the Settings page, never the browser's own dropdown, whose open list the page cannot
 // style. An empty value or an "(empty)" label reads "automatic": the page never prints an empty value
-export default function OptionMenu({ name, prefix, options, value, host, onChoose, onOther }: {
+export default function OptionMenu({ name, prefix, icon = "list", options, value, host, onChoose, onOther }: {
   name: string;
   prefix?: string;
+  // the icon on the left of every row, as the header menus draw one; the chosen row is ticked on its right
+  icon?: string;
   options: SettingOption[];
   value: string;
   // a model's spec: the host its model runs on; of the hosts serving the model, only this one's entry is ticked
@@ -34,11 +36,12 @@ export default function OptionMenu({ name, prefix, options, value, host, onChoos
                 closeAndRefocus();
                 onChoose(option.value, option);
               }}>
+                <Icon name={icon} />
                 <span className="menu-text">
                   <span>{readOptionLabel(option.label)}</span>
                   {option.hint && <small>{option.hint}</small>}
                 </span>
-                {isChosen(option) && <Icon name="check" />}
+                {isChosen(option) && <span className="menu-check"><Icon name="check" /></span>}
               </button>
             </li>,
           ])}
@@ -48,6 +51,7 @@ export default function OptionMenu({ name, prefix, options, value, host, onChoos
                 closeAndRefocus();
                 onOther();
               }}>
+                <Icon name="pencil" />
                 <span className="menu-text"><span>Other…</span><small>type a value of your own</small></span>
               </button>
             </li>

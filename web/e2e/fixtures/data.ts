@@ -119,7 +119,7 @@ export const RUN_LOG_TEXT = "phase 3 frames processing: batch 1 accepted\nphase 
 export const SETTINGS: SettingRow[] = [
   { key: "framesProcessing.framesPerCall", value: 7, kind: "number", source: "playbook.local.json",
     comment: "How many consecutive frames one call reads." },
-  { key: "review.isOn", value: true, kind: "bool", source: "code", comment: "Whether phase 5 reviews the document." },
+  { key: "review.isOn", value: true, kind: "bool", source: "playbook.local.json", comment: "Whether phase 5 reviews the document." },
   { key: "frames.mode", value: "change", kind: "text", source: "playbook.local.json", choices: ["change", "interval"],
     comment: "When a frame is taken." },
 ];

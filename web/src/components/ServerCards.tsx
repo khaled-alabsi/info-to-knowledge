@@ -113,9 +113,9 @@ export default function ServerCards({ rows, context, newRows, onAdd, onDiscard, 
                   placeholder="http://computer.local:1234/v1" onChange={(event) => setField(server, "url", event.target.value)} />
               </label>
               <label className="server-field">
-                <span className="setting-label">Token variable</span>
-                <input type="text" aria-label={`token variable of ${server}`} value={String(entry.apiKeyEnv ?? "")}
-                  placeholder="empty: no login, or the variable's name as OPENROUTER_API_KEY"
+                <span className="setting-label">Login key name</span>
+                <input type="text" aria-label={`login key name of ${server}`} value={String(entry.apiKeyEnv ?? "")}
+                  placeholder="Empty if no login"
                   onChange={(event) => setField(server, "apiKeyEnv", event.target.value)} />
               </label>
               <div className="server-field">
@@ -150,7 +150,7 @@ export default function ServerCards({ rows, context, newRows, onAdd, onDiscard, 
         </div>
       ) : (
         <div className="setting-row edited add-model">
-          <input type="text" aria-label="New server's name" placeholder="name, as gpu-box or laptop" autoFocus value={typedName}
+          <input type="text" aria-label="New server's name" placeholder="New server's name" autoFocus value={typedName}
             onChange={(event) => setTypedName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") addServer(); }} />
           <button type="button" className="btn primary" onClick={addServer} disabled={!typedName.trim() || nameTaken}>Add</button>
           <button type="button" className="btn" onClick={() => { setNewServer(null); setTypedName(""); }}>Cancel</button>

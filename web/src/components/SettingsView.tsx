@@ -4,7 +4,7 @@ import type { MissingProvider, SettingRow } from "../api";
 import { asTree, listJobs, MODELS_KEY, PHASE_MODELS_KEY, readPath } from "../modelLibrary";
 import { findSectionGroup, findSubgroupTitle, isSettingHidden, readSettingHelp, readSettingLabel, readSettingPrefix, SECTION_GROUPS,
   SECTION_SUBGROUPS } from "../settingsLabels";
-import { usePersistentState } from "../viewState";
+import { isOwnerChange } from "../settingRunValue";
 import Icon from "./Icon";
 import { buildNewModelRow, copyModelFields } from "./ModelLibrary";
 import OptionMenu from "./OptionMenu";
@@ -150,11 +150,9 @@ export default function SettingsView({ profile, onProfileChange, drafts, onDraft
   const profiles = settingsProfiles.profiles ?? [];
   const [rows, setRows] = useState<SettingRow[] | null>(null);
   const [filter, setFilter] = useState("");
-  // Every section closed until opened, and kept open when the settings are left and opened again; a search opens each
-  // section holding a match
-  const [openSections, setOpenSections] = usePersistentState<string[]>("settingsSections", []);
-  // The cards inside a section stay closed until opened too, and keep their state like the sections
-  const [openCards, setOpenCards] = usePersistentState<string[]>("settingsCards", []);
+  // Every section starts shut on every load, and its cards too; a search opens each section holding a match
+  const [openSections, setOpenSections] = useState<string[]>([]);
+  const [openCards, setOpenCards] = useState<string[]>([]);
   // The rows whose value is being typed in a box, after "Other…" was picked from their list
   const [typedKeys, setTypedKeys] = useState<string[]>([]);
   // The file chosen in the Edit menu while changes were unsaved, waiting for the person to keep or drop them
@@ -223,7 +221,10 @@ export default function SettingsView({ profile, onProfileChange, drafts, onDraft
   const modelNames = [...new Set(allRows.filter((row) => readPath(row)[0] === MODELS_KEY && readPath(row).length === 3)
     .map((row) => readPath(row)[1]))];
   const setNames = Object.keys(asTree(allRows.find((row) => row.key === "providerSets")?.value));
-  const sectionRows = (id: string) => visible.filter((row) => readSectionId(row, jobKeys) === id && matchesSearch(row, needle));
+  // A setting nobody changed is not on the page: it shows when the owner's own file (or the open profile) changes it, when a change
+  // to it is not saved yet, or when a search finds it, so every hidden setting stays findable through "Find a setting"
+  const isOnPage = (row: SettingRow) => Boolean(needle) || isOwnerChange(row.source) || row.key in drafts;
+  const sectionRows = (id: string) => visible.filter((row) => readSectionId(row, jobKeys) === id && isOnPage(row) && matchesSearch(row, needle));
   // The servers (with their models) and the provider sets stand on their own panels, so they show whenever the settings hold
   // them; a section of rows shows when it has a row, and a search keeps the sections holding a match
   const serverNames = Object.keys(asTree(allRows.find((row) => row.key === "hosts")?.value));
@@ -252,10 +253,10 @@ export default function SettingsView({ profile, onProfileChange, drafts, onDraft
             boxes out of line with the title and the button) */}
         {/* the default settings alone: the server's own profile is listed by its name like any other, never folded into
             this entry, whose values hold no profile */}
-        <OptionMenu name="Edit" prefix="Edit" value={profile} options={[
-          { value: "", label: "default settings", hint: "both default settings files", group: "" },
-          ...profiles.map((name) => ({ value: name, label: `profile: ${name}`, group: "",
-            hint: name === settingsProfiles.serverProfile ? "the server runs on it" : "" }))]}
+        <OptionMenu name="Edit" prefix="Edit" icon="settings" value={profile} options={[
+          { value: "", label: "default settings", hint: "what every run uses unless it names a profile", group: "" },
+          ...profiles.map((name) => ({ value: name, label: name, group: "",
+            hint: name === settingsProfiles.serverProfile ? "a profile; the server runs on it" : "a profile: changes on top of the default settings" }))]}
           onChoose={(next) => {
             if (next === profile) return;
             // unsaved changes are lost on a switch: ask first, and switch at once when there are none (the owner)
@@ -264,8 +265,9 @@ export default function SettingsView({ profile, onProfileChange, drafts, onDraft
         <input type="search" className="grow" aria-label="Find" value={filter}
           placeholder="Find a setting" onChange={(event) => setFilter(event.target.value)} />
       </header>
-      <p className="muted">A change stays marked until you press Save settings in the top bar. A run already going keeps its
-        values; the next run uses the saved ones.</p>
+      <p className="muted">Only what you changed is listed here; use Find a setting for any other. A change stays marked until you
+        save it with the Save settings button that appears in the top bar. A run already going keeps its values; the next run
+        uses the saved ones.</p>
       {missingProviders.length > 0 && (
         <div className="settings-switch-warning" role="alert">
           <p><strong>A model provider a run needs is not set up.</strong> A run is refused until each model below has one:
@@ -303,7 +305,17 @@ export default function SettingsView({ profile, onProfileChange, drafts, onDraft
           </p>
         );
       })()}
-      {rows === null && <Spinner />}
+      {rows === null && (
+        <>
+          {/* the two sections that are always there are named at once, so the page is never only a spinner */}
+          {[SERVERS, PROVIDER_SETS].map((id) => (
+            <div key={id} className="settings-section settings-section-loading" aria-hidden="true">
+              <h3>{SECTIONS.find((section) => section.id === id)?.title}</h3>
+            </div>
+          ))}
+          <Spinner />
+        </>
+      )}
       {rows !== null && needle && shownSections.length === 0 && (
         <p className="muted">No setting's name, help or key holds "{filter.trim()}".</p>
       )}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SettingRow } from "./api";
-import { canModelDo, describeModelReplies, describeModelRun, describeModelUses, isModelRemovable, listJobs, listModelNames, listModelUsers,
+import { canModelDo, describeModelReplies, describeModelRun, describeModelUses, describeModelWait, describePages, describeWait, isModelRemovable, listJobs, listModelNames, listModelUsers,
   listModelUses, readDefaultJobModel, readModelProvider, readProviderKinds, readSetJobModel } from "./modelLibrary";
 
 function row(key: string, value: unknown, source = "code", extra: Partial<SettingRow> = {}): SettingRow {
@@ -33,7 +33,7 @@ describe("model library", () => {
   });
 
   it("says where a model runs and how much it reads, in everyday words", () => {
-    expect(describeModelRun(ROWS, "frame")).toEqual({ host: "lmstudio", model: "big", context: "131,072 tokens" });
+    expect(describeModelRun(ROWS, "frame")).toEqual({ host: "lmstudio", model: "big", context: "about 197 pages" });
     expect(describeModelRun(ROWS, "frame-gpu")).toEqual({ host: "gpu-box", model: "gpu-model", context: "automatic" });
     expect(describeModelRun(ROWS, "new", { spec: "openai:gpt" }).host).toBe("OpenAI's own service");
   });
@@ -41,9 +41,22 @@ describe("model library", () => {
   it("shows the longest reply and the presence penalty that tell two models on one server apart", () => {
     const rows = [row("models.a.maxTokens", 40960), row("models.a.sampling", { presence_penalty: 1 }, "code", { kind: "json" }),
       row("models.b.maxTokens", 32768), row("models.b.sampling", { presence_penalty: 0 }, "code", { kind: "json" }), row("models.c.spec", "x:y")];
-    expect(describeModelReplies(rows, "a")).toBe("longest reply 40,960 tokens · presence penalty 1.0");
-    expect(describeModelReplies(rows, "b")).toBe("longest reply 32,768 tokens · presence penalty 0.0");
+    expect(describeModelReplies(rows, "a")).toBe("writes up to about 61 pages · repeat penalty 1.0");
+    expect(describeModelReplies(rows, "b")).toBe("writes up to about 49 pages · repeat penalty 0.0");
     expect(describeModelReplies(rows, "c")).toBe("");
+  });
+
+  it("says how much a model reads, writes and waits in pages and hours, never in tokens or seconds defect", () => {
+    // A model's summary said "131,072 tokens" and "longest reply 40,960 tokens" and a wait of 3600 seconds showed nowhere.
+    // It now says "about 197 pages", "writes up to about 61 pages" and "waits up to 1 hour for a reply".
+    expect(describePages(131072)).toBe("about 197 pages");
+    expect(describePages(900)).toBe("about 1 page");
+    expect(describeWait(3600)).toBe("1 hour");
+    expect(describeWait(1800)).toBe("30 minutes");
+    expect(describeWait(90)).toBe("90 seconds");
+    const rows = [row("models.slow.requestTimeoutS", 3600, "local"), row("models.slow.spec", "x:y")];
+    expect(describeModelWait(rows, "slow")).toBe("waits up to 1 hour for a reply");
+    expect(describeModelWait(rows, "other")).toBe("");
   });
 
   it("lists each phase that calls a model as a job, and the fast workflow's models as none: it uses the set's", () => {

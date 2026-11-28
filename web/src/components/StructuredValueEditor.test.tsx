@@ -4,27 +4,48 @@ import { describe, expect, it, vi } from "vitest";
 import StructuredValueEditor from "./StructuredValueEditor";
 
 describe("StructuredValueEditor", () => {
-  it("edits a map of values as a table and gives back the whole map, never text to parse", async () => {
+  it("edits a map of values as labelled fields and gives back the whole map, never text to parse", async () => {
     const onChange = vi.fn();
     render(<StructuredValueEditor settingKey="models.frame.sampling" label="sampling" value={{ top_k: 20 }} onChange={onChange} />);
-    expect(screen.getByRole("columnheader", { name: "Name" })).toBeInTheDocument();
-    await userEvent.type(screen.getByRole("spinbutton", { name: "sampling: Top K" }), "5");
+    expect(screen.queryByRole("columnheader")).not.toBeInTheDocument();
+    await userEvent.type(screen.getByRole("spinbutton", { name: "sampling: Number of word choices" }), "5");
     expect(onChange).toHaveBeenLastCalledWith({ top_k: 205 });
-    await userEvent.type(screen.getByRole("textbox", { name: "sampling: new name" }), "min_p");
-    await userEvent.type(screen.getByRole("textbox", { name: "sampling: new value" }), "0.1");
-    await userEvent.click(screen.getByRole("button", { name: "Add row" }));
-    expect(onChange).toHaveBeenLastCalledWith({ top_k: 20, min_p: 0.1 });
-    await userEvent.click(screen.getByRole("button", { name: "remove Top K from sampling" }));
+    await userEvent.click(screen.getByRole("button", { name: "Add an option" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: /Least likely word allowed/ }));
+    expect(onChange).toHaveBeenLastCalledWith({ top_k: 20, min_p: 0 });
+    await userEvent.click(screen.getByRole("button", { name: "remove Number of word choices from sampling" }));
     expect(onChange).toHaveBeenLastCalledWith({});
   });
 
-  it("names each row of a table keyed by settings in plain words, never by its code name defect", () => {
+  it("names each field of a map keyed by settings in plain words, never by its code name defect", () => {
     // A speed preset's table showed "budgets.askWhyAfterRejection" and "review.isOn" as its row names on the phone.
-    // Each row keyed by a setting now shows that setting's label, and a sampling row its usual name.
-    render(<StructuredValueEditor settingKey="speedPresets" label="quality"
+    // Each field keyed by a setting now shows that setting's label, and a sampling field its usual name.
+    const { container } = render(<StructuredValueEditor settingKey="speedPresets" label="quality"
       value={{ "budgets.askWhyAfterRejection": true, "review.isOn": true, presence_penalty: 1 }} onChange={vi.fn()} />);
-    const names = screen.getAllByRole("rowheader").map((cell) => cell.textContent);
+    const names = Array.from(container.querySelectorAll(".structured-field > .setting-label")).map((cell) => cell.textContent);
     expect(names).toEqual(["Ask why after a rejection", "Run the review", "Presence penalty"]);
+  });
+
+  it("ticks the text reader's languages from a list of named languages, never a list of typed codes defect", async () => {
+    // The languages stood as a table of typed codes ("eng", "deu"). They are now one tick box a language, by its name.
+    const onChange = vi.fn();
+    render(<StructuredValueEditor settingKey="frames.textReaderLanguages" label="Languages" value={["eng", "deu"]} onChange={onChange} />);
+    expect(screen.getByRole("checkbox", { name: "Languages: English" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Languages: French" })).not.toBeChecked();
+    await userEvent.click(screen.getByRole("checkbox", { name: "Languages: French" }));
+    expect(onChange).toHaveBeenLastCalledWith(["eng", "deu", "fra"]);
+    await userEvent.click(screen.getByRole("checkbox", { name: "Languages: English" }));
+    expect(onChange).toHaveBeenLastCalledWith(["deu"]);
+  });
+
+  it("chooses a speed preset's workflow from a menu of its values, never typed text defect", async () => {
+    // A preset's "direct-draft" workflow was a typing box. It is now a menu in plain words.
+    const onChange = vi.fn();
+    render(<StructuredValueEditor settingKey="speedPresets" label="quality" onChange={onChange} value={{ "video.workflow": "direct-draft" }} />);
+    expect(screen.queryByRole("textbox", { name: /Video workflow/ })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "quality: Video workflow: Direct draft" }));
+    await userEvent.click(screen.getByRole("menuitemradio", { name: "Quality" }));
+    expect(onChange).toHaveBeenLastCalledWith({ "video.workflow": "quality" });
   });
 
   it("shows the model servers as a table of address and key variable, and refuses a name a row has", async () => {

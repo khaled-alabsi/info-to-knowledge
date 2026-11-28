@@ -8,23 +8,21 @@ import { saveDrafts } from "./SettingsView";
 
 const ROWS = [
   { key: "budgets.maxAttempts", value: 3, kind: "number", source: "local", comment: "Answers a step may give" },
-  { key: "review.isOn", value: true, kind: "bool", source: "code", comment: "Whether phase 5 runs" },
+  // a setting nobody changed is not on the page, so the ones the tests look for are the owner's own (source "local")
+  { key: "review.isOn", value: true, kind: "bool", source: "local", comment: "Whether phase 5 runs" },
   { key: "models.frame.sampling", value: { top_k: 20 }, kind: "json", source: "local", comment: "" },
-  { key: "frames.boardHandler", value: "text-diff-integration", kind: "text", source: "code", comment: "How phase 3 is shown a board step",
+  { key: "frames.boardHandler", value: "text-diff-integration", kind: "text", source: "local", comment: "How phase 3 is shown a board step",
     choices: ["image-diff-only", "text-diff-integration"] },
   { key: "models.small.v2.spec", path: ["models", "small.v2", "spec"], value: "lmstudio:small-model", kind: "text", source: "local",
     comment: "", choices: [], is_open_choice: true, chosen_host: "lmstudio", default_host: "lmstudio", choice_options: [
-      { value: "openai-compatible:big-model", label: "big-model", hint: "", group: "other-mac at http://other-mac:1234/v1",
-        host: "other-mac" },
-      { value: "lmstudio:big-model", label: "big-model", hint: "", group: "lmstudio at http://localhost:1234/v1",
-        host: "lmstudio" },
-      { value: "lmstudio:small-model", label: "small-model", hint: "", group: "lmstudio at http://localhost:1234/v1",
-        host: "lmstudio" }] },
+      { value: "openai-compatible:big-model", label: "big-model", hint: "", group: "other-mac", host: "other-mac" },
+      { value: "lmstudio:big-model", label: "big-model", hint: "", group: "lmstudio", host: "lmstudio" },
+      { value: "lmstudio:small-model", label: "small-model", hint: "", group: "lmstudio", host: "lmstudio" }] },
   { key: "models.small.v2.host", path: ["models", "small.v2", "host"], value: "", kind: "text", source: "code",
     comment: "", choices: [], is_open_choice: true, choice_options: [
       { value: "", label: "(empty)", hint: "its default", group: "" },
-      { value: "lmstudio", label: "lmstudio", hint: "http://localhost:1234/v1", group: "" },
-      { value: "other-mac", label: "other-mac", hint: "http://other-mac:1234/v1", group: "" }] },
+      { value: "lmstudio", label: "lmstudio", hint: "", group: "" },
+      { value: "other-mac", label: "other-mac", hint: "", group: "" }] },
   { key: "models.small.v2.temperature", path: ["models", "small.v2", "temperature"], value: 0.7, kind: "number",
     source: "local", comment: "" },
 ];
@@ -42,7 +40,7 @@ function serveSettings(save: (body: { key: string }) => unknown = () => ({ exit_
 async function openSettings() {
   render(<App />);
   await userEvent.click(await screen.findByRole("button", { name: /Settings/ }));
-  return screen.findByRole("spinbutton", { name: "budgets.maxAttempts" });
+  return screen.findByRole("spinbutton", { name: "Tries per step" });
 }
 
 describe("Settings", () => {
@@ -97,9 +95,44 @@ describe("Settings", () => {
     }
   });
 
-  it("splits the Frames section into Frame capturing, Frame preparing and Frame processing cards, never one lump defect", async () => {
-    // The owner: "frames frames?": 52 settings stood under a heading named like the section
-    const row = (key: string) => ({ key, path: key.split("."), value: 1, kind: "number", source: "code", comment: "" });
+  it("says a server holds no models yet and names its login key in plain words, never an empty card or a variable name defect", async () => {
+    // A server with no models showed an empty card, and its login field was "Token variable" with a code-name placeholder.
+    // The card now says "No models yet", and the login field is "Login key name" with the placeholder "Empty if no login".
+    serveSets();
+    await openSettings();
+    await userEvent.click(screen.getByRole("heading", { name: "Model servers" }));
+    const card = screen.getByRole("group", { name: "server other-mac" });
+    expect(within(card).getByText("No models yet.")).toBeInTheDocument();
+    expect(within(card).getByText("Login key name")).toBeInTheDocument();
+    expect(within(card).getByRole("textbox", { name: "login key name of other-mac" })).toHaveAttribute("placeholder", "Empty if no login");
+    expect(card.textContent).not.toMatch(/Token variable|environment variable/i);
+  });
+
+  it("offers a setting with a fixed set of values as a menu in plain words, and names every control by its label defect", async () => {
+    // The speech engine's size was a typing box holding "large-v3-turbo", and a control was named by its settings key.
+    // It is now a menu naming "Large, fast version"; the control is named "Speech model size", never "audio.whisperModel".
+    const calls = installServer({
+      "GET /api/phases": PHASES, "GET /api/inbox": [], "GET /api/runs": [], "GET /api/jobs": [], "GET /api/inbox/trash": [],
+      "GET /api/profiles": { profiles: [], server_profile: "" },
+      "GET /api/settings": [...SET_ROWS, { key: "audio.whisperModel", path: ["audio", "whisperModel"], value: "large-v3-turbo",
+        kind: "text", source: "local", comment: "" }],
+      "PUT /api/settings": () => ({ exit_code: 0, output: "saved" }),
+    });
+    await openSettings();
+    await userEvent.type(screen.getByRole("searchbox"), "whisper");
+    expect(screen.queryByRole("textbox", { name: /whisperModel/ })).not.toBeInTheDocument();
+    const button = await screen.findByRole("button", { name: /: Large, fast version$/ });
+    expect(button.getAttribute("aria-label")).not.toMatch(/audio\./);
+    await userEvent.click(button);
+    await userEvent.click(screen.getByRole("menuitemradio", { name: /^Small/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Save settings (1)" }));
+    expect(calls.filter((call) => call.method === "PUT").map((call) => (call.body as { new_value: string }).new_value)).toEqual(["small"]);
+  });
+
+  it("splits the Frames section into Frame capturing, Frames preparing and Frames processing cards, never one lump defect", async () => {
+    // The owner: "frames frames?": 52 settings stood under a heading named like the section. The two steps are named as the
+    // jobs name them ("Frames preparing", "Frames processing"). The owner's own settings are what the section shows
+    const row = (key: string) => ({ key, path: key.split("."), value: 1, kind: "number", source: "local", comment: "" });
     installServer({
       "GET /api/phases": PHASES, "GET /api/inbox": [], "GET /api/runs": [], "GET /api/jobs": [], "GET /api/inbox/trash": [],
       "GET /api/profiles": { profiles: [], server_profile: "" },
@@ -111,17 +144,61 @@ describe("Settings", () => {
     await userEvent.click(screen.getByRole("heading", { name: "Frames" }));
     const section = screen.getByRole("group", { name: "Frames" }) as HTMLElement;
     const cards = Array.from(section.querySelectorAll(".settings-prefix")).map((each) => each.textContent);
-    expect(cards).toEqual(["Frame capturing", "Screen watching", "Frame preparing", "Text and boards", "What the model is told",
-      "Frame processing"]);
+    expect(cards).toEqual(["Frame capturing", "Screen watching", "Frames preparing", "Text and boards", "What the model is told",
+      "Frames processing"]);
     // an opened section shows its card titles alone: every card is closed until it is opened, and no setting is on the page
     const details = Array.from(section.querySelectorAll("details.settings-prefix-group")) as HTMLDetailsElement[];
     expect(details.map((each) => each.open)).toEqual(details.map(() => false));
     // the section's header counts the cards it shows
     expect(within(section).getAllByText("6").length).toBeGreaterThan(0);
     const last = details.length - 1;
-    await userEvent.click(within(section).getByText("Frame processing"));
+    await userEvent.click(within(section).getByText("Frames processing"));
     expect(details.map((each) => each.open)).toEqual(details.map((_, index) => index === last));
     expect(within(details[last]).getAllByRole("spinbutton")).toHaveLength(2);
+  });
+
+  it("lists only the settings the owner changed, and finds any other one by search defect", async () => {
+    // Defect as shown: about 150 settings nobody changed stood in six sections beside the few the owner changed. The fix: a
+    // setting still at the program's or the shipped default shows only when a search finds it or a change to it is unsaved
+    const row = (key: string, source: string) => ({ key, path: key.split("."), value: 1, kind: "number", source, comment: "" });
+    installServer({
+      "GET /api/phases": PHASES, "GET /api/inbox": [], "GET /api/runs": [], "GET /api/jobs": [], "GET /api/inbox/trash": [],
+      "GET /api/profiles": { profiles: [], server_profile: "" },
+      "GET /api/settings": [...SET_ROWS, row("frames.perMinute", "code"), row("audio.mlx.chunkSeconds", "default"),
+        row("frames.stillSeconds", "local")],
+    });
+    await openSettings();
+    const titles = screen.getAllByRole("heading", { level: 3 }).map((heading) => heading.textContent);
+    expect(titles).not.toContain("Audio");
+    expect(screen.queryByText("Frame capturing")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Frames" })).toBeInTheDocument();
+    await userEvent.type(screen.getByRole("searchbox"), "Audio per call");
+    expect(await screen.findByRole("heading", { name: "Audio" })).toBeInTheDocument();
+    expect(screen.getByRole("spinbutton", { name: "Audio per call (seconds)" })).toBeInTheDocument();
+  });
+
+  it("starts every section and card shut on every load, whatever an earlier visit left open defect", async () => {
+    // Defect as shown: the open sections were remembered, so the page opened with groups already open. The fix: shut on load
+    window.localStorage.setItem("settingsSections", JSON.stringify(["servers", "frames"]));
+    window.localStorage.setItem("settingsCards", JSON.stringify(["frames/Frame capturing"]));
+    serveSets();
+    await openSettings();
+    const open = Array.from(document.querySelectorAll("details.settings-section, details.settings-prefix-group"))
+      .filter((each) => (each as HTMLDetailsElement).open);
+    expect(open).toHaveLength(0);
+  });
+
+  it("names the two sections while the settings load, never only a spinner defect", async () => {
+    // Defect as shown: the first load showed a spinner and nothing else. The fix: the two sections stand there by name
+    installServer({
+      "GET /api/phases": PHASES, "GET /api/inbox": [], "GET /api/runs": [], "GET /api/jobs": [], "GET /api/inbox/trash": [],
+      "GET /api/profiles": { profiles: [], server_profile: "" },
+      "GET /api/settings": () => new Promise<never>(() => undefined),
+    });
+    render(<App />);
+    await userEvent.click(await screen.findByRole("button", { name: /Settings/ }));
+    expect(await screen.findByText("Model servers")).toBeInTheDocument();
+    expect(screen.getByText("Provider sets")).toBeInTheDocument();
   });
 
   it("has two model sections: servers holding their models, and sets mapping each job to a model, in plain words defect", async () => {
@@ -150,7 +227,7 @@ describe("Settings", () => {
     await openSettings();
     const titles = screen.getAllByRole("heading", { level: 3 }).map((heading) => heading.textContent);
     expect(titles.slice(0, 2)).toEqual(["Model servers", "Provider sets"]);
-    for (const title of ["Model servers", "Provider sets", "Video"]) await userEvent.click(screen.getByRole("heading", { name: title }));
+    for (const title of ["Model servers", "Provider sets"]) await userEvent.click(screen.getByRole("heading", { name: title }));
     const servers = screen.getByRole("group", { name: "Model servers" }) as HTMLElement;
     // the servers section holds each server's card with its models inside, and nothing about a job
     expect(within(servers).getAllByRole("group", { name: /^server / })).toHaveLength(2);
@@ -159,13 +236,15 @@ describe("Settings", () => {
     expect(within(lmstudio).getByRole("textbox", { name: "address of lmstudio" })).toHaveValue("http://localhost:1234/v1");
     // a job is chosen in a provider set, never in a server's card
     expect(within(servers).queryByRole("button", { name: /^default: / })).not.toBeInTheDocument();
-    // every job is one menu in each set
+    // the default set holds every job; a job no model can do has no menu to open (it names what it runs on instead)
     const fallback = screen.getByRole("group", { name: "provider set default" });
     for (const job of ["Speech to text", "Scanned page reader", "Speaker detection", "Frame vectors", "Decision filter", "Review"]) {
-      expect(within(fallback).getByRole("button", { name: new RegExp(`^default: ${job}`) })).toBeInTheDocument();
+      expect(within(fallback).getByText(job)).toBeInTheDocument();
     }
-    // the fast workflow keeps its flow settings and has no model menus
-    await userEvent.click(screen.getByText("Describing frames"));
+    expect(within(fallback).getByRole("button", { name: /^default: Review/ })).toBeInTheDocument();
+    expect(within(fallback).queryByRole("button", { name: /^default: Speech to text/ })).not.toBeInTheDocument();
+    // the fast workflow keeps its flow settings (found by search) and has no model menus
+    await userEvent.type(screen.getByRole("searchbox"), "Frames per session");
     expect(document.body.textContent).toMatch(/Frames per session/);
     expect(document.body.textContent).not.toMatch(/Frame describer|Document writer/);
     const fast = screen.getByRole("group", { name: "Describing frames" });
@@ -191,9 +270,9 @@ describe("Settings", () => {
     const pc = screen.getByRole("group", { name: "provider set PC" });
     // the older machine key is read and kept in the file, never shown or chosen
     expect(screen.queryByRole("button", { name: /^Machine of/ })).not.toBeInTheDocument();
-    expect(within(pc).getByRole("button", { name: "PC: Review: lmstudio: small.v2" })).toBeInTheDocument();
-    await userEvent.click(within(pc).getByRole("button", { name: "PC: Review: lmstudio: small.v2" }));
-    await userEvent.click(screen.getByRole("menuitemradio", { name: /^same as default set/ }));
+    expect(within(pc).getByRole("button", { name: "PC: Review: small.v2" })).toBeInTheDocument();
+    await userEvent.click(within(pc).getByRole("button", { name: "PC: Review: small.v2" }));
+    await userEvent.click(screen.getByRole("menuitemradio", { name: /^Same as the default set/ }));
     await userEvent.click(screen.getByRole("button", { name: "Save settings (1)" }));
     const body = calls.find((call) => call.method === "PUT")?.body as { key: string; new_value: { PC: Record<string, unknown> } };
     expect(body.key).toBe("providerSets");
@@ -220,13 +299,17 @@ describe("Settings", () => {
     await openSettings();
     await userEvent.click(screen.getByRole("heading", { name: "Provider sets" }));
     const pc = screen.getByRole("group", { name: "provider set PC" });
+    // a job the set does not change is added from its "Override a job" menu, starting with the model that can do it
+    await userEvent.click(within(pc).getByRole("button", { name: "Override a job" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: /^Speech to text/ }));
     await userEvent.click(within(pc).getByRole("button", { name: /^PC: Speech to text/ }));
     const offered = screen.getAllByRole("menuitemradio").map((item) => item.textContent ?? "");
     expect(offered).toHaveLength(2);
-    expect(offered[0]).toMatch(/^same as default set: none/);
-    expect(offered[1]).toMatch(/^voice: whisper/);
+    expect(offered[0]).toMatch(/^Same as the default set/);
+    expect(offered[1]).toMatch(/^whisper/);
+    expect(Array.from(document.querySelectorAll(".menu-group")).map((item) => item.textContent)).toEqual(["voice"]);
     await userEvent.keyboard("{Escape}");
-    await userEvent.click(within(pc).getByRole("button", { name: "PC: Review: lmstudio: small.v2" }));
+    await userEvent.click(within(pc).getByRole("button", { name: "PC: Review: small.v2" }));
     expect(screen.queryByRole("menuitemradio", { name: /whisper/ })).not.toBeInTheDocument();
   });
 
@@ -251,8 +334,11 @@ describe("Settings", () => {
     await openSettings();
     await userEvent.click(screen.getByRole("button", { name: "Edit: default settings" }));
     expect(screen.getAllByRole("menuitemradio").map((item) => item.textContent)).toEqual([
-      "default settingsboth default settings files", "profile: strictthe server runs on it"]);
+      "default settingswhat every run uses unless it names a profile", "stricta profile; the server runs on it"]);
     expect(screen.queryByText(/the server's settings/)).not.toBeInTheDocument();
+    // a file of the repository meant as an example to copy is no profile, and every row has an icon on its left
+    expect(screen.queryByText(/local\.example/)).not.toBeInTheDocument();
+    expect(document.querySelectorAll(".setting-menu button[role='menuitemradio'] > svg.icon")).toHaveLength(2);
   });
 
   it("shows a model's provider and model name as two fields, and saves the spec joined from them", async () => {
@@ -267,7 +353,7 @@ describe("Settings", () => {
     expect(within(card).queryByText("lmstudio:small-model")).not.toBeInTheDocument();
     await userEvent.clear(name);
     await userEvent.type(name, "big-model");
-    await userEvent.click(within(card).getByRole("button", { name: /^models\.small\.v2\.host/ }));
+    await userEvent.click(within(card).getByRole("button", { name: /^Server/ }));
     await userEvent.click(screen.getByRole("menuitemradio", { name: /other-mac/ }));
     await userEvent.click(screen.getByRole("button", { name: "Save settings (2)" }));
     expect(calls.filter((call) => call.method === "PUT").map((call) => call.body)).toEqual([
@@ -326,11 +412,11 @@ describe("Settings", () => {
     expect(screen.queryByText("Answers a step may give")).not.toBeInTheDocument();
     // a saved value carries no mark, whichever file set it; only an unsaved change is marked
     expect(within(field.closest(".setting-row") as HTMLElement).queryByText("changed")).not.toBeInTheDocument();
-    expect(within(screen.getByRole("checkbox", { name: "review.isOn" }).closest(".setting-row") as HTMLElement)
+    expect(within(screen.getByRole("checkbox", { name: "Run the review" }).closest(".setting-row") as HTMLElement)
       .queryByText("changed")).not.toBeInTheDocument();
     await userEvent.clear(field);
     await userEvent.type(field, "4");
-    await userEvent.click(screen.getByRole("checkbox", { name: "review.isOn" }));
+    await userEvent.click(screen.getByRole("checkbox", { name: "Run the review" }));
     expect(calls.some((call) => call.method === "PUT")).toBe(false);
     expect(field.closest(".setting-row")).toHaveClass("edited");
     const save = screen.getByRole("button", { name: "Save settings (2)" });
@@ -347,8 +433,8 @@ describe("Settings", () => {
     const calls = serveSettings();
     await openSettings();
     // the menu shows plain words for each stored value, never the stored code word
-    await userEvent.click(screen.getByRole("button", { name: "frames.boardHandler: The frame with its text changes" }));
-    const list = screen.getByRole("menu", { name: "frames.boardHandler" });
+    await userEvent.click(screen.getByRole("button", { name: "Board display: The frame with its text changes" }));
+    const list = screen.getByRole("menu", { name: "Board display" });
     expect(within(list).getAllByRole("menuitemradio").map((option) => option.textContent)).toEqual(
       ["The changed area enlarged", "The frame with its text changes"]);
     await userEvent.click(within(list).getByRole("menuitemradio", { name: "The changed area enlarged" }));
@@ -365,10 +451,9 @@ describe("Settings", () => {
     expect(screen.queryByRole("button", { name: /Save settings/ })).not.toBeInTheDocument();
     await userEvent.clear(field);
     await userEvent.type(field, "-1");
-    // a table of values, never a box of JSON: a value is added to it with its own Add button
-    const newName = screen.getByRole("textbox", { name: "models.frame.sampling: new name" });
-    await userEvent.type(newName, "min_p");
-    await userEvent.click(within(newName.closest(".setting-row") as HTMLElement).getByRole("button", { name: "Add row" }));
+    // labelled fields, never a box of JSON or a table of names: an option is added from a menu of the usual ones
+    await userEvent.click(screen.getByRole("button", { name: "Add an option" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: /Least likely word allowed/ }));
     await userEvent.click(screen.getByRole("button", { name: "Save settings (2)" }));
     expect(await screen.findByText(/is refused: too small/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Save settings \(\d\)/ })).toBeInTheDocument();
@@ -397,12 +482,12 @@ describe("Settings", () => {
     expect(screen.getByRole("heading", { name: "Review and quality" }).closest("details")!.open).toBe(true);
     expect(screen.queryByRole("heading", { name: "Advanced limits" })).not.toBeInTheDocument();
     await userEvent.clear(screen.getByRole("searchbox"));
-    const field = screen.getByRole("spinbutton", { name: "budgets.maxAttempts" });
+    const field = screen.getByRole("spinbutton", { name: "Tries per step" });
     await userEvent.clear(field);
     await userEvent.type(field, "5");
     expect(screen.getByRole("button", { name: "Save settings (1)" })).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Edit: default settings" }));
-    await userEvent.click(screen.getByRole("menuitemradio", { name: "profile: strict" }));
+    await userEvent.click(screen.getByRole("menuitemradio", { name: /^strict/ }));
     await userEvent.click(screen.getByRole("button", { name: "Discard the changes and switch" }));
     expect(await screen.findByText(/Profile strict sets 1 setting:/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Save settings/ })).not.toBeInTheDocument();
@@ -414,7 +499,7 @@ describe("Settings", () => {
     serveSettings();
     await openSettings();
     await userEvent.click(screen.getByRole("button", { name: "Edit: default settings" }));
-    await userEvent.click(screen.getByRole("menuitemradio", { name: "profile: strict" }));
+    await userEvent.click(screen.getByRole("menuitemradio", { name: /^strict/ }));
     expect(await screen.findByText(/Profile strict sets 1 setting:/)).toHaveTextContent(
       "Profile strict sets 1 setting: Tries per step. Every other value is the default settings'.");
   });
@@ -422,11 +507,11 @@ describe("Settings", () => {
   it("asks before a switch drops unsaved changes, and switches at once with none", async () => {
     serveSettings();
     await openSettings();
-    const field = screen.getByRole("spinbutton", { name: "budgets.maxAttempts" });
+    const field = screen.getByRole("spinbutton", { name: "Tries per step" });
     await userEvent.clear(field);
     await userEvent.type(field, "5");
     await userEvent.click(screen.getByRole("button", { name: "Edit: default settings" }));
-    await userEvent.click(screen.getByRole("menuitemradio", { name: "profile: strict" }));
+    await userEvent.click(screen.getByRole("menuitemradio", { name: /^strict/ }));
     expect(screen.getByRole("alert")).toHaveTextContent("You have 1 unsaved change to the default settings");
     await userEvent.click(screen.getByRole("button", { name: "Stay on the default settings" }));
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
@@ -434,7 +519,7 @@ describe("Settings", () => {
     expect(screen.getByRole("button", { name: "Edit: default settings" })).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Discard changes" }));
     await userEvent.click(screen.getByRole("button", { name: "Edit: default settings" }));
-    await userEvent.click(screen.getByRole("menuitemradio", { name: "profile: strict" }));
+    await userEvent.click(screen.getByRole("menuitemradio", { name: /^strict/ }));
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(await screen.findByText(/Profile strict sets/)).toBeInTheDocument();
   });

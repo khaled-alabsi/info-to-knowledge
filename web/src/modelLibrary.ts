@@ -65,18 +65,38 @@ export function describeModelRun(rows: SettingRow[], name: string, drafted?: Tre
     host: hostName ? describeHost(hostName)
       : provider === "openai" ? "OpenAI's own service" : "no server chosen",
     model: spec.includes(":") ? spec.slice(spec.indexOf(":") + 1) : spec || "automatic",
-    context: typeof context === "number" ? `${context.toLocaleString("en-US")} tokens` : "automatic",
+    context: typeof context === "number" ? describePages(context) : "automatic",
   };
 }
 
+// A size in tokens as a person pictures it: a token is about three quarters of a word and a page about 500 words
+export function describePages(tokens: number): string {
+  const pages = Math.max(1, Math.round((tokens * 0.75) / 500));
+  return `about ${pages.toLocaleString("en-US")} ${pages === 1 ? "page" : "pages"}`;
+}
+
+// A wait in seconds as a person says it: "1 hour", "30 minutes", "90 seconds"
+export function describeWait(seconds: number): string {
+  const unit = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
+  if (seconds >= 3600 && seconds % 3600 === 0) return unit(seconds / 3600, "hour");
+  if (seconds >= 60 && seconds % 60 === 0) return unit(seconds / 60, "minute");
+  return unit(seconds, "second");
+}
+
+// How long the program waits for one reply of a model, in words; empty when the model sets no wait of its own
+export function describeModelWait(rows: SettingRow[], name: string): string {
+  const wait = readModelRows(rows, name).requestTimeoutS?.value;
+  return typeof wait === "number" && wait > 0 ? `waits up to ${describeWait(wait)} for a reply` : "";
+}
+
 // The two values that tell apart models running the same model on the same server: how long a reply may be and the
-// presence penalty; empty when the model sets neither
+// repeat penalty; empty when the model sets neither
 export function describeModelReplies(rows: SettingRow[], name: string, drafted?: Tree): string {
   const fields = readModelRows(rows, name);
   const reply = readFieldValue(fields, "maxTokens", drafted);
   const penalty = asTree(readFieldValue(fields, "sampling", drafted)).presence_penalty;
-  const parts = [typeof reply === "number" ? `longest reply ${reply.toLocaleString("en-US")} tokens` : "",
-    typeof penalty === "number" ? `presence penalty ${penalty.toFixed(1)}` : ""];
+  const parts = [typeof reply === "number" ? `writes up to ${describePages(reply)}` : "",
+    typeof penalty === "number" ? `repeat penalty ${penalty.toFixed(1)}` : ""];
   return parts.filter((part) => part !== "").join(" · ");
 }
 

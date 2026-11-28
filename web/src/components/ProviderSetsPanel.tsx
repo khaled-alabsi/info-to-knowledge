@@ -1,10 +1,11 @@
 import { useState } from "react";
 import type { SettingOption, SettingRow } from "../api";
-import { asTree, canModelDo, DEFAULT_SET, describeModelRun, isTree, listJobs, listModelNames, MODELS_KEY, readDefaultJobModel,
+import { asTree, canModelDo, DEFAULT_SET, describeModelRun, describeModelWait, isTree, listJobs, listModelNames, MODELS_KEY, readDefaultJobModel,
   readModelProvider, readPath, readSetJobModel, SETS_KEY } from "../modelLibrary";
 import type { Job, Tree } from "../modelLibrary";
-import { describeHost, describeValue, isEmptyValue, isOwnerChange } from "../settingRunValue";
+import { describeHost, describeValue, isEmptyValue, isOwnerChange, readOptionLabel } from "../settingRunValue";
 import { readSettingLabel } from "../settingsLabels";
+import { Menu } from "./Dropdown";
 import Icon from "./Icon";
 import OptionMenu from "./OptionMenu";
 import type { SettingDrafts } from "./SettingsView";
@@ -92,12 +93,17 @@ function readDefaultChoice(job: Job, drafts: SettingDrafts): string {
   return draft ? String(draft.raw) : typeof job.row.value === "string" ? job.row.value : "";
 }
 
-// Where a model runs, in the words a person uses: "lmstudio · qwen3.5-4b". A job with no model runs the way the program
+// Where a model runs, in the words a person uses: the server it is on. A job with no model runs the way the program
 // always has when a provider does it (speech to text, ...), and has no model when it is a phase
 function describeRun(rows: SettingRow[], model: string, isProviderJob = false): string {
   if (!model) return isProviderJob ? "this computer, the program's own way" : "no model chosen";
-  const run = describeModelRun(rows, model);
-  return `${run.host} · ${run.model}`;
+  return describeModelRun(rows, model).host;
+}
+
+// The name the model has on its server, when it is not the name the models list gives it
+function describeServerModel(rows: SettingRow[], model: string): string {
+  const name = describeModelRun(rows, model).model;
+  return name === model ? "" : name;
 }
 
 // What a copy of the default set holds: every job its owner linked to a model, the shipped links staying the shipped ones
@@ -161,6 +167,7 @@ export default function ProviderSetsPanel({ rows, drafts, onEdit }: {
     const index = serverOrder.indexOf(readModelProvider(rows, model));
     return index < 0 ? serverOrder.length : index;
   };
+  // each model by its name, under its server's heading, with the name it has on that server under it
   const listChoices = (current: string, firstOption: SettingOption | null, job: Job): SettingOption[] => [
     ...(firstOption ? [firstOption] : []),
     ...modelNames.filter((model) => model === current || canModelDo(rows, model, job))
@@ -168,24 +175,16 @@ export default function ProviderSetsPanel({ rows, drafts, onEdit }: {
       .map((model) => {
         const server = readModelProvider(rows, model);
         const group = server ? describeHost(server) : "Other";
-        return { value: model, label: `${group}: ${model}`, hint: describeRun(rows, model), group };
+        return { value: model, label: model, hint: describeServerModel(rows, model) || "same name on the server", group };
       }),
     ...(current && !modelNames.includes(current)
-      ? [{ value: current, label: current, hint: "not in the models library", group: "Other" }] : []),
+      ? [{ value: current, label: current, hint: "not in the models list", group: "Other" }] : []),
   ];
 
   return (
     <div className="provider-sets">
-      <p className="muted">A provider set gives each job a model. Each job's menu lists, by server, only the models that can do
-        that job. The default set is the settings as they are. Every other set lists only the jobs it changes; a job it does
-        not list uses the default set's model.</p>
-      {chosenRow && (
-        <div className="provider-set-chosen">
-          <OptionMenu name="Used when a job names no set" prefix="Used when a job names no set:" value={chosen}
-            options={names.map((name) => ({ value: name, label: name, hint: "", group: "" }))}
-            onChoose={(name) => onEdit(chosenRow, name)} />
-        </div>
-      )}
+      <p className="muted">A provider set gives each job a model. The default set holds every job. Any other set holds only the
+        jobs it changes; every job it leaves out uses the default set's model.</p>
       {names.map((name) => {
         const isDefault = name === DEFAULT_SET;
         const overrides = asTree(sets[name]);
@@ -193,11 +192,25 @@ export default function ProviderSetsPanel({ rows, drafts, onEdit }: {
           .filter((leaf) => leaf.path.length > 0 && !(leaf.path.length === 1 && leaf.path[0] === MACHINE_KEY)
             && !jobPaths.has(leaf.path.join("\u0001")));
         const isCopying = copying?.from === name;
+        // the default set shows every job; another set shows the jobs it changes, the others are added from its menu
+        const shownJobs = isDefault ? jobs : jobs.filter((job) => readSetJobModel(overrides, job) !== "");
+        const addableJobs = isDefault ? [] : jobs.filter((job) => readSetJobModel(overrides, job) === "");
+        const overrideItems = addableJobs.map((job) => {
+          const startWith = readDefaultChoice(job, drafts) || readDefaultJobModel(job)
+            || listChoices("", null, job)[0]?.value || "";
+          return { label: job.title, icon: "plus", isDisabled: startWith === "",
+            hint: startWith === "" ? "no model can do this job yet" : `now the default set's: ${startWith}`,
+            onSelect: () => writeSets({ ...sets, [name]: setLeaf(overrides, job.path, startWith) }) };
+        });
         return (
           <div key={name} className="provider-set" aria-label={`provider set ${name}`} role="group">
             <div className="provider-set-head">
               <h4>{name}</h4>
               <div className="provider-set-actions">
+                {chosenRow && (chosen === name
+                  ? <span className="provider-set-chosen"><Icon name="check" size={14} /> Used by runs that pick no set</span>
+                  : <button type="button" className="btn" aria-label={`use provider set ${name} for runs that pick no set`}
+                    onClick={() => onEdit(chosenRow, name)}>Use for runs that pick no set</button>)}
                 <button type="button" className="btn" onClick={() => setCopying({ from: name, name: "" })}
                   aria-label={`copy provider set ${name}`}><Icon name="copy" size={14} /> Copy</button>
                 {!isDefault && (
@@ -218,37 +231,48 @@ export default function ProviderSetsPanel({ rows, drafts, onEdit }: {
               </div>
             )}
             <div className="job-links" role="group" aria-label={`jobs of ${name}`}>
-              {jobs.map((job) => {
+              {shownJobs.map((job) => {
                 const defaultChoice = readDefaultChoice(job, drafts) || readDefaultJobModel(job);
                 const current = isDefault ? readDefaultChoice(job, drafts) : readSetJobModel(overrides, job);
                 const usual = typeof job.row.resolved === "string" ? job.row.resolved : "";
                 const isProviderJob = job.key.startsWith("providers.");
                 const firstOption: SettingOption | null = isDefault
-                  ? (job.key.startsWith("phaseModels.") ? { value: "", label: `the ${usual} model`, hint: "", group: "" }
-                    : isProviderJob ? { value: "", label: "none: the program's own way", hint: "", group: "" } : null)
-                  : { value: "", label: `same as default set: ${defaultChoice || "none"}`, hint: "", group: "" };
+                  ? (job.key.startsWith("phaseModels.")
+                    ? { value: "", label: "The usual model", hint: usual || "chosen by the program", group: "" }
+                    : isProviderJob ? { value: "", label: "The program's own way", hint: "runs on this computer, no model server", group: "" }
+                      : null)
+                  : { value: "", label: "Same as the default set",
+                    hint: defaultChoice || (isProviderJob ? "the program's own way" : "no model chosen"), group: "" };
                 const effective = current || defaultChoice;
+                const choices = listChoices(current, firstOption, job);
                 return (
                   <div key={job.key} className="job-link">
                     <span className="job-title">{job.title}</span>
-                    <OptionMenu name={`${name}: ${job.title}`} value={current} options={listChoices(current, firstOption, job)}
-                      onChoose={(model) => {
-                        if (isDefault) {
-                          onEdit(job.row, model);
-                          return;
-                        }
-                        writeSets({ ...sets, [name]: model === "" ? dropLeaf(overrides, job.path) : setLeaf(overrides, job.path, model) });
-                      }} />
-                    <small className="muted job-runs">Runs on {describeRun(rows, effective, isProviderJob)}</small>
+                    {choices.length > 1 ? (
+                      <OptionMenu name={`${name}: ${job.title}`} icon="layers" value={current} options={choices}
+                        onChoose={(model) => {
+                          if (isDefault) {
+                            onEdit(job.row, model);
+                            return;
+                          }
+                          writeSets({ ...sets, [name]: model === "" ? dropLeaf(overrides, job.path) : setLeaf(overrides, job.path, model) });
+                        }} />
+                    ) : (
+                      // a job nothing else can do has no menu to open: it says what it runs on
+                      <span className="job-fixed">{readOptionLabel(choices[0]?.label ?? "")}</span>
+                    )}
+                    <small className="muted job-runs">Runs on {describeRun(rows, effective, isProviderJob)}
+                      {effective && describeModelWait(rows, effective) ? ` · ${describeModelWait(rows, effective)}` : ""}</small>
                   </div>
                 );
               })}
             </div>
-            {isDefault ? (
-              <p className="muted">Every other value of this set is a setting in the sections below.</p>
-            ) : (
+            {addableJobs.length > 0 && (
+              <Menu label="Override a job" icon="plus" variant="ghost" items={overrideItems} />
+            )}
+            {!isDefault && (
               <>
-                {jobs.every((job) => readSetJobModel(overrides, job) === "") && otherLeaves.length === 0 && (
+                {shownJobs.length === 0 && otherLeaves.length === 0 && (
                   <p className="muted">It changes nothing yet: it runs exactly like the default set.</p>
                 )}
                 {otherLeaves.length > 0 && <h5 className="provider-set-subhead">Other values this set changes</h5>}
@@ -260,13 +284,13 @@ export default function ProviderSetsPanel({ rows, drafts, onEdit }: {
                   return (
                     <div key={key} className="provider-set-value">
                       <span className="job-title">{label}</span>
-                      <input type="text" aria-label={`${name}: ${key}`} value={renderValue(leaf.value)}
+                      <input type="text" aria-label={`${name}: ${label}`} value={renderValue(leaf.value)}
                         onChange={(event) => writeSets({ ...sets, [name]: setLeaf(overrides, leaf.path,
                           parseTyped(event.target.value, fallback.found ? fallback.value : leaf.value)) })} />
                       <small className="muted">default: {fallback.found
                         ? describeValue(fallback.row, isEmptyValue(fallback.value) ? null : fallback.value)
                         : "not a known setting"}</small>
-                      <button type="button" className="btn ghost" aria-label={`stop changing ${key} in ${name}`}
+                      <button type="button" className="btn ghost" aria-label={`stop changing ${label} in ${name}`}
                         onClick={() => writeSets({ ...sets, [name]: dropLeaf(overrides, leaf.path) })}>Use default</button>
                     </div>
                   );

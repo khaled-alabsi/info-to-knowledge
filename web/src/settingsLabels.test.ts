@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   ADVANCED_MODEL_FIELDS, MODEL_FIELD_LABELS, PHASE_LABELS, SECTION_GROUPS, SECTION_SUBGROUPS, SETTING_LABELS,
   findSectionGroup, findSubgroupTitle, isAdvancedModelField, isSettingHidden, readSettingHelp, readSettingLabel, readSettingPrefix,
-  readableKey, splitModelKey,
+  TEXT_READER_LANGUAGES, listFixedChoices, readChoiceLabel, readableKey, splitModelKey,
 } from "./settingsLabels";
 
 // Every key the server sent in its settings list, copied here so the test fetches nothing
@@ -181,7 +181,7 @@ describe("the section groups", () => {
     for (const [id, cards] of Object.entries(SECTION_SUBGROUPS)) {
       const section = SECTION_GROUPS.find((group) => group.id === id);
       expect(section, id).toBeDefined();
-      expect(cards.length, id).toBeGreaterThan(1);
+      expect(cards.length, id).toBeGreaterThan(0);
       for (const card of cards) {
         expect(card.title.toLowerCase(), id).not.toBe(section?.title.toLowerCase());
         expect(card.title).not.toMatch(/[`]|[a-z][A-Z]/);
@@ -193,14 +193,31 @@ describe("the section groups", () => {
       }
     }
     expect(findSubgroupTitle("frames", "frames.perMinute")).toBe("Frame capturing");
-    expect(findSubgroupTitle("frames", "frames.isKnowledgeFilterOn")).toBe("Frame preparing");
-    expect(findSubgroupTitle("frames", "framesProcessing.repairCalls")).toBe("Frame processing");
+    expect(findSubgroupTitle("frames", "frames.isKnowledgeFilterOn")).toBe("Frames preparing");
+    expect(findSubgroupTitle("frames", "framesProcessing.repairCalls")).toBe("Frames processing");
     expect(findSubgroupTitle("audio", "audio.diarization.model")).toBe("Speaker detection");
-    expect(findSubgroupTitle("review-and-quality", "review.isOn")).toBe("Review");
+    expect(findSubgroupTitle("review-and-quality", "review.isOn")).toBe("Checking the finished document");
     expect(findSubgroupTitle("frames", "frames.stillSeconds")).toBe("Screen watching");
     expect(findSubgroupTitle("advanced-limits", "queue.retries")).toBe("Queue");
     expect(findSubgroupTitle("video", "video.fastProcessing.frameWidth")).toBe("Describing frames");
     expect(findSubgroupTitle("document", "documentReshaping.batchTokens")).toBe("Document reshaping");
+  });
+});
+
+describe("the groups of a section", () => {
+  it("names the two frame steps as the jobs do, and holds no group of one setting defect", () => {
+    // defect as shown: the jobs said "Frames preparing" and the groups "Frame preparing"; three groups held one setting each
+    // the fix: one name for each step everywhere, and a one-setting group joins the group beside it
+    const titles = SECTION_SUBGROUPS.frames.map((group) => group.title);
+    expect(titles).toContain("Frames preparing");
+    expect(titles).toContain("Frames processing");
+    expect(titles).not.toContain("Frame preparing");
+    for (const [id, groups] of Object.entries(SECTION_SUBGROUPS)) {
+      for (const group of groups) {
+        const keys = ALL_KEYS.filter((key) => group.keys.some((each) => key === each || key.startsWith(`${each}.`)) && !isSettingHidden(key));
+        expect(keys.length, `${id}: ${group.title}`).not.toBe(1);
+      }
+    }
   });
 });
 
@@ -210,6 +227,27 @@ describe("a key with no label", () => {
     expect(readableKey("frames_preparing")).toBe("Frames preparing");
     expect(readSettingLabel("somethingNew.maxRetryCount")).toBe("Max retry count");
     expect(readSettingHelp("somethingNew.maxRetryCount")).toBe("");
+  });
+
+  it("offers a setting with a fixed set of values as a choice with a grey line each, never a typing box defect", () => {
+    // The speech engine's device, precision and size, and the text reader's languages were typing boxes holding words such as
+    // "float32" and "large-v3-turbo". Each now lists its values in plain words; a value an own file holds stays listed.
+    const size = listFixedChoices("audio.whisperModel", "large-v3-turbo");
+    expect(size?.options.map((option) => option.label)).toContain("Large, fast version");
+    expect(size?.options.every((option) => option.hint !== "")).toBe(true);
+    expect(listFixedChoices("audio.fasterWhisper.device", "cpu")?.options.map((option) => option.label)[0]).toBe("Main processor");
+    expect(listFixedChoices("audio.whisperModel", "my-own")?.options.at(-1)).toEqual(
+      { value: "my-own", label: "my-own", hint: "set in your own file" });
+    expect(listFixedChoices("audio.diarization.model", "")?.isOpen).toBe(true);
+    expect(listFixedChoices("budgets.maxAttempts", "3")).toBeNull();
+    expect(TEXT_READER_LANGUAGES.map((language) => language.value)).toEqual(expect.arrayContaining(["eng", "deu"]));
+  });
+
+  it("says a value a run uses in plain words, never the stored code word defect", () => {
+    // A model's answer-format row showed "function_calling (from the model's provider)", the stored word. It now reads
+    // "Function calls (from the model's provider)".
+    expect(readChoiceLabel("models.frame.structuredMethod", "function_calling")).toBe("Function calls");
+    expect(readChoiceLabel("frames.mode", "unknown")).toBe("unknown");
   });
 
   it("takes a model added later by its field", () => {

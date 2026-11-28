@@ -525,7 +525,7 @@ export default function App({ account = null, onSignOut }: { account?: Account |
           {canAdmin && (
             // Closed: the gear alone. Open: how to leave, in words; changes not saved stay marked for when it opens again
             <button className={`btn ghost settings-button${isSettingsOpen ? " on" : " icon-only"}${isSetupNeeded ? " has-alert" : ""}`}
-              aria-label={isSettingsOpen ? undefined : isSetupNeeded ? (isContainer ? "Settings: provider missing" : "Settings: setup needed") : "Settings"}
+              aria-label={isSettingsOpen ? "Close settings" : isSetupNeeded ? (isContainer ? "Settings: provider missing" : "Settings: setup needed") : "Settings"}
               title={isSettingsOpen ? "close the settings"
                 : isSetupNeeded ? (isContainer ? "Settings: a model provider a run needs is missing"
                   : "Settings: something a run needs is not set up") : "Settings"}
@@ -537,7 +537,7 @@ export default function App({ account = null, onSignOut }: { account?: Account |
                 tabBeforeSettings.current = tab;
                 setTab("settings");
               }}>
-              {isSettingsOpen ? <><Icon name="x" size={14} /> Close settings</> : <Icon name="settings" size={14} />}
+              {isSettingsOpen ? <><Icon name="x" size={14} /> Close<span className="close-more"> settings</span></> : <Icon name="settings" size={14} />}
               {isSetupNeeded && !isSettingsOpen && <span className="alert-mark" aria-hidden="true">!</span>}
             </button>
           )}

@@ -1,6 +1,9 @@
 import { useState } from "react";
+import { Menu } from "./Dropdown";
 import Icon from "./Icon";
-import { PROVIDER_JOB_CHOICES, readSettingLabel } from "../settingsLabels";
+import { listFixedChoices, PROVIDER_JOB_CHOICES, readSettingLabel, TEXT_READER_LANGUAGES } from "../settingsLabels";
+import type { FixedChoice } from "../settingsLabels";
+import OptionMenu from "./OptionMenu";
 
 // A setting whose value is a list or a map, edited as a small table: a row a name or an item, a box for each value, a
 // button to take a row out and one to add a row. Nobody types JSON: the draft the page keeps is the table's value, which
@@ -57,6 +60,38 @@ function ScalarBox({ value, label, example, onChange }: {
     onChange={(event) => onChange(parseTyped(event.target.value, value))} />;
 }
 
+// A value of a named setting: a menu when the setting is chosen from a fixed list (a speed preset's video workflow), else a box
+function ScalarOrChoice({ settingName, value, label, onChange }: {
+  settingName: string; value: unknown; label: string; onChange: (next: unknown) => void;
+}) {
+  const fixed = typeof value === "string" ? listFixedChoices(settingName, value) : null;
+  if (!fixed) return <ScalarBox value={value} label={label} onChange={onChange} />;
+  return <OptionMenu name={label} value={String(value)} options={fixed.options.map((option) => ({ ...option, group: "" }))}
+    onChoose={(next) => onChange(next)} />;
+}
+
+// A list of values ticked from a fixed list, one tick box each with its plain name (the languages the text reader reads); a
+// value the file holds that the list does not stays ticked under its own name
+function ChoiceTicks({ choices, value, label, onChange }: {
+  choices: FixedChoice[]; value: unknown[]; label: string; onChange: (next: string[]) => void;
+}) {
+  const ticked = value.map(String);
+  const all = [...choices, ...ticked.filter((each) => !choices.some((choice) => choice.value === each))
+    .map((each) => ({ value: each, label: each, hint: "" }))];
+  return (
+    <div className="suits">
+      {all.map((choice) => (
+        <label key={choice.value} className="suit-choice">
+          <input type="checkbox" aria-label={`${label}: ${choice.label}`} checked={ticked.includes(choice.value)}
+            onChange={(event) => onChange(all.map((each) => each.value).filter((each) =>
+              each === choice.value ? event.target.checked : ticked.includes(each)))} />
+          {choice.label}
+        </label>
+      ))}
+    </div>
+  );
+}
+
 // The jobs a server can do, one tick box a job with its plain name; written back as the ticked jobs' stored words
 function JobTicks({ value, label, onChange }: { value: unknown; label: string; onChange: (next: string[]) => void }) {
   const ticked = Array.isArray(value) ? value.map(String) : [];
@@ -102,7 +137,7 @@ function NameBox({ label, placeholder, onAdd, taken }: {
     <div className="structured-add">
       <input type="text" aria-label={`${label}: new name`} placeholder={placeholder} value={name}
         onChange={(event) => setName(event.target.value)} />
-      <input type="text" aria-label={`${label}: new value`} placeholder="value" value={text}
+      <input type="text" aria-label={`${label}: new value`} placeholder="Value" value={text}
         onChange={(event) => setText(event.target.value)} />
       <button type="button" className="btn" onClick={add} disabled={!name.trim() || isTaken}>Add row</button>
       {isTaken && <small className="error">a row has this name</small>}
@@ -117,31 +152,37 @@ function readRowName(name: string): string {
 
 // A model's sampling values under their usual names, never the request's field names
 const SAMPLING_NAMES: Record<string, string> = {
-  temperature: "Temperature", top_p: "Top P", top_k: "Top K", min_p: "Min P", repeat_penalty: "Repeat penalty",
+  temperature: "Randomness", top_p: "Word choice spread", top_k: "Number of word choices", min_p: "Least likely word allowed",
+  repeat_penalty: "Repeat penalty",
   presence_penalty: "Presence penalty", frequency_penalty: "Frequency penalty", seed: "Seed",
 };
 
-// A map of single values: one row a name, its value beside it
-function ScalarMapTable({ value, label, onChange }: { value: Tree; label: string; onChange: (next: Tree) => void }) {
+// A map of single values: one labelled field a value, never a table of names and values. A map with a fixed set of names (a
+// model's sampling) adds a value from a menu of those names; another map adds one by the name typed
+function ScalarMapTable({ value, label, choices, onChange }: {
+  value: Tree; label: string; choices?: Record<string, string>; onChange: (next: Tree) => void;
+}) {
   const names = Object.keys(value);
+  const addable = choices ? Object.entries(choices).filter(([name]) => !names.includes(name)) : [];
   return (
-    <div className="structured-table">
-      <table>
-        <thead><tr><th scope="col">Name</th><th scope="col">Value</th><th scope="col"><span className="sr-only">Remove</span></th></tr></thead>
-        <tbody>
-          {names.map((name) => (
-            <tr key={name}>
-              <th scope="row">{readRowName(name)}</th>
-              <td><ScalarBox value={value[name]} label={`${label}: ${readRowName(name)}`}
-                onChange={(next) => onChange({ ...value, [name]: next })} /></td>
-              <td><TrashButton what={`${readRowName(name)} from ${label}`}
-                onClick={() => onChange(Object.fromEntries(names.filter((other) => other !== name).map((other) => [other, value[other]])))} /></td>
-            </tr>
-          ))}
-          {names.length === 0 && <tr><td colSpan={3} className="muted">Nothing listed yet.</td></tr>}
-        </tbody>
-      </table>
-      <NameBox label={label} placeholder="name" taken={names} onAdd={(name, text) => onChange({ ...value, [name]: parseNew(text) })} />
+    <div className="structured-fields">
+      {names.map((name) => (
+        <div key={name} className="structured-field">
+          <span className="setting-label">{readRowName(name)}</span>
+          <ScalarOrChoice settingName={name} value={value[name]} label={`${label}: ${readRowName(name)}`}
+            onChange={(next) => onChange({ ...value, [name]: next })} />
+          <TrashButton what={`${readRowName(name)} from ${label}`}
+            onClick={() => onChange(Object.fromEntries(names.filter((other) => other !== name).map((other) => [other, value[other]])))} />
+        </div>
+      ))}
+      {names.length === 0 && <p className="muted">Nothing listed yet.</p>}
+      {choices
+        ? addable.length > 0 && (
+          <Menu label="Add an option" icon="plus" variant="ghost"
+            items={addable.map(([name, title]) => ({ label: title, icon: "plus", hint: "starts at 0",
+              onSelect: () => onChange({ ...value, [name]: 0 }) }))} />
+        )
+        : <NameBox label={label} placeholder="Setting name" taken={names} onAdd={(name, text) => onChange({ ...value, [name]: parseNew(text) })} />}
     </div>
   );
 }
@@ -300,6 +341,9 @@ export default function StructuredValueEditor({ settingKey, label, value, onChan
   onChange: (next: unknown) => void;
 }) {
   const hint = COLUMN_HINTS[settingKey] ?? [];
+  if (Array.isArray(value) && settingKey === "frames.textReaderLanguages") {
+    return <ChoiceTicks choices={TEXT_READER_LANGUAGES} value={value} label={label} onChange={onChange} />;
+  }
   if (Array.isArray(value)) {
     if (value.every(isScalar) && hint.length === 0) {
       return <TextListTable value={value} label={label} onChange={onChange} />;
@@ -309,7 +353,8 @@ export default function StructuredValueEditor({ settingKey, label, value, onChan
   if (isTree(value)) {
     const entries = Object.values(value);
     if (entries.length > 0 ? entries.every(isScalar) : hint.length === 0) {
-      return <ScalarMapTable value={value} label={label} onChange={onChange} />;
+      return <ScalarMapTable value={value} label={label} choices={settingKey.endsWith(".sampling") ? SAMPLING_NAMES : undefined}
+        onChange={onChange} />;
     }
     if (hint.length > 0 || entries.some((entry) => isTree(entry) && Object.values(entry).some((field) => !isScalar(field)))) {
       return <ObjectMapTable value={value as Record<string, Tree>} label={label} hint={hint} onChange={onChange} />;

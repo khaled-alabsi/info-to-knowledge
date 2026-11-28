@@ -30,14 +30,14 @@ test("lists every setting under its section and card, each closed until opened",
 
   await expect(page.getByRole("heading", { name: "Review and quality", level: 3 })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Frames", exact: true, level: 3 })).toBeVisible();
-  const framesPerCall = page.getByRole("spinbutton", { name: "framesProcessing.framesPerCall" });
+  const framesPerCall = page.getByRole("spinbutton", { name: "Frames per call" });
   await expect(framesPerCall).toBeHidden();
 
   await page.getByRole("heading", { name: "Frames", exact: true, level: 3 }).click();
   // an opened section shows its cards' titles alone
-  await expect(page.getByRole("heading", { name: "Frame processing", exact: true, level: 4 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Frames processing", exact: true, level: 4 })).toBeVisible();
   await expect(framesPerCall).toBeHidden();
-  await page.getByRole("heading", { name: "Frame processing", exact: true, level: 4 }).click();
+  await page.getByRole("heading", { name: "Frames processing", exact: true, level: 4 }).click();
   await expect(framesPerCall).toHaveValue("7");
   // the help text comes from the page's own labels, not the settings file's comment
   await expect(page.getByText("How many consecutive frames the model reads in one call; 1 means one call for each frame.")).toBeVisible();
@@ -47,9 +47,9 @@ test("lists every setting under its section and card, each closed until opened",
 
 test("a change is a draft until Save settings writes it", async ({ page, api }) => {
   await openSettings(page);
-  await openCard(page, "Frames", "Frame processing");
+  await openCard(page, "Frames", "Frames processing");
 
-  const framesPerCall = page.getByRole("spinbutton", { name: "framesProcessing.framesPerCall" });
+  const framesPerCall = page.getByRole("spinbutton", { name: "Frames per call" });
   await framesPerCall.fill("9");
   const save = page.getByRole("button", { name: "Save settings (1)" });
   await expect(save).toBeVisible();
@@ -66,9 +66,9 @@ test("a change is a draft until Save settings writes it", async ({ page, api }) 
 
 test("typing the old value back takes the draft away", async ({ page }) => {
   await openSettings(page);
-  await openCard(page, "Review and quality", "Review");
+  await openCard(page, "Review and quality", "Checking the finished document");
 
-  const reviewSwitch = page.getByRole("checkbox", { name: "review.isOn" });
+  const reviewSwitch = page.getByRole("checkbox", { name: "Run the review" });
   await reviewSwitch.uncheck();
   await expect(page.getByRole("button", { name: "Save settings (1)" })).toBeVisible();
   await reviewSwitch.check();
@@ -81,7 +81,7 @@ test("a refused setting stays a draft and says why", async ({ page, api }) => {
   await openCard(page, "Frames", "Frame capturing");
 
   // a choice reads in plain words, never the word the settings file holds
-  await page.getByRole("button", { name: "frames.mode: When the screen changes" }).click();
+  await page.getByRole("button", { name: "Capture mode: When the screen changes" }).click();
   await page.getByRole("menuitemradio", { name: "At a fixed rate" }).click();
   await page.getByRole("button", { name: "Save settings (1)" }).click();
   await expect(page.getByText("frames.mode: not one of change, interval")).toBeVisible();
@@ -92,20 +92,20 @@ test("the search opens each group holding a match and hides the rest", async ({ 
   await openSettings(page);
 
   await page.getByRole("searchbox").fill("consecutive");
-  await expect(page.getByRole("spinbutton", { name: "framesProcessing.framesPerCall" })).toBeVisible();
+  await expect(page.getByRole("spinbutton", { name: "Frames per call" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Review and quality", level: 3 })).toHaveCount(0);
 });
 
 test("choosing a profile reads its file and drops the drafts typed for the default settings", async ({ page, api }) => {
   await openSettings(page);
-  await openCard(page, "Frames", "Frame processing");
-  await page.getByRole("spinbutton", { name: "framesProcessing.framesPerCall" }).fill("9");
+  await openCard(page, "Frames", "Frames processing");
+  await page.getByRole("spinbutton", { name: "Frames per call" }).fill("9");
   await expect(page.getByRole("button", { name: "Save settings (1)" })).toBeVisible();
 
   const readsBefore = api.sentTo("GET /settings").length;
 
   await page.getByRole("button", { name: "Edit: default settings" }).click();
-  await page.getByRole("menuitemradio", { name: "profile: fast" }).click();
+  await page.getByRole("menuitemradio", { name: /^fast/ }).click();
   // the unsaved change is named before it is dropped, the warning inside the screen at every width
   const warning = page.getByRole("alert");
   await expect(warning).toContainText("You have 1 unsaved change to the default settings");
@@ -123,15 +123,15 @@ test("each LLM pass's extra wishes have their own box in the PDF card, inside th
   api.answer("GET /settings", { json: [...SETTINGS,
     { key: "pdf.cleanupWishes", value: "remove every Jira link", kind: "long-text", source: "playbook.local.json",
       comment: "The extra wishes of phase 7's LLM clean up." },
-    { key: "pdf.rewriteWishes", value: "", kind: "long-text", source: "code",
+    { key: "pdf.rewriteWishes", value: "", kind: "long-text", source: "playbook.local.json",
       comment: "The extra wishes of phase 7's LLM rewrite." }] });
   await openSettings(page);
   await openCard(page, "Document", "PDFs");
 
-  const cleanup = page.getByRole("textbox", { name: "pdf.cleanupWishes" });
+  const cleanup = page.getByRole("textbox", { name: "Extra instructions for the clean up" });
   await expect(cleanup).toHaveValue("remove every Jira link");
   await expect(cleanup).toHaveJSProperty("tagName", "TEXTAREA");
-  await expect(page.getByRole("textbox", { name: "pdf.rewriteWishes" })).toHaveJSProperty("tagName", "TEXTAREA");
+  await expect(page.getByRole("textbox", { name: "Extra instructions for the rewrite" })).toHaveJSProperty("tagName", "TEXTAREA");
   for (const size of SCREEN_WIDTHS) {
     await page.setViewportSize(size);
     await expectInsideScreen(page, cleanup);
@@ -213,28 +213,34 @@ for (const size of SCREEN_WIDTHS) {
       // the default set shows each job with the library model it runs and where; another set shows what it leaves as the default's
       const fallback = page.getByRole("group", { name: "provider set default" });
       await expectInsideScreen(page, fallback);
-      await expect(fallback.getByText("Runs on lmstudio · acme-vision-35b")).toBeVisible();
-      await expect(fallback.getByRole("button", { name: "default: Frames processing: the frame model" })).toBeVisible();
-      const chosen = page.getByRole("button", { name: "Used when a job names no set: default" });
-      await expectInsideScreen(page, chosen);
+      await expect(fallback.getByText("Runs on lmstudio", { exact: false }).first()).toBeVisible();
+      await expect(fallback.getByRole("button", { name: "default: Frames processing: The usual model" })).toBeVisible();
+      await expectInsideScreen(page, fallback.getByText("Used by runs that pick no set"));
       const spare = page.getByRole("group", { name: "provider set spare" });
       await expectInsideScreen(page, spare);
-      const link = spare.getByRole("button", { name: "spare: Frames processing: same as default set: frame" });
-      await expectInsideScreen(page, link);
-      // a set has no Machine box: the machine is read from the servers its models run on
+      // a set has no Machine box, and it shows no job it leaves as the default's: its menu adds one
       await expect(spare.getByRole("button", { name: /^Machine of/ })).toHaveCount(0);
+      await expect(spare.getByRole("button", { name: "spare: Frames processing" })).toHaveCount(0);
       await expect(spare.getByRole("button", { name: "remove provider set spare" })).toBeVisible();
       await expect(spare.getByText("default: 7")).toBeVisible();
 
-      // a job is linked to a library model from the list of the library's names
+      // a job is overridden from the set's menu, then linked to a library model from the list of the library's names
+      const override = spare.getByRole("button", { name: "Override a job" });
+      await scrollIntoViewSettled(page, override);
+      await override.click();
+      const overrideMenu = page.getByRole("menu");
+      await expectInsideScreen(page, overrideMenu);
+      await overrideMenu.getByRole("menuitem", { name: /^Frames processing/ }).click();
+      const link = spare.getByRole("button", { name: /^spare: Frames processing/ });
+      await expectInsideScreen(page, link);
       await scrollIntoViewSettled(page, link);
       await link.click();
       const menu = page.getByRole("menu", { name: "spare: Frames processing" });
       await expectInsideScreen(page, menu);
-      await menu.getByRole("menuitemradio", { name: /frame-gpu/ }).click();
-      await expect(spare.getByText("Runs on gpu-box · gpu-vision")).toBeVisible();
+      await menu.getByRole("menuitemradio", { name: /^frame-gpu/ }).click();
+      await expect(spare.getByText("Runs on gpu-box")).toBeVisible();
 
-      const value = spare.getByRole("textbox", { name: "spare: framesProcessing.framesPerCall" });
+      const value = spare.getByRole("textbox", { name: "spare: Frames per call" });
       await value.fill("6");
       await page.getByRole("button", { name: "Save settings (1)" }).click();
       const sent = api.sentTo("PUT /settings");
@@ -344,15 +350,19 @@ for (const size of SCREEN_WIDTHS) {
 
       await page.getByRole("heading", { name: "Provider sets", level: 3 }).click();
       const spare = page.getByRole("group", { name: "provider set spare" });
+      const overrideButton = spare.getByRole("button", { name: "Override a job" });
+      await scrollIntoViewSettled(page, overrideButton);
+      await overrideButton.click();
+      await page.getByRole("menuitem", { name: /^Speech to text/ }).click();
       const speech = spare.getByRole("button", { name: /^spare: Speech to text/ });
       await scrollIntoViewSettled(page, speech);
       await speech.click();
       const menu = page.getByRole("menu", { name: "spare: Speech to text" });
       await expectInsideScreen(page, menu);
-      await expect(menu.getByRole("menuitemradio", { name: /gpu-box: whisper-gpu/ })).toBeVisible();
+      await expect(menu.getByRole("menuitemradio", { name: /^whisper-gpu/ })).toBeVisible();
       // a model on the chat-only server is not offered to speech to text
-      await expect(menu.getByRole("menuitemradio", { name: /lmstudio: frame(?!-)/ })).toHaveCount(0);
-      await menu.getByRole("menuitemradio", { name: /gpu-box: whisper-gpu/ }).click();
+      await expect(menu.getByRole("menuitemradio", { name: /^frame(?!-)/ })).toHaveCount(0);
+      await menu.getByRole("menuitemradio", { name: /^whisper-gpu/ }).click();
       await page.getByRole("button", { name: "Save settings (1)" }).click();
       const sent = api.sentTo("PUT /settings");
       await expect.poll(() => sent.length).toBe(1);
@@ -403,37 +413,36 @@ for (const size of SCREEN_WIDTHS) {
       await expectInsideScreen(page, small.getByRole("checkbox", { name: "Filtering frames, small-filter" }));
 
       // frames preparing offers the filter model, frames processing the picture reader, never the other way round
-      const spare = page.getByRole("group", { name: "provider set spare" });
-      await expectInsideScreen(page, spare);
-      const preparing = spare.getByRole("button", { name: /^spare: Frames preparing/ });
+      const base = page.getByRole("group", { name: "provider set default" });
+      await expectInsideScreen(page, base);
+      const preparing = base.getByRole("button", { name: /^default: Frames preparing/ });
       await scrollIntoViewSettled(page, preparing);
       await preparing.click();
-      const preparingMenu = page.getByRole("menu", { name: "spare: Frames preparing" });
-      await expect(preparingMenu.getByRole("menuitemradio", { name: /lmstudio: small-filter/ })).toBeVisible();
-      await expect(preparingMenu.getByRole("menuitemradio", { name: /lmstudio: frame(?!-)/ })).toHaveCount(0);
+      const preparingMenu = page.getByRole("menu", { name: "default: Frames preparing" });
+      await expect(preparingMenu.getByRole("menuitemradio", { name: /^small-filter/ })).toBeVisible();
+      await expect(preparingMenu.getByRole("menuitemradio", { name: /^frame(?!-)/ })).toHaveCount(0);
       // an option names its server plainly, never an address
       await expect(preparingMenu).not.toContainText(/localhost|http|\.local/);
       await page.keyboard.press("Escape");
-      const processing = spare.getByRole("button", { name: /^spare: Frames processing/ });
+      const processing = base.getByRole("button", { name: /^default: Frames processing/ });
       await scrollIntoViewSettled(page, processing);
       await processing.click();
-      const processingMenu = page.getByRole("menu", { name: "spare: Frames processing" });
-      await expect(processingMenu.getByRole("menuitemradio", { name: /lmstudio: frame(?!-)/ })).toBeVisible();
-      await expect(processingMenu.getByRole("menuitemradio", { name: /lmstudio: small-filter/ })).toHaveCount(0);
+      const processingMenu = page.getByRole("menu", { name: "default: Frames processing" });
+      await expect(processingMenu.getByRole("menuitemradio", { name: /^frame(?!-)/ })).toBeVisible();
+      await expect(processingMenu.getByRole("menuitemradio", { name: /^small-filter/ })).toHaveCount(0);
       await page.keyboard.press("Escape");
 
-      // every job is its own card; no Machine box and no fast workflow model menus
-      await expect(spare.getByRole("button", { name: /^Machine of/ })).toHaveCount(0);
+      // every job is its own card in the default set; no Machine box and no fast workflow model menus
+      await expect(base.getByRole("button", { name: /^Machine of/ })).toHaveCount(0);
       await expect(page.getByText(/Fast workflow|Frame describer|Document writer/)).toHaveCount(0);
       for (const job of ["Speech to text", "Scanned page reader", "Speaker detection", "Frame vectors", "Decision filter"]) {
-        await expect(spare.getByRole("button", { name: new RegExp(`^spare: ${job}`) })).toHaveCount(1);
+        await expect(base.locator(".job-link").filter({ hasText: job })).toHaveCount(1);
       }
-      expect(await spare.locator(".job-link").count()).toBe(9);
+      expect(await base.locator(".job-link").count()).toBe(9);
       // no backtick and no quoted-empty pair anywhere on the page
       const text = await page.locator(".settings-view").innerText();
       expect(text).not.toContain("`");
       expect(text).not.toContain('""');
-      await page.screenshot({ path: `../temp/settings-shots/two-sections-${size.width}.png`, fullPage: true });
     });
 }
 
@@ -442,7 +451,7 @@ test("a set's value set back to the default leaves the set changing nothing", as
   await openSettings(page);
   await page.getByRole("heading", { name: "Provider sets", level: 3 }).click();
   const spare = page.getByRole("group", { name: "provider set spare" });
-  await spare.getByRole("button", { name: "stop changing framesProcessing.framesPerCall in spare" }).click();
+  await spare.getByRole("button", { name: "stop changing Frames per call in spare" }).click();
   await expect(spare).toContainText("It changes nothing yet");
   await expect(page.getByRole("button", { name: "Save settings (1)" })).toBeVisible();
 });
@@ -455,13 +464,15 @@ for (const size of SCREEN_WIDTHS) {
       api.answer("GET /settings", { json: PROVIDER_SET_ROWS });
       await page.setViewportSize(size);
       await openSettings(page);
-      await openCard(page, "Audio", "Speech to text");
-      const language = page.getByRole("textbox", { name: "audio.language" });
+      // a setting nobody changed is not on the page: a search finds it
+      await page.getByRole("searchbox").fill("Spoken language");
+      const language = page.getByRole("textbox", { name: "Spoken language" });
       await expect(language).toHaveAttribute("placeholder", "found from the recording");
       await expectInsideScreen(page, language);
       const row = language.locator("xpath=ancestor::div[contains(@class,'setting-row')]");
       await expect(row.getByText("code", { exact: true })).toHaveCount(0);
       await expect(row.getByText("default", { exact: true })).toHaveCount(0);
+      await page.getByRole("searchbox").fill("");
 
       await page.getByRole("heading", { name: "Model servers", exact: true, level: 3 }).click();
       const frame = page.getByRole("group", { name: "model frame", exact: true });
@@ -474,3 +485,90 @@ for (const size of SCREEN_WIDTHS) {
       expect(body).not.toMatch(/\(not set\)|\(empty\)|not set: uses its default/);
     });
 }
+
+// The critic's faults on a phone: a top bar of two rows, a server with no models as an empty card, the "+ Add model" button off
+// the line of its cards, a model's options as a table of typed names, and a menu cut off at the screen's edge
+const CRITIC_ROWS = [...PROVIDER_SET_ROWS.filter((row) => row.key !== "hosts"),
+  { key: "hosts", kind: "json", source: "playbook.local.json", comment: "", value: {
+    lmstudio: { url: "http://localhost:1234/v1" }, "gpu-box": { url: "http://gpu-box.local:8090/v1" },
+    "spare-box": { url: "http://spare-box.local:8090/v1", apiKeyEnv: "" } } },
+  { key: "models.frame.sampling", path: ["models", "frame", "sampling"], value: { top_k: 20 }, kind: "json",
+    source: "playbook.local.json", comment: "" }];
+
+for (const size of SCREEN_WIDTHS) {
+  test(`the top bar, an empty server, the add button and a model's options stay tidy and inside the screen, at ${size.width} px defect`,
+    async ({ page, api }) => {
+      // Fixed: the top bar held two rows on a phone, a server without models was an empty card, "+ Add model" stood off the
+      // cards' line, a model's options were typed names in a table and the menus had no icon. All inside the screen now.
+      api.answer("GET /settings", { json: CRITIC_ROWS });
+      await page.setViewportSize(size);
+      await openSettings(page);
+      if (size.width <= 640) {
+        const bar = await page.locator(".topbar").boundingBox();
+        expect(bar?.height ?? 999, "the top bar is one row on a phone").toBeLessThan(70);
+      }
+      await expectInsideScreen(page, page.getByRole("button", { name: "Close settings" }));
+
+      // the edit menu has an icon on every row and stays on the screen
+      await page.getByRole("button", { name: "Edit: default settings" }).click();
+      const editMenu = page.getByRole("menu", { name: "Edit" });
+      await expectInsideScreen(page, editMenu);
+      expect(await editMenu.locator("button[role='menuitemradio'] > svg").count()).toBeGreaterThan(0);
+      await page.keyboard.press("Escape");
+
+      await page.getByRole("heading", { name: "Model servers", exact: true, level: 3 }).click();
+      const spare = page.getByRole("group", { name: "server spare-box" });
+      await expect(spare.getByText("No models yet.")).toBeVisible();
+      await expectInsideScreen(page, spare.getByText("No models yet."));
+      await expectInsideScreen(page, spare.getByRole("textbox", { name: "login key name of spare-box" }));
+
+      // "+ Add model" stands on the left edge of the model cards above it
+      const local = page.getByRole("group", { name: "server lmstudio" });
+      const frame = local.getByRole("group", { name: "model frame", exact: true });
+      const add = local.getByRole("button", { name: "add model to lmstudio" });
+      const cardBox = await frame.boundingBox();
+      const addBox = await add.boundingBox();
+      expect(addBox && cardBox && Math.abs(addBox.x - cardBox.x)).toBeLessThanOrEqual(1);
+
+      // a model's options are labelled fields with an Add an option menu, never a table of typed names
+      await frame.locator("summary").first().click();
+      await frame.getByText("Advanced", { exact: true }).click();
+      const options = frame.getByRole("textbox", { name: /Number of word choices/ }).or(frame.getByRole("spinbutton", { name: /Number of word choices/ }));
+      await expectInsideScreen(page, options.first());
+      await expect(frame.getByRole("columnheader")).toHaveCount(0);
+      const addOption = frame.getByRole("button", { name: "Add an option" });
+      await scrollIntoViewSettled(page, addOption);
+      await addOption.click();
+      await expectInsideScreen(page, page.getByRole("menu"));
+      await page.keyboard.press("Escape");
+    });
+}
+
+
+// A setting nobody changed is not on the page until a search finds it; a value with fixed choices is a menu, never a typing box
+const PRECISION_ROW = { key: "audio.fasterWhisper.computeType", path: ["audio", "fasterWhisper", "computeType"], value: "int8", kind: "text",
+  source: "code", comment: "" };
+
+for (const size of SCREEN_WIDTHS) {
+  test(`a setting nobody changed is found by a search and its fixed values are a menu, at ${size.width} px defect`,
+    async ({ page, api }) => {
+      // Fixed: every setting was listed in six extra sections and fixed values were typing boxes. Now only a search shows an
+      // unchanged setting, and its fixed values are a menu named in plain words.
+      api.answer("GET /settings", { json: [...SETTINGS, PRECISION_ROW] });
+      await page.setViewportSize(size);
+      await openSettings(page);
+      await expect(page.getByRole("heading", { name: "Audio", exact: true, level: 3 })).toHaveCount(0);
+      await expect(page.getByRole("combobox", { name: "Standard engine precision" })).toHaveCount(0);
+
+      await page.getByRole("searchbox").fill("Standard engine precision");
+      const choice = page.getByRole("button", { name: /^Standard engine precision/ });
+      await expectInsideScreen(page, choice);
+      await expect(page.getByRole("textbox", { name: "Standard engine precision" })).toHaveCount(0);
+      await scrollIntoViewSettled(page, choice);
+      await choice.click();
+      await expectInsideScreen(page, page.getByRole("menu"));
+      expect(await page.getByRole("menuitemradio").count()).toBeGreaterThan(1);
+      await page.keyboard.press("Escape");
+    });
+}
+
