@@ -119,7 +119,8 @@ def invoke_structured_chain(model: BaseChatModel,
     finally:
         call_record_service.record_call(reply=raw,
                                         started_epoch_s=started_epoch_s,
-                                        duration_s=time.monotonic() - started)
+                                        duration_s=time.monotonic() - started,
+                                        model=model)
     parsed = reply.get("parsed")
     if parsed is not None:
         return chain_reply_result.ChainReplyResult(raw=raw, parsed=parsed,
@@ -321,7 +322,8 @@ def read_streamed_reply(model: BaseChatModel,
     finally:
         call_record_service.record_call(reply=reply,
                                         started_epoch_s=started_epoch_s,
-                                        duration_s=time.monotonic() - started)
+                                        duration_s=time.monotonic() - started,
+                                        model=model)
 
     return reply
 
@@ -338,7 +340,8 @@ def invoke_reply(model: BaseChatModel,
     finally:
         call_record_service.record_call(reply=reply,
                                         started_epoch_s=started_epoch_s,
-                                        duration_s=time.monotonic() - started)
+                                        duration_s=time.monotonic() - started,
+                                        model=model)
 
     return reply
 

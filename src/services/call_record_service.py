@@ -60,18 +60,38 @@ def clear_place() -> None:
     _PLACE.set(None)
 
 
+def _find_model_and_host(model: Any,
+                         reply: BaseMessage | None) -> dict[str, str]:
+    """Which model answered and at which machine's address, so a run's speed is compared per machine even when the run
+    moved between machines: the name the host reports in its reply first, else the one the call asked for."""
+
+    # a model with options bound to it (tools, a schema) holds the real client under `bound`
+    while model is not None and hasattr(model, "bound"):
+        model = model.bound
+    reply_metadata = getattr(reply, "response_metadata", None) or {}
+    model_name = reply_metadata.get("model_name") or reply_metadata.get("model") \
+        or getattr(model, "model_name", None) or getattr(model, "model", None)
+    host_url = getattr(model, "openai_api_base", None) or getattr(model, "base_url", None)
+    found = {"model": model_name, "host": host_url}
+
+    return {key: str(value) for key, value in found.items() if value}
+
+
 def record_call(reply: BaseMessage | None,
                 started_epoch_s: float,
-                duration_s: float) -> None:
+                duration_s: float,
+                model: Any = None) -> None:
     """One row for one call that returned `reply` after `duration_s`, in the run the place names: its phase, step and
-    attempt, its tokens and times as the host reported them, and how it ended (a thinking stopped as a loop is named
-    so). Nothing when no place is set."""
+    attempt, the model that answered and its machine's address, its tokens and times as the host reported them, and how
+    it ended (a thinking stopped as a loop is named so). Nothing when no place is set."""
 
     place = _PLACE.get()
     if place is None:
         return
     usage = chain_response_utils.read_token_usage(reply) if reply is not None else {}
     row = {key: place[key] for key in ("phase", "slug", "attempt", "windowTokens") if place.get(key) is not None}
+    row.update(_find_model_and_host(model=model,
+                                    reply=reply))
     row.update({"startedAtS": round(started_epoch_s, 3), "promptTokens": usage.get("prompt_tokens"),
                 "outputTokens": usage.get("output_tokens"), "promptDurationS": usage.get("prompt_duration_s"),
                 "outputDurationS": usage.get("output_duration_s"), "durationS": round(duration_s, 1),

@@ -530,6 +530,25 @@ def test_a_phase_with_no_metrics_code_of_its_own_counts_its_calls_on_its_closing
                   str(lines.lines))
 
 
+def test_each_call_row_names_the_model_that_answered_and_its_machine_s_address_defect():
+    # Defect: a speed comparison per machine could only guess each run's machine from the set it uses now, since no call
+    # row said which model answered or where; a run moved between machines was counted under its last one.
+    # Fix: every call row names the model the host reports and the address of the machine it was sent to
+    ctx, _lines = _load_run_context()
+    phase = output_contract.DOCUMENT_RESHAPING_PHASE
+    performance_log_service.start_unit(ctx, phase, None)
+    model = fakes.scripted(AIMessage(content="ok", response_metadata={"model_name": "qwen3.6-35b-a3b-pc"}))
+    object.__setattr__(model, "base_url", "http://gpu-box:8090/v1")
+    chain_runner.invoke_reply(model=model,
+                              messages=[HumanMessage(content="Say ok.")])
+    call_record_service.clear_place()
+    row = call_log_service.read_call_metrics(ctx.run_dir)[-1]
+    harness.check("the row names the model the host says answered",
+                  row.get("model") == "qwen3.6-35b-a3b-pc", str(row))
+    harness.check("and the machine's address the call went to",
+                  row.get("host") == "http://gpu-box:8090/v1", str(row))
+
+
 def test_a_call_made_with_no_phase_started_writes_no_row():
     ctx, _lines = _load_run_context()
     call_record_service.clear_place()
