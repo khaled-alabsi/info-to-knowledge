@@ -324,6 +324,42 @@ def test_a_pause_that_stops_the_running_run_now_runs_it_again_first_once_resumed
         job_queue_service.set_run_lister(previous_lister)
 
 
+def test_an_interrupt_and_pause_holds_the_queue_until_the_run_is_resumed_first_defect():
+    # Interrupt now ended the run and the next job of its machine started at once; the owner asked for an interrupt
+    # that pauses too. Now the interrupted job holds the queue, blocked, and Retry runs it first with --resume.
+    queue_dir = Path(tempfile.mkdtemp()) / "ui"
+    main = Path(tempfile.mkdtemp()) / "waiting_main.py"
+    main.write_text(_WAITING_MAIN, encoding="utf-8")
+    previous = job_queue_service.set_command_prefix([sys.executable, str(main)])
+    previous_lister = job_queue_service.set_run_lister(lambda: [])
+    try:
+        queued = job_queue_service.queue_jobs(queue_dir, [RunJobRequest(video=Path("/in/v-0.mp4"), output_root=Path("/out/v")),
+                                                          RunJobRequest(video=Path("/in/w-0.mp4"), output_root=Path("/out/w"))])
+        turns: list = []
+        worker = threading.Thread(target=lambda: turns.append(job_queue_service.run_next_job(queue_dir)))
+        worker.start()
+        console = job_queue_service.build_console_path(queue_dir, queued[0].job_id)
+        deadline = time.monotonic() + 20
+        while ("ready" not in (console.read_text(encoding="utf-8") if console.is_file() else "")
+               and time.monotonic() < deadline):
+            pass
+        harness.check("the child started", time.monotonic() < deadline)
+        job_queue_service.send_interrupt(queue_dir, queued[0].job_id, is_holding=True)
+        worker.join(timeout=20)
+        harness.check("the interrupted run holds the queue", turns and turns[0].status == run_job.JOB_BLOCKED,
+                      str(turns and turns[0].status))
+        harness.check("the next job does not start", job_queue_service.run_next_job(queue_dir) is None)
+        harness.check("the console says how to go on", "interrupted and paused" in console.read_text(encoding="utf-8"))
+        job_queue_service.retry_blocked_job(queue_dir, queued[0].job_id)
+        again = job_queue_service.run_next_job(queue_dir)
+        harness.check("Retry runs the interrupted run first, with --resume", again is not None
+                      and again.job_id == queued[0].job_id and again.status == "finished"
+                      and "resumed" in console.read_text(encoding="utf-8"), str(again and again.status))
+    finally:
+        job_queue_service.set_command_prefix(previous)
+        job_queue_service.set_run_lister(previous_lister)
+
+
 def test_a_run_the_pause_stopped_with_no_server_watching_runs_again_at_once_on_resume_defect():
     # The server restarted while a run went on; stopped by the pause, its end was read as a lost job's, which waits the
     # failure's retry pause: it started a minute after Resume. Now it goes first and at once.

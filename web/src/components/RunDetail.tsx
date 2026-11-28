@@ -351,7 +351,7 @@ export default function RunDetail({
       reportFailure(`${what} was not queued`, error);
     }
   };
-  const actOnJob = async (job: Job, action: "cancel" | "interrupt") => {
+  const actOnJob = async (job: Job, action: "cancel" | "interrupt" | "interrupt-and-pause") => {
     try {
       onMessage(await sendJobAction(job, action));
       onChanged();
@@ -911,7 +911,13 @@ export default function RunDetail({
                 isDisabled: detail?.signal === "drain", onSelect: () => void signal("drain") },
               { label: "Stop", hint: "stop at the next check", icon: "stop", isDanger: true, isDisabled: detail?.signal === "stop",
                 onSelect: () => void signal("stop") },
-              { label: "Interrupt now", hint: runningJob ? "as Ctrl-C would, without waiting for a check" : "only for a run started from this page",
+              // both stop the run at once, as Ctrl-C; one lets its machine's next job start, the other holds it until Retry
+              // (the owner: "I want interrupt and pause")
+              { label: "Interrupt and pause", hint: runningJob ? "stops it now; its machine starts nothing else until you press Retry"
+                : "only for a run started from this page",
+                icon: "pause", isDanger: true, isDisabled: !runningJob,
+                onSelect: () => { if (runningJob) void actOnJob(runningJob, "interrupt-and-pause"); } },
+              { label: "Interrupt, next job", hint: runningJob ? "stops it now; its machine's next job starts" : "only for a run started from this page",
                 icon: "x", isDanger: true, isDisabled: !runningJob, onSelect: () => { if (runningJob) void actOnJob(runningJob, "interrupt"); } },
               ...(holdItem ? [{ ...holdItem, group: "If this job fails" }] : []),
             ]} />

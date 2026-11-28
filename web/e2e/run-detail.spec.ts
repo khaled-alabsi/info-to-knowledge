@@ -348,6 +348,24 @@ for (const size of SCREEN_WIDTHS) {
       .toEqual([{ choice: "continue" }]);
   });
 
+  test(`the Control menu offers Interrupt and pause beside Interrupt, next job, on a ${size.width} px screen defect`, async ({ page, api }) => {
+    // Defect: the only interrupt let the machine's next job start (the owner: "I want interrupt and pause")
+    await page.setViewportSize(size);
+    const detail = { ...RUN_DETAILS["gateway-review"], live_pids: [4242] };
+    api.answer("GET /runs/output/gateway-review/update", { json: { run: detail, offset: 0, text: "" } });
+    const running = buildJob("job-running", { status: "running", pid: 4242 },
+      { video: "inbox/Gateway review.mp4", output_root: "output/gateway-review" });
+    api.answer("GET /jobs", { json: [running] });
+    api.answer("POST /jobs/job-running/interrupt-and-pause", { json: running });
+    await openDoneRun(page);
+    await page.getByRole("button", { name: "Control" }).click();
+    await expect(page.getByRole("menuitem", { name: /Interrupt, next job/ })).toBeVisible();
+    const item = page.getByRole("menuitem", { name: /Interrupt and pause/ });
+    await expectInsideScreen(page, item);
+    await item.click();
+    await expect.poll(() => api.sentTo("POST /jobs/job-running/interrupt-and-pause").length).toBe(1);
+  });
+
   test(`a running part's status opens its live steps and thinking, its name on one line, on a ${size.width} px screen defect`, async ({ page, api }) => {
     // Defect: the owner saw a word count only, and "part" over "2" on a phone. Fix: the status opens the part's live
     // panel, its steps and its thinking; a part's name never breaks

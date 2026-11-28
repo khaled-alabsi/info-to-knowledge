@@ -84,7 +84,7 @@ test("the queue paused until resumed reads Paused and waits for Resume now defec
 
 test("the running count pauses or stops every running run at once defect", async ({ page, api }) => {
   // The owner found no way to stop or pause every run: the stop was a switch in the queued menu, shown only with two
-  // jobs. Now the running count's menu has Pause all runs and Stop all runs now.
+  // jobs. Now the running count's menu has Pause all and Pause all now (the owner's names for them).
   api.answer("GET /jobs", { json: [buildJob("job-running", { status: "running", pid: 4243 }, {})] });
   api.answer("GET /runs", { json: RUNS.map((run, index) => index > 1 ? run : { ...run, is_live: true, status: "running" }) });
   let pause = { until: "", is_until_resumed: false };
@@ -103,16 +103,34 @@ test("the running count pauses or stops every running run at once defect", async
     await page.getByRole("button", { name: /2 running/ }).click();
     await expectInsideScreen(page, page.getByRole("menu"));
     await expect(page.getByRole("menuitem", { name: new RegExp(RUNS[0].name) })).toBeVisible();
-    await page.getByRole("menuitem", { name: /Pause all runs/ }).click();
+    await page.getByRole("menuitem", { name: /^Pause all(?! now)/ }).click();
     await expect(page.getByRole("button", { name: /queued · paused/ })).toBeVisible();
-    // while paused, Pause all is gone and Stop all stays
+    // while paused, Pause all is gone and Pause all now stays
     await page.getByRole("button", { name: /2 running/ }).click();
-    await expect(page.getByRole("menuitem", { name: /Pause all runs/ })).toHaveCount(0);
-    await page.getByRole("menuitem", { name: /Stop all runs now/ }).click();
+    await expect(page.getByRole("menuitem", { name: /^Pause all(?! now)/ })).toHaveCount(0);
+    await page.getByRole("menuitem", { name: /^Pause all now/ }).click();
     pause = { until: "", is_until_resumed: false };
   }
   const sent = api.sentTo("POST /queue/pause").map((request) => request.body);
   expect(sent.slice(0, 2)).toEqual([{}, { is_stopping_now: true }]);
+});
+
+test("the queued count's pause menu offers Pause now, which stops every running run at once defect", async ({ page, api }) => {
+  // Defect: the queue's own pause menu only held the next jobs; stopping the running runs too sat in another menu (the
+  // owner: "I already have a global menu that can be enhanced"). Fix: it offers Pause now.
+  api.answer("GET /jobs", { json: [buildJob("job-running", { status: "running", pid: 4243 }, {}),
+    buildJob("job-next", { status: "queued" }, {})] });
+  api.answer("GET /runs", { json: RUNS.map((run, index) => index > 0 ? run : { ...run, is_live: true, status: "running" }) });
+  api.answer("GET /queue/pause", { json: { until: "", is_until_resumed: false } });
+  api.answer("POST /queue/pause", { json: { until: "", is_until_resumed: true } });
+  for (const size of SCREEN_WIDTHS) {
+    await page.setViewportSize(size);
+    await page.goto("/");
+    await page.getByRole("button", { name: /1 queued/ }).click();
+    await expectInsideScreen(page, page.getByRole("menu"));
+    await page.getByRole("menuitem", { name: /^Pause now/ }).click();
+  }
+  expect(api.sentTo("POST /queue/pause").map((request) => request.body)[0]).toEqual({ is_stopping_now: true });
 });
 
 test("says the server is not answering when its lists fail", async ({ page, api }) => {

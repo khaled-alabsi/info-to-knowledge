@@ -147,7 +147,8 @@ export function countJobsAhead(jobs: Job[]): number {
 // What each action did to a job, as the page's message says it
 const ACTION_WORDS = {
   cancel: "taken off the queue",
-  interrupt: "interrupted",
+  interrupt: "interrupted, the next job starts",
+  "interrupt-and-pause": "interrupted and paused: its machine starts no other job until you press Retry",
   retry: "runs again before any other job",
   skip: "skipped, the next job starts",
 };

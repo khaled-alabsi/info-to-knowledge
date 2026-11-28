@@ -53,7 +53,7 @@ describe("RunDetail before the first update", () => {
 });
 
 describe("RunDetail action bar", () => {
-  it("live: names the running phase and offers only Control, with Interrupt now off for a run not started here", async () => {
+  it("live: names the running phase and offers only Control, with both interrupts off for a run not started here", async () => {
     renderRun();
     sendUpdate({ live_pids: [4242], status: "running", phases: makePhaseRows(["complete", "complete", "running", "not run", "not run"]) });
     // "running" says it already: no "live" pill beside it
@@ -65,9 +65,11 @@ describe("RunDetail action bar", () => {
     expect(screen.queryByRole("button", { name: "more actions" })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Control" }));
     expect(screen.getAllByRole("menuitem").map((item) => item.querySelector("span span")?.textContent))
-      .toEqual(["Pause", "Drain", "Stop", "Interrupt now"]);
-    expect(screen.getByRole("menuitem", { name: /Interrupt now/ })).toHaveAttribute("aria-disabled", "true");
-    expect(screen.getByRole("menuitem", { name: /Interrupt now/ })).toHaveTextContent("only for a run started from this page");
+      .toEqual(["Pause", "Drain", "Stop", "Interrupt and pause", "Interrupt, next job"]);
+    for (const name of [/Interrupt and pause/, /Interrupt, next job/]) {
+      expect(screen.getByRole("menuitem", { name })).toHaveAttribute("aria-disabled", "true");
+      expect(screen.getByRole("menuitem", { name })).toHaveTextContent("only for a run started from this page");
+    }
   });
 
   it("names each phase by the title the run gives it, so an audio run's phase 2 is speech preparing, help included", async () => {
@@ -163,22 +165,37 @@ describe("RunDetail action bar", () => {
     expect(calls.at(-1)?.body).toEqual({ signal: "continue" });
   });
 
-  it("live from this page: Interrupt now interrupts its job", async () => {
+  it("live from this page: Interrupt, next job interrupts its job", async () => {
     let answer: unknown = makeJob({ job_id: "job-7", status: "running" });
     const calls = installServer({ "POST /api/jobs/job-7/interrupt": () => answer });
     const { onMessage, onChanged } = renderRun({ jobs: [makeJob({ job_id: "job-7", status: "running" })] });
     sendUpdate({ live_pids: [1] });
     await userEvent.click(screen.getByRole("button", { name: "Control" }));
-    const item = screen.getByRole("menuitem", { name: /Interrupt now/ });
-    expect(item).toHaveTextContent("as Ctrl-C would, without waiting for a check");
+    const item = screen.getByRole("menuitem", { name: /Interrupt, next job/ });
+    expect(item).toHaveTextContent("stops it now; its machine's next job starts");
     await userEvent.click(item);
     expect(calls.at(-1)).toEqual({ method: "POST", url: "/api/jobs/job-7/interrupt", body: {} });
-    expect(onMessage).toHaveBeenLastCalledWith("Job job-7: interrupted");
+    expect(onMessage).toHaveBeenLastCalledWith("Job job-7: interrupted, the next job starts");
     expect(onChanged).toHaveBeenCalled();
     answer = answerJson({ detail: "unknown job job-7" }, 404);
     await userEvent.click(screen.getByRole("button", { name: "Control" }));
-    await userEvent.click(screen.getByRole("menuitem", { name: /Interrupt now/ }));
+    await userEvent.click(screen.getByRole("menuitem", { name: /Interrupt, next job/ }));
     expect(onMessage).toHaveBeenLastCalledWith("AcmeSync-demo: the run was not interrupted: 404: unknown job job-7", true);
+  });
+
+  it("live from this page: Interrupt and pause interrupts its job and holds its machine's queue defect", async () => {
+    // Defect: the only interrupt let the machine's next job start at once (the owner: "I want interrupt and pause").
+    // Fix: Interrupt and pause stops the run and holds the machine's queue until Retry.
+    const calls = installServer({ "POST /api/jobs/job-8/interrupt-and-pause": makeJob({ job_id: "job-8", status: "running" }) });
+    const { onMessage } = renderRun({ jobs: [makeJob({ job_id: "job-8", status: "running" })] });
+    sendUpdate({ live_pids: [1] });
+    await userEvent.click(screen.getByRole("button", { name: "Control" }));
+    const item = screen.getByRole("menuitem", { name: /Interrupt and pause/ });
+    expect(item).toHaveTextContent("stops it now; its machine starts nothing else until you press Retry");
+    await userEvent.click(item);
+    expect(calls.at(-1)).toEqual({ method: "POST", url: "/api/jobs/job-8/interrupt-and-pause", body: {} });
+    expect(onMessage).toHaveBeenLastCalledWith(
+      "Job job-8: interrupted and paused: its machine starts no other job until you press Retry");
   });
 
   it("waiting in the queue: names the job and offers to take it off the queue, and its choice for a failure", () => {

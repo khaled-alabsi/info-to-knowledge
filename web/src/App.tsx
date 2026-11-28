@@ -345,6 +345,10 @@ export default function App({ account = null, onSignOut }: { account?: Account |
       addMessage(`The queue's pause could not be changed: ${describeError(error)}`, true);
     }
   };
+  // the queue paused and every running run stopped at once, as Ctrl+C; each goes on first once the queue resumes
+  const pauseNowItem = { label: "Pause now", icon: "stop", isDanger: true,
+    hint: "each running run stops now, as Ctrl+C does, and goes on first, where it stopped, when you resume the queue",
+    onSelect: () => void changeQueuePause("hold", true) };
   // What runs now is read from the run folders alone (a run started by hand has no job), the same folders the
   // running count's button opens
   const liveRuns = runs.filter((run) => run.is_live);
@@ -449,12 +453,10 @@ export default function App({ account = null, onSignOut }: { account?: Account |
                         setOpened({ kind: "run", run });
                       },
                     })),
-                    ...(isQueuePaused ? [] : [{ label: "Pause all runs", icon: "pause", group: "Every run",
+                    ...(isQueuePaused ? [] : [{ label: "Pause all", icon: "pause", group: "Every run",
                       hint: "each run waits at its next step, and no waiting job starts, until you resume the queue",
                       onSelect: () => void changeQueuePause("hold") }]),
-                    { label: "Stop all runs now", icon: "stop", group: "Every run", isDanger: true,
-                      hint: "each run ends now, as Ctrl+C does, and goes on where it stopped when you resume the queue",
-                      onSelect: () => void changeQueuePause("hold", true) },
+                    { ...pauseNowItem, label: "Pause all now", group: "Every run" },
                   ]} />
               ) : (
                 <span className="stat"><span className="dot" /> 0 running</span>
@@ -471,6 +473,7 @@ export default function App({ account = null, onSignOut }: { account?: Account |
                       onSelect: () => void changeQueuePause("resume") },
                     ...(queuePause.is_until_resumed ? [] : [{ label: "Pause until I resume", icon: "pause",
                       onSelect: () => void changeQueuePause("hold") }]),
+                    ...(liveRun ? [pauseNowItem] : []),
                     ...QUEUE_PAUSE_MINUTES.map((minutes) => ({ label: `Pause ${describePauseLength(minutes)} from now`, icon: "pause",
                       onSelect: () => void changeQueuePause(minutes) })),
                   ]} />
@@ -479,6 +482,9 @@ export default function App({ account = null, onSignOut }: { account?: Account |
                   variant="ghost stat queue-pause" title="pause the queue" note={QUEUE_PAUSE_NOTE}
                   items={[
                     { label: "Pause until I resume", icon: "pause", onSelect: () => void changeQueuePause("hold") },
+                    // the queue's own menu stops the running runs too (the owner: "I already have a global menu that
+                    // can be enhanced")
+                    ...(liveRun ? [pauseNowItem] : []),
                     ...QUEUE_PAUSE_MINUTES.map((minutes) => ({ label: `Pause ${describePauseLength(minutes)}`, icon: "pause",
                       onSelect: () => void changeQueuePause(minutes) })),
                   ]} />

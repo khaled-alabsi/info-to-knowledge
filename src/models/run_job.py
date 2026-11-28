@@ -145,6 +145,9 @@ class RunJob:
     attempt: int = 0
     # When a job waiting for its retry may start again; empty when it waits for nothing
     retry_at: str = ""
+    # Interrupted with "Interrupt and pause": once it ends it holds its machine's queue (blocked) until the person
+    # resumes it (Retry, which runs it first with --resume) or lets it go (Skip)
+    is_held_after_interrupt: bool = False
 
     def as_dict(self) -> dict:
         """The JSON form `ui/jobs.json` stores and the API returns."""

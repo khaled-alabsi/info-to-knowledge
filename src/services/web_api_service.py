@@ -1642,9 +1642,16 @@ def skip_blocked_job(job_id: str) -> dict:
 
 @router.post("/jobs/{job_id}/interrupt")
 def send_job_interrupt(job_id: str) -> dict:
-    """Interrupt a running job's process, as Ctrl-C would."""
+    """Interrupt a running job's process, as Ctrl-C would; the next job of its machine starts."""
 
     return job_queue_service.send_interrupt(job_queue_service.QUEUE_DIR, job_id).as_dict()
+
+
+@router.post("/jobs/{job_id}/interrupt-and-pause")
+def send_job_interrupt_and_pause(job_id: str) -> dict:
+    """Interrupt a running job's process, as Ctrl-C would, and hold its machine's queue until it is retried or skipped."""
+
+    return job_queue_service.send_interrupt(job_queue_service.QUEUE_DIR, job_id, is_holding=True).as_dict()
 
 
 @router.get("/jobs/{job_id}/log")

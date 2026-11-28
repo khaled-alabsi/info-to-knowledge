@@ -57,6 +57,9 @@ QUEUE_DIR = config.UI_DIR
 JOBS_FILE = "jobs.json"
 # The person's pause of the queue: `{"until": "<time>"}`, or `{"isUntilResumed": true}`. No file, no pause
 PAUSE_FILE = "queue-pause.json"
+# The console line of a job interrupted with "Interrupt and pause"
+_HELD_LINE = ("interrupted and paused: no other job starts on this machine until you resume it (Retry runs it again "
+              "first, with --resume) or let it go (Skip)")
 CONSOLES_DIR = "jobs"
 # How often the worker looks again while a run it did not start (an adopted job, or a run typed on the command line)
 # is still alive.
@@ -306,6 +309,8 @@ def _mark_lost_jobs(queue_dir: Path,
         if _is_stopped_by_pause(queue_dir, job.job_id):
             job.status, job.retry_at = run_job.JOB_RETRYING, job.ended_at
             line = "the queue's pause stopped the run; it runs again first, with --resume, once the pause ends"
+        elif job.is_held_after_interrupt:
+            job.status, line = run_job.JOB_BLOCKED, _HELD_LINE
         elif _read_run_status(job.request.output_root) != "complete":
             job.status, job.retry_at, line = _decide_after_failure(job, run_job.JOB_LOST)
         changed.append((job, line))
@@ -397,14 +402,35 @@ def cancel_job(queue_dir: Path,
 
 
 def send_interrupt(queue_dir: Path,
-                  job_id: str) -> RunJob:
-    """Send a running job's process the interrupt Ctrl-C sends, which `run` ends with exit code 130."""
+                  job_id: str,
+                  is_holding: bool = False) -> RunJob:
+    """Send a running job's process the interrupt Ctrl-C sends, which `run` ends with exit code 130. With `is_holding`
+    the job then holds its machine's queue, blocked, until it is retried (run again first, with --resume) or skipped;
+    without it the next job of that machine starts (the owner: "interrupt and pause")."""
 
     job = _find_job(list_jobs(queue_dir), job_id)
-    if job.status == run_job.JOB_RUNNING and process_utils.is_process_alive(job.pid):
-        os.kill(job.pid, signal.SIGINT)
+    if job.status != run_job.JOB_RUNNING or not process_utils.is_process_alive(job.pid):
+        return job
+    if is_holding:
+        # written before the interrupt, so the worker that sees the job end knows to hold
+        with _lock:
+            jobs = _load_jobs(queue_dir)
+            job = _find_job(jobs, job_id)
+            job.is_held_after_interrupt = True
+            _save_jobs(queue_dir, jobs)
+    os.kill(job.pid, signal.SIGINT)
 
     return job
+
+
+def _is_held_after_interrupt(queue_dir: Path,
+                             job_id: str) -> bool:
+    """Whether the person interrupted this job with "Interrupt and pause", as the jobs file records it."""
+
+    try:
+        return _find_job(_load_jobs(queue_dir), job_id).is_held_after_interrupt
+    except UnknownJobError:
+        return False
 
 
 def move_job(queue_dir: Path,
@@ -467,7 +493,7 @@ def retry_blocked_job(queue_dir: Path,
         jobs = _load_jobs(queue_dir)
         job = _find_job(jobs, job_id)
         if job.status == run_job.JOB_BLOCKED:
-            job.status, job.retry_at = run_job.JOB_RETRYING, _read_now()
+            job.status, job.retry_at, job.is_held_after_interrupt = run_job.JOB_RETRYING, _read_now(), False
             _save_jobs(queue_dir, jobs)
     _wake.set()
 
@@ -484,6 +510,7 @@ def skip_blocked_job(queue_dir: Path,
         job = _find_job(jobs, job_id)
         if job.status == run_job.JOB_BLOCKED:
             job.status = run_job.EXIT_STATUSES.get(job.exit_code, run_job.JOB_CRASHED)
+            job.is_held_after_interrupt = False
             _save_jobs(queue_dir, jobs)
     _wake.set()
 
@@ -860,6 +887,8 @@ def run_next_job(queue_dir: Path,
         if status == run_job.EXIT_STATUSES[run_job.EXIT_INTERRUPTED] and _is_stopped_by_pause(queue_dir, job.job_id):
             status, retry_at = run_job.JOB_RETRYING, ended_at
             line = "the queue's pause stopped the run; it runs again first, with --resume, once the pause ends"
+        elif status == run_job.EXIT_STATUSES[run_job.EXIT_INTERRUPTED] and _is_held_after_interrupt(queue_dir, job.job_id):
+            status, retry_at, line = run_job.JOB_BLOCKED, "", _HELD_LINE
         try:
             jobs = _load_jobs(queue_dir)
             ended = _find_job(jobs, job.job_id)
