@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import StructuredValueEditor from "./StructuredValueEditor";
 
@@ -8,13 +9,30 @@ describe("StructuredValueEditor", () => {
     const onChange = vi.fn();
     render(<StructuredValueEditor settingKey="models.frame.sampling" label="sampling" value={{ top_k: 20 }} onChange={onChange} />);
     expect(screen.queryByRole("columnheader")).not.toBeInTheDocument();
-    await userEvent.type(screen.getByRole("spinbutton", { name: "sampling: Number of word choices" }), "5");
+    await userEvent.type(screen.getByRole("textbox", { name: "sampling: Number of word choices" }), "5");
     expect(onChange).toHaveBeenLastCalledWith({ top_k: 205 });
     await userEvent.click(screen.getByRole("button", { name: "Add an option" }));
     await userEvent.click(screen.getByRole("menuitem", { name: /Least likely word allowed/ }));
     expect(onChange).toHaveBeenLastCalledWith({ top_k: 20, min_p: 0 });
     await userEvent.click(screen.getByRole("button", { name: "remove Number of word choices from sampling" }));
     expect(onChange).toHaveBeenLastCalledWith({});
+  });
+
+  it("shows a decimal with a dot in a box that takes text, whatever the browser's language defect", async () => {
+    // A number box showed 0.95 as "0,95" in a German browser, beside boxes that show a dot.
+    // Now a number is typed in a text box that opens the number keypad, and a dot typed half way is kept.
+    function Kept() {
+      const [value, setValue] = useState<unknown>({ top_p: 0.95 });
+      return <StructuredValueEditor settingKey="models.frame.sampling" label="sampling" value={value} onChange={setValue} />;
+    }
+    render(<Kept />);
+    const box = screen.getByRole("textbox", { name: /sampling:/ });
+    expect(box).toHaveValue("0.95");
+    expect(box).toHaveAttribute("inputmode", "decimal");
+    await userEvent.type(box, "{backspace}{backspace}");
+    expect(box).toHaveValue("0.");
+    await userEvent.type(box, "5");
+    expect(box).toHaveValue("0.5");
   });
 
   it("names each field of a map keyed by settings in plain words, never by its code name defect", () => {

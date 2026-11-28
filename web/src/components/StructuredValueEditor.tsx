@@ -53,10 +53,18 @@ function readColumnTitle(column: string): string {
 function ScalarBox({ value, label, example, onChange }: {
   value: unknown; label: string; example?: string; onChange: (next: unknown) => void;
 }) {
+  // A number is typed in a text box: a number box shows the browser's own decimal sign (a comma in a German browser),
+  // so 0.95 read "0,95" beside boxes that show a dot. The typed text is kept while it is not a number yet ("0.")
+  const [typed, setTyped] = useState<string | null>(null);
   if (typeof value === "boolean") {
     return <input type="checkbox" aria-label={label} checked={value} onChange={(event) => onChange(event.target.checked)} />;
   }
-  return <input type={typeof value === "number" ? "number" : "text"} aria-label={label} placeholder={example} value={printScalar(value)}
+  if (typeof value === "number") {
+    return <input type="text" inputMode="decimal" aria-label={label} placeholder={example}
+      value={typed !== null && Number(typed) === value ? typed : printScalar(value)}
+      onChange={(event) => { setTyped(event.target.value); onChange(parseTyped(event.target.value, value)); }} />;
+  }
+  return <input type="text" aria-label={label} placeholder={example} value={printScalar(value)}
     onChange={(event) => onChange(parseTyped(event.target.value, value))} />;
 }
 

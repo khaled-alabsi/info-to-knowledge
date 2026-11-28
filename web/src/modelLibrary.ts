@@ -114,8 +114,11 @@ const PHASE_SUITS: Record<string, string[]> = {
   frames_processing: ["frames"],
 };
 const WRITING_SUITS = ["writing"];
-// The scanned page reader looks at pictures of pages
-const PROVIDER_SUITS: Record<string, string[]> = { chat: ["frames"] };
+// The scanned page reader looks at pictures of pages; the decision filter tells which frames hold no knowledge
+const PROVIDER_SUITS: Record<string, string[]> = { chat: ["frames"], decision: ["filtering"] };
+// The jobs a chat provider's model can do as well as a provider of their own kind: the program asks a chat model the
+// decision filter's questions over chat
+const CHAT_DOES: string[] = ["decision"];
 
 // The jobs, in the order the rows give them: each phase that calls a model, then each job a provider does (scanned page
 // reader, speech to text, speaker detection, ...). The fast workflow has no jobs of its own: it uses the set's
@@ -157,7 +160,9 @@ export function readModelSuits(rows: SettingRow[], name: string): string[] {
 // place) is offered for chat only
 export function canModelDo(rows: SettingRow[], name: string, job: Pick<Job, "kind" | "suits">): boolean {
   const provider = readModelProvider(rows, name);
-  if (!(provider ? readProviderKinds(rows, provider).includes(job.kind) : job.kind === "chat")) return false;
+  const kinds = provider ? readProviderKinds(rows, provider) : [];
+  const isServed = kinds.includes(job.kind) || (CHAT_DOES.includes(job.kind) && kinds.includes("chat"));
+  if (!(provider ? isServed : job.kind === "chat")) return false;
   const suits = readModelSuits(rows, name);
   return suits.length === 0 || job.suits.length === 0 || suits.some((suit) => job.suits.includes(suit));
 }

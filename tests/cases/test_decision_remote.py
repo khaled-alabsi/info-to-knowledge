@@ -78,13 +78,30 @@ def _build_tool(folder: Path) -> None:
     (folder / "filter_frames.py").write_text(TOOL_TEXT.format(names=QUESTION_NAMES), encoding="utf-8")
 
 
+def _build_chat_reply(request: fake_model_server.RecordedRequest) -> dict:
+    """Give me the reply of a chat model that answers, as words around one number, the score
+    `_build_classifications_reply` gives for the frame and question of the request."""
+
+    content = request.read_json()["messages"][0]["content"]
+    data_url = next(part["image_url"]["url"] for part in content if part["type"] == "image_url")
+    text = next(part["text"] for part in content if part["type"] == "text")
+    position = next(index for index, question in enumerate(decision_filter_service.QUESTIONS.values())
+                    if text.startswith(question))
+    grey = numpy.asarray(Image.open(io.BytesIO(base64.b64decode(data_url.split(",", 1)[1]))).convert("L"), dtype=float).mean()
+    number = int(grey // 25)
+    score = number / 10 if position == 0 else (number + position) / 20
+
+    return {"choices": [{"message": {"role": "assistant", "content": f"Probability: {score}"}}]}
+
+
 def _read_decisions(url: str,
                     frames_dir: Path,
-                    tool_dir: Path) -> dict[str, dict]:
-    """`url` "" leaves the decision model to the tool."""
+                    tool_dir: Path,
+                    kinds: tuple[str, ...] = ("decision",)) -> dict[str, dict]:
+    """`url` "" leaves the decision model to the tool; `kinds` are the host's, a scoring server's by default."""
 
     kept = config.settings
-    host_dict = {fake_model_server.TEST_HOST: {"url": url}} if url else {}
+    host_dict = {fake_model_server.TEST_HOST: {"url": url, "kinds": list(kinds)}} if url else {}
     host_name = fake_model_server.TEST_HOST if url else ""
     config.settings = config.Settings(**{"hosts": host_dict,
                                          "providers": {"decision": {"host": host_name, "model": "d1"}},
@@ -150,6 +167,55 @@ def test_a_frame_under_the_cut_is_dropped_naming_the_kind_of_empty_frame_it_scor
                   and decided["frame-001.jpg"]["dropClass"] == "joining", str(decided["frame-001.jpg"]))
     harness.check("frame 2 scores 0.2, the cut, and is kept with its tag", decided["frame-002.jpg"]["tag"] == "text",
                   str(decided["frame-002.jpg"]))
+
+
+def test_a_chat_model_chosen_as_decision_filter_gives_the_tools_decisions_defect():
+    # The Decision filter menu offered only the program's own way: a chat model that suits filtering could not be chosen,
+    # since a chat server has no scoring route. Now a chat host's model is asked each frame and question over chat.
+    folder = Path(tempfile.mkdtemp())
+    frames_dir = folder / "frames"
+    frames_dir.mkdir()
+    _build_frames(frames_dir)
+    tool_dir = folder / "tool"
+    _build_tool(tool_dir)
+    route = ("POST", "/v1/chat/completions")
+    kept_route = fake_model_server.ROUTE_DICT[route]
+    fake_model_server.ROUTE_DICT[route] = _build_chat_reply
+    server = fake_model_server.FakeModelServer()
+    try:
+        with fake_model_server.serving(server):
+            own = _read_decisions(url="", frames_dir=frames_dir, tool_dir=tool_dir)
+            over_chat = _read_decisions(url=server.build_url(), frames_dir=frames_dir, tool_dir=tool_dir, kinds=("chat",))
+    finally:
+        fake_model_server.ROUTE_DICT[route] = kept_route
+    chat_list = [request for request in server.request_list if request.path == route[1]]
+    first = chat_list[0].read_json() if chat_list else {}
+    harness.check("the chat model's numbers give the tool's decisions for every frame", over_chat == own,
+                  f"{over_chat.get('frame-003.jpg')} {own['frame-003.jpg']}")
+    harness.check("50 chat calls: 10 frames, each asked the 5 questions, and the scoring route is never asked",
+                  len(chat_list) == FRAME_COUNT * len(QUESTION_NAMES)
+                  and not any(request.path == CLASSIFICATIONS_PATH for request in server.request_list), str(len(chat_list)))
+    harness.check("each call names the model, at temperature 0, and asks for one number",
+                  first.get("model") == "d1" and first.get("temperature") == 0.0
+                  and decision_filter_service.CHAT_ANSWER_TEXT in first["messages"][0]["content"][1]["text"], str(first)[:300])
+
+
+def test_a_chat_reply_with_no_number_is_refused_naming_the_frame_defect():
+    # A chat model that answers words alone would have left the frame's score unknown.
+    # Now phase 2 stops and names the frame and the reply.
+    folder = Path(tempfile.mkdtemp())
+    frames_dir = folder / "frames"
+    frames_dir.mkdir()
+    _build_frames(frames_dir)
+    server = fake_model_server.FakeModelServer()                 # its chat reply is words alone: "stand-in text"
+    refused = ""
+    with fake_model_server.serving(server):
+        try:
+            _read_decisions(url=server.build_url(), frames_dir=frames_dir, tool_dir=folder / "no-tool", kinds=("chat",))
+        except RuntimeError as failed:
+            refused = str(failed)
+    harness.check("the error names the first frame and the reply", "frame-000.jpg" in refused and "stand-in text" in refused,
+                  refused)
 
 
 def test_a_folder_with_no_frame_is_refused_by_name():

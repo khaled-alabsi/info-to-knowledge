@@ -103,6 +103,20 @@ describe("model library", () => {
     expect(readModelProvider(rows, "cloud")).toBe("");
   });
 
+  it("offers the Decision filter a chat model that suits filtering, not only the program's own way defect", () => {
+    const rows = [
+      row("hosts", { lmstudio: { url: "http://l/v1", kinds: ["chat"] }, scorer: { url: "http://s/v1", kinds: ["decision"] } },
+        "local", { kind: "json" }),
+      row("models.filter.spec", "lmstudio:qwen3.5-4b"), row("models.filter.suits", ["filtering"], "code", { kind: "json" }),
+      row("models.writer.spec", "lmstudio:c"), row("models.writer.suits", ["writing"], "code", { kind: "json" }),
+      row("models.d1.spec", "openai-compatible:d1"), row("models.d1.host", "scorer"),
+      row("models.cloud.spec", "openai:gpt"),
+      row("providers.decision.libraryModel", ""),
+    ];
+    const [decision] = listJobs(rows);
+    expect(listModelNames(rows).filter((name) => canModelDo(rows, name, decision))).toEqual(["filter", "d1"]);
+  });
+
   it("reads the model a job calls: the row's own, else the phase's usual one; a set's link, else nothing", () => {
     const [frames, review] = listJobs(ROWS);
     expect(readDefaultJobModel(frames)).toBe("frame");

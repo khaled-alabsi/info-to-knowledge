@@ -30,7 +30,7 @@ test("lists every setting under its section and card, each closed until opened",
 
   await expect(page.getByRole("heading", { name: "Review and quality", level: 3 })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Frames", exact: true, level: 3 })).toBeVisible();
-  const framesPerCall = page.getByRole("spinbutton", { name: "Frames per call" });
+  const framesPerCall = page.getByRole("textbox", { name: "Frames per call" });
   await expect(framesPerCall).toBeHidden();
 
   await page.getByRole("heading", { name: "Frames", exact: true, level: 3 }).click();
@@ -49,7 +49,7 @@ test("a change is a draft until Save settings writes it", async ({ page, api }) 
   await openSettings(page);
   await openCard(page, "Frames", "Frames processing");
 
-  const framesPerCall = page.getByRole("spinbutton", { name: "Frames per call" });
+  const framesPerCall = page.getByRole("textbox", { name: "Frames per call" });
   await framesPerCall.fill("9");
   const save = page.getByRole("button", { name: "Save settings (1)" });
   await expect(save).toBeVisible();
@@ -92,14 +92,14 @@ test("the search opens each group holding a match and hides the rest", async ({ 
   await openSettings(page);
 
   await page.getByRole("searchbox").fill("consecutive");
-  await expect(page.getByRole("spinbutton", { name: "Frames per call" })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Frames per call" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Review and quality", level: 3 })).toHaveCount(0);
 });
 
 test("choosing a profile reads its file and drops the drafts typed for the default settings", async ({ page, api }) => {
   await openSettings(page);
   await openCard(page, "Frames", "Frames processing");
-  await page.getByRole("spinbutton", { name: "Frames per call" }).fill("9");
+  await page.getByRole("textbox", { name: "Frames per call" }).fill("9");
   await expect(page.getByRole("button", { name: "Save settings (1)" })).toBeVisible();
 
   const readsBefore = api.sentTo("GET /settings").length;
@@ -433,6 +433,15 @@ for (const size of SCREEN_WIDTHS) {
       await expect(processingMenu.getByRole("menuitemradio", { name: /^frame(?!-)/ })).toBeVisible();
       await expect(processingMenu.getByRole("menuitemradio", { name: /^small-filter/ })).toHaveCount(0);
       await page.keyboard.press("Escape");
+      // the Decision filter offers the filter model of a chat server, not only the program's own way
+      const decision = base.getByRole("button", { name: /^default: Decision filter/ });
+      await scrollIntoViewSettled(page, decision);
+      await decision.click();
+      const decisionMenu = page.getByRole("menu", { name: "default: Decision filter" });
+      await expect(decisionMenu.getByRole("menuitemradio", { name: /^small-filter/ })).toBeVisible();
+      await expectInsideScreen(page, decisionMenu.getByRole("menuitemradio", { name: /^small-filter/ }));
+      await expect(decisionMenu.getByRole("menuitemradio", { name: /^frame(?!-)/ })).toHaveCount(0);
+      await page.keyboard.press("Escape");
 
       // every job is its own card in the default set; no Machine box and no fast workflow model menus
       await expect(base.getByRole("button", { name: /^Machine of/ })).toHaveCount(0);
@@ -447,6 +456,24 @@ for (const size of SCREEN_WIDTHS) {
       expect(text).not.toContain('""');
     });
 }
+
+// A number box showed 0.95 as "0,95" in a German browser, beside boxes that show a dot. Every number now shows a dot
+test.describe("in a German browser", () => {
+  test.use({ locale: "de-DE" });
+  for (const size of SCREEN_WIDTHS) {
+    test(`a decimal setting shows a dot, at ${size.width} px`, async ({ page, api }) => {
+      api.answer("GET /settings", { json: [...SETTINGS, { key: "frames.decisionFilterCut", path: ["frames", "decisionFilterCut"],
+        value: 0.95, kind: "number", source: "local", comment: "" }] });
+      await page.setViewportSize(size);
+      await openSettings(page);
+      await page.getByRole("searchbox").fill("cut-off");
+      const box = page.getByRole("textbox", { name: "Decision filter cut-off (0 to 1)" });
+      await expect(box).toHaveValue("0.95");
+      await expectInsideScreen(page, box);
+      expect(await page.locator(".settings-view").innerText()).not.toContain("0,95");
+    });
+  }
+});
 
 test("a set's value set back to the default leaves the set changing nothing", async ({ page, api }) => {
   api.answer("GET /settings", { json: PROVIDER_SET_ROWS });

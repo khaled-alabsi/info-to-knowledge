@@ -40,7 +40,7 @@ function serveSettings(save: (body: { key: string }) => unknown = () => ({ exit_
 async function openSettings() {
   render(<App />);
   await userEvent.click(await screen.findByRole("button", { name: /Settings/ }));
-  return screen.findByRole("spinbutton", { name: "Tries per step" });
+  return screen.findByRole("textbox", { name: "Tries per step" });
 }
 
 describe("Settings", () => {
@@ -154,7 +154,7 @@ describe("Settings", () => {
     const last = details.length - 1;
     await userEvent.click(within(section).getByText("Frames processing"));
     expect(details.map((each) => each.open)).toEqual(details.map((_, index) => index === last));
-    expect(within(details[last]).getAllByRole("spinbutton")).toHaveLength(2);
+    expect(within(details[last]).getAllByRole("textbox")).toHaveLength(2);
   });
 
   it("lists only the settings the owner changed, and finds any other one by search defect", async () => {
@@ -174,7 +174,7 @@ describe("Settings", () => {
     expect(screen.getByRole("heading", { name: "Frames" })).toBeInTheDocument();
     await userEvent.type(screen.getByRole("searchbox"), "Audio per call");
     expect(await screen.findByRole("heading", { name: "Audio" })).toBeInTheDocument();
-    expect(screen.getByRole("spinbutton", { name: "Audio per call (seconds)" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Audio per call (seconds)" })).toBeInTheDocument();
   });
 
   it("starts every section and card shut on every load, whatever an earlier visit left open defect", async () => {
@@ -482,7 +482,7 @@ describe("Settings", () => {
     expect(screen.getByRole("heading", { name: "Review and quality" }).closest("details")!.open).toBe(true);
     expect(screen.queryByRole("heading", { name: "Advanced limits" })).not.toBeInTheDocument();
     await userEvent.clear(screen.getByRole("searchbox"));
-    const field = screen.getByRole("spinbutton", { name: "Tries per step" });
+    const field = screen.getByRole("textbox", { name: "Tries per step" });
     await userEvent.clear(field);
     await userEvent.type(field, "5");
     expect(screen.getByRole("button", { name: "Save settings (1)" })).toBeInTheDocument();
@@ -507,7 +507,7 @@ describe("Settings", () => {
   it("asks before a switch drops unsaved changes, and switches at once with none", async () => {
     serveSettings();
     await openSettings();
-    const field = screen.getByRole("spinbutton", { name: "Tries per step" });
+    const field = screen.getByRole("textbox", { name: "Tries per step" });
     await userEvent.clear(field);
     await userEvent.type(field, "5");
     await userEvent.click(screen.getByRole("button", { name: "Edit: default settings" }));

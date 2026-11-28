@@ -109,7 +109,8 @@ export default function SettingRowItem({ row, context, label }: { row: SettingRo
             : <StructuredValueEditor settingKey={row.key} label={name} value={structured}
                 onChange={(next) => edit(row, JSON.stringify(next, null, 2))} />
         ) : (
-          <input type={row.kind === "number" ? "number" : "text"} aria-label={name} value={String(raw)}
+          // A number in a text box: a number box shows the browser's own decimal sign, a comma in a German browser
+          <input type="text" inputMode={row.kind === "number" ? "decimal" : undefined} aria-label={name} value={String(raw)}
             placeholder={row.value === null || row.value === "" ? describeRunValue(row) : undefined}
             onChange={(event) => edit(row, event.target.value)} />
         )}

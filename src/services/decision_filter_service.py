@@ -13,6 +13,10 @@ or on CUDA. Optionally, with `providers.decision.host` set, a host server answer
 (`POST /v1/classifications`, the one request that no standard server answers): the frames go in batches, one request for
 each question and batch, and each frame's score for a question is its probability. The program applies
 `decisionFilterCut` to the knowledge question's score as before. That route is never required.
+
+A server whose host does not list the `decision` kind is a chat server (LM Studio, Ollama, llama.cpp), which has no
+`/v1/classifications`: the Decision filter menu offers it any model that suits filtering. Such a model is asked each
+frame and question over `/v1/chat/completions`, one frame a call, and the number it answers is read as the probability.
 """
 
 from __future__ import annotations
@@ -20,6 +24,7 @@ from __future__ import annotations
 import io
 import json
 import logging
+import re
 import subprocess
 import tempfile
 from pathlib import Path
@@ -34,7 +39,7 @@ from services import endpoint_client
 from services import knowledge_filter_service
 from utils import json_store_utils
 
-__all__ = ["CLASSIFIER_MODEL", "DECISION_MODEL", "FILTER_MODELS", "QUESTIONS", "BATCH_FRAMES", "read_chosen_model",
+__all__ = ["CLASSIFIER_MODEL", "DECISION_MODEL", "FILTER_MODELS", "QUESTIONS", "BATCH_FRAMES", "CHAT_ANSWER_TEXT", "read_chosen_model",
            "write_chosen_model", "read_decisions", "apply_decisions"]
 
 _LOG = logging.getLogger(__name__)
@@ -63,6 +68,12 @@ BATCH_FRAMES = 8                                  # frames sent in one request
 _FRAME_WIDTH = 640                                # the width a frame is asked at, as the tool asks it
 _FRAME_JPEG_QUALITY = 90
 _SCORE_DIGITS = 4                                 # a probability is kept to this many digits, as the tool keeps it
+# What a chat model is told after each question, so its answer is the probability alone
+CHAT_ANSWER_TEXT = ("Answer with one number only, nothing else: the probability from 0 to 1 that the answer to this "
+                    "question is yes for the screen shown.")
+_CHAT_MAX_TOKENS = 16                             # room for one number
+_NUMBER = re.compile(r"\d+(?:\.\d+)?|\.\d+")
+_DECISION_KIND = "decision"                       # the host kind that answers `/v1/classifications`
 
 
 def read_chosen_model(folder: Path) -> str:
@@ -133,14 +144,56 @@ def _read_decisions_from_server(endpoint: EndpointSpec,
     return decisions
 
 
+def _read_chat_score(endpoint: EndpointSpec,
+                     data_url: str,
+                     question: str,
+                     frame_name: str) -> float:
+    """Give me the probability a chat model answers for `question` on one frame: the first number of its reply, held
+    between 0 and 1. A reply holding no number stops phase 2, naming the frame and the reply."""
+
+    body = {"model": endpoint.model, "temperature": 0.0, "max_tokens": _CHAT_MAX_TOKENS, "reasoning_effort": "none",
+            "messages": [{"role": "user", "content": [{"type": "image_url", "image_url": {"url": data_url}},
+                                                      {"type": "text", "text": f"{question}\n{CHAT_ANSWER_TEXT}"}]}]}
+    reply = endpoint_client.request_chat_completion(endpoint=endpoint, body=body)
+    text = reply["choices"][0]["message"].get("content") or ""
+    found = _NUMBER.search(text)
+    if found is None:
+        raise RuntimeError(f"the decision model {endpoint.model!r} answered no number for {frame_name}: "
+                           f"{text[:endpoint_client.REPLY_SHOWN_CHARS]!r}")
+
+    return round(min(1.0, max(0.0, float(found.group()))), _SCORE_DIGITS)
+
+
+def _read_decisions_over_chat(endpoint: EndpointSpec,
+                              frames_dir: Path) -> dict[str, dict]:
+    """Every `frame-*.jpg` of `frames_dir` by file name -> `{"frame", "pKnowledge", "classes"}`, from a chat model asked
+    every question of `QUESTIONS` for each frame, one frame a call."""
+
+    frame_path_list = sorted(frames_dir.glob("frame-*.jpg"))
+    if not frame_path_list:
+        raise RuntimeError(f"no frame-*.jpg in {frames_dir}")
+    decisions = {}
+    for frame_path in frame_path_list:
+        data_url = _build_frame_data_url(frame_path=frame_path)
+        scores = {name: _read_chat_score(endpoint=endpoint, data_url=data_url, question=question, frame_name=frame_path.name)
+                  for name, question in QUESTIONS.items()}
+        decisions[frame_path.name] = {"frame": frame_path.name, "pKnowledge": scores["knowledge"],
+                                      "classes": {name: score for name, score in scores.items() if name != "knowledge"}}
+
+    return decisions
+
+
 def read_decisions(frames_dir: Path,
                    settings: FrameSettings) -> dict[str, dict]:
     """Every image of `frames_dir` by file name -> d1-2B's `{"frame", "pKnowledge", "classes"}`; a missing tool or a
-    failed run stops phase 2 by name. With `providers.decision.host` set, the model server answers and the tool is not
-    needed."""
+    failed run stops phase 2 by name. With `providers.decision` set, the model server answers and the tool is not
+    needed: a host listing the `decision` kind by `/v1/classifications`, any other host's model over chat."""
 
     endpoint = endpoint_client.find_endpoint(kind="decision")
     if endpoint is not None:
+        host = config.settings.find_host_by_url(endpoint.base_url)
+        if host is not None and _DECISION_KIND not in host.kinds:
+            return _read_decisions_over_chat(endpoint=endpoint, frames_dir=frames_dir)
         return _read_decisions_from_server(endpoint=endpoint, frames_dir=frames_dir)
     python = knowledge_filter_service.resolve_playbook_path(settings.decision_filter_python)
     script = python.parent.parent.parent / _SCRIPT_NAME

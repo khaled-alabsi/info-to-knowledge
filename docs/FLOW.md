@@ -78,7 +78,9 @@ PHASE 2  frames_preparing
                                          none: frames.knowledgeFilterModel
   program  runs     the d1-2B knowledge filter (tools/d1-knowledge-filter/, its own environment) when that model is
                                          liquidai-d1-2B: each frame's knowledge probability and empty-frame classes;
-                                         a frame under frames.decisionFilterCut is tagged people, with its dropClass
+                                         a frame under frames.decisionFilterCut is tagged people, with its dropClass;
+                                         a chat model named there instead is asked over /v1/chat/completions, one
+                                         call per frame and question, its reply's first number read as the score
   program  writes   frames/dropped/*.jpg  the frames tagged people (no knowledge), moved out of frames/, while
                                          frames.isKnowledgeFilterOn; shown on the detail view as "Dropped frames"; then
                                          each frame between two showings of one screen (the next frame repeats the one
