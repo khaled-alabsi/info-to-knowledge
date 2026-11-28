@@ -93,12 +93,40 @@ function readDefaultChoice(job: Job, drafts: SettingDrafts): string {
   return draft ? String(draft.raw) : typeof job.row.value === "string" ? job.row.value : "";
 }
 
-// Where a model runs, in the words a person uses: the server it is on. A job with no model runs the way the program
-// always has when a provider does it (speech to text, ...), and has no model when it is a phase
-function describeRun(rows: SettingRow[], model: string, isProviderJob = false): string {
-  if (!model) return isProviderJob ? "this computer, the program's own way" : "no model chosen";
+// A setting's value as text, "" when the settings hold none
+function readText(rows: SettingRow[], key: string): string {
+  const value = rows.find((row) => row.key === key)?.value;
+  return typeof value === "string" ? value : "";
+}
+
+// The tool a provider job runs on this computer when no model server is chosen for it, by its real name
+export function describeBuiltInTool(rows: SettingRow[], jobKey: string): string {
+  const kind = PROVIDER_KIND.exec(jobKey)?.[1] ?? "";
+  if (kind === "speech") {
+    const engine = readText(rows, "audio.engine") || "mlx";
+    const model = readText(rows, "audio.whisperModel");
+    return `Whisper on ${engine === "mlx" ? "MLX" : engine}${model ? `, ${model}` : ""}`;
+  }
+  if (kind === "diarization") return readText(rows, "audio.diarization.model") || "pyannote/speaker-diarization-community-1";
+  if (kind === "embeddings") return "SigLIP 2 (the frame classifier)";
+  if (kind === "decision") return readText(rows, "frames.knowledgeFilterModel") || "google-SigLIP-2";
+  return "no model chosen";
+}
+
+// A model by its real name and the provider it runs on: "qwen3.6-35b-a3b-mtp on LM Studio"
+function describeModelOnProvider(rows: SettingRow[], model: string): string {
+  const run = describeModelRun(rows, model);
+  return `${run.model} on ${run.host}`;
+}
+
+// Where a model runs, in the words a person uses: the server it is on. A provider job with no model runs its built-in
+// tool on this computer, named; a phase with no model has none
+function describeRun(rows: SettingRow[], model: string, jobKey = ""): string {
+  if (!model) return jobKey.startsWith("providers.") ? `this computer: ${describeBuiltInTool(rows, jobKey)}` : "no model chosen";
   return describeModelRun(rows, model).host;
 }
+
+const PROVIDER_KIND = /^providers\.([a-z]+)\./;
 
 // The name the model has on its server, when it is not the name the models list gives it
 function describeServerModel(rows: SettingRow[], model: string): string {
@@ -203,9 +231,12 @@ export default function ProviderSetsPanel({ rows, drafts, onEdit }: {
             onSelect: () => writeSets({ ...sets, [name]: setLeaf(overrides, job.path, startWith) }) };
         });
         return (
-          <div key={name} className="provider-set" aria-label={`provider set ${name}`} role="group">
+          // every set starts closed, its name alone showing, like every other group of settings
+          <details key={name} className="provider-set" aria-label={`provider set ${name}`} role="group">
+            <summary className="provider-set-head">
+              <span className="caret"><Icon name="chevron" size={13} /></span><h4>{name}</h4>
+            </summary>
             <div className="provider-set-head">
-              <h4>{name}</h4>
               <div className="provider-set-actions">
                 {chosenRow && (chosen === name
                   ? <span className="provider-set-chosen"><Icon name="check" size={14} /> Used by runs that pick no set</span>
@@ -236,14 +267,16 @@ export default function ProviderSetsPanel({ rows, drafts, onEdit }: {
                 const current = isDefault ? readDefaultChoice(job, drafts) : readSetJobModel(overrides, job);
                 const usual = typeof job.row.resolved === "string" ? job.row.resolved : "";
                 const isProviderJob = job.key.startsWith("providers.");
+                const builtIn = describeBuiltInTool(rows, job.key);
                 const firstOption: SettingOption | null = isDefault
                   ? (job.key.startsWith("phaseModels.")
-                    ? { value: "", label: usual ? `The ${usual} model` : "The program's choice of model",
+                    ? { value: "", label: usual ? describeModelOnProvider(rows, usual) : "no model chosen",
                       hint: "used when this job is given no model of its own", group: "" }
-                    : isProviderJob ? { value: "", label: "The program's own way", hint: "runs on this computer, no model server", group: "" }
+                    : isProviderJob ? { value: "", label: builtIn, hint: "runs on this computer, no model server", group: "" }
                       : null)
                   : { value: "", label: "Same as the default set",
-                    hint: defaultChoice || (isProviderJob ? "the program's own way" : "no model chosen"), group: "" };
+                    hint: defaultChoice ? describeModelOnProvider(rows, defaultChoice) : isProviderJob ? builtIn : "no model chosen",
+                    group: "" };
                 const effective = current || defaultChoice;
                 const choices = listChoices(current, firstOption, job);
                 return (
@@ -262,7 +295,7 @@ export default function ProviderSetsPanel({ rows, drafts, onEdit }: {
                       // a job nothing else can do has no menu to open: it says what it runs on
                       <span className="job-fixed">{readOptionLabel(choices[0]?.label ?? "")}</span>
                     )}
-                    <small className="muted job-runs">Runs on {describeRun(rows, effective, isProviderJob)}
+                    <small className="muted job-runs">Runs on {describeRun(rows, effective, job.key)}
                       {effective && describeModelWait(rows, effective) ? ` · ${describeModelWait(rows, effective)}` : ""}</small>
                   </div>
                 );
@@ -298,7 +331,7 @@ export default function ProviderSetsPanel({ rows, drafts, onEdit }: {
                 })}
               </>
             )}
-          </div>
+          </details>
         );
       })}
       <div className="provider-set-add">

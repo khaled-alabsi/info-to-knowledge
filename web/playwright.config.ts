@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
+import { pickTestWorkers } from "./testWorkers";
 
 // `npm run test:e2e`: the page served by Vite on its own port, every /api call answered by the tests (e2e/fixtures/),
 // in chromium only. Port 4173, never 5173: `npm run dev` there proxies /api to the real `i2k serve`. The server reads
@@ -8,8 +9,7 @@ const PORT = 4173;
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: true,
-  // Two workers at most: this Mac runs model jobs beside it
-  workers: 2,
+  workers: pickTestWorkers(),
   forbidOnly: Boolean(process.env.CI),
   reporter: [["list"]],
   use: {

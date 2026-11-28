@@ -1,14 +1,15 @@
 import { defineConfig, mergeConfig } from "vitest/config";
 import viteConfig from "./vite.config.ts";
+import { pickTestWorkers } from "./testWorkers.ts";
 
 // `npm test` runs the page's tests in jsdom; `npm run coverage` also fails the run below 85% on any measure.
-// Two workers at most: this Mac runs model jobs beside it.
+// Four workers when memory allows, two while a model job holds it (testWorkers.ts).
 export default mergeConfig(viteConfig, defineConfig({
   test: {
     environment: "jsdom",
     setupFiles: ["./src/test/setup.ts"],
     include: ["src/**/*.test.{ts,tsx}"],
-    maxWorkers: 2,
+    maxWorkers: pickTestWorkers(),
     restoreMocks: true,
     // The stylesheet is read as text by a layout test (`styles.css?raw`); without this every CSS import is empty
     css: { include: [/styles\.css/] },

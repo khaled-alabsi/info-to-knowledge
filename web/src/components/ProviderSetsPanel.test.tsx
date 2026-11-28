@@ -66,7 +66,7 @@ describe("ProviderSetsPanel", () => {
     await userEvent.click(within(office).getByRole("button", { name: /^Office: Frames processing/ }));
     // each model once by its own name, a grey line under it, and its server stands once as the heading
     expect(screen.getAllByRole("menuitemradio").map((item) => item.textContent)).toEqual([
-      "Same as the default setframe", "framebig-model", "documentdoc-model", "frame-gpugpu-model"]);
+      "Same as the default setbig-model on lmstudio", "framebig-model", "documentdoc-model", "frame-gpugpu-model"]);
     expect(Array.from(document.querySelectorAll(".menu-group")).map((item) => item.textContent)).toEqual(["lmstudio", "gpu-box"]);
     expect(document.querySelectorAll(".menu button[role='menuitemradio'] > svg.icon").length).toBeGreaterThan(0);
     await userEvent.click(screen.getByRole("menuitemradio", { name: /^document/ }));
@@ -86,8 +86,21 @@ describe("ProviderSetsPanel", () => {
     renderPanel();
     await userEvent.click(within(screen.getByRole("group", { name: "provider set default" }))
       .getByRole("button", { name: /^default: Review/ }));
-    const rows = screen.getAllByRole("menuitemradio").map((item) => item.textContent ?? "");
+    // the first option stands under no heading, so it names its model and provider itself
+    const [first, ...rows] = screen.getAllByRole("menuitemradio").map((item) => item.textContent ?? "");
+    expect(first).toMatch(/^doc-model on lmstudio/);
     for (const row of rows) expect(row).not.toMatch(/lmstudio|gpu-box|http/);
+  });
+
+  it("names the default model of a job by its real name and provider, never by its role defect", async () => {
+    // Defect as shown: the menu's first option read "The document model", and the owner could not tell which model it is.
+    // The fix: it reads the model's real name and the provider it runs on, and a provider job names its built-in tool
+    renderPanel();
+    await userEvent.click(within(screen.getByRole("group", { name: "provider set default" }))
+      .getByRole("button", { name: /^default: Review/ }));
+    const names = screen.getAllByRole("menuitemradio").map((item) => item.textContent ?? "");
+    expect(names.some((name) => /the document model/i.test(name))).toBe(false);
+    expect(names[0]).toContain("doc-model on lmstudio");
   });
 
   it("changes a job of the default set through the job's own setting", async () => {

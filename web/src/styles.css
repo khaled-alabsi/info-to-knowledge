@@ -1386,6 +1386,10 @@ p.transcript-suggestions { padding: 10px 12px; }
   flex-direction: column; gap: 8px; min-width: 0; }
 .provider-set-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .provider-set-head h4 { margin: 0; font-size: 15px; }
+/* a provider set and a server card fold to their title, like every group of settings */
+summary.provider-set-head, summary.server-card-head { cursor: pointer; list-style: none; justify-content: flex-start; gap: 8px; }
+summary.provider-set-head::-webkit-details-marker, summary.server-card-head::-webkit-details-marker { display: none; }
+.server-card-actions { display: flex; justify-content: flex-end; }
 .provider-set-actions { display: flex; gap: 8px; margin-left: auto; flex-wrap: wrap; }
 .provider-set-chosen { display: flex; align-items: center; gap: 6px; font-size: 13px; }
 .provider-set-subhead { margin: 4px 0 0; font-size: 13px; color: var(--muted, #666); }

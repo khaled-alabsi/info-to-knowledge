@@ -19,6 +19,12 @@ async function openSettings(page: Page) {
   await expect(page.getByRole("heading", { name: "Settings", level: 2 })).toBeVisible();
 }
 
+// Opens every server card and provider set card shown: each stands closed until opened, like every group of settings
+async function openCards(page: Page) {
+  await page.locator("details.server-card, details.provider-set").evaluateAll((cards) =>
+    cards.forEach((card) => { (card as HTMLDetailsElement).open = true; }));
+}
+
 // Opens a section, then one of its cards: both stand closed until opened
 async function openCard(page: Page, section: string, card: string) {
   await page.getByRole("heading", { name: section, exact: true, level: 3 }).click();
@@ -161,7 +167,7 @@ const PROVIDER_SET_ROWS = [...SETTINGS,
 test("a server card holds its address, its models and its jobs, a new model is added on its server, all inside the screen", async ({ page, api }) => {
   api.answer("GET /settings", { json: PROVIDER_SET_ROWS });
   await openSettings(page);
-  await page.getByRole("heading", { name: "Model servers", exact: true, level: 3 }).click();
+  await page.getByRole("heading", { name: "Model servers", exact: true, level: 3 }).click(); await openCards(page);
 
   const local = page.getByRole("group", { name: "server lmstudio" });
   const gpu = page.getByRole("group", { name: "server gpu-box" });
@@ -208,14 +214,14 @@ for (const size of SCREEN_WIDTHS) {
       api.answer("GET /settings", { json: PROVIDER_SET_ROWS });
       await page.setViewportSize(size);
       await openSettings(page);
-      await page.getByRole("heading", { name: "Provider sets", level: 3 }).click();
+      await page.getByRole("heading", { name: "Provider sets", level: 3 }).click(); await openCards(page);
 
       // the default set shows each job with the library model it runs and where; another set shows what it leaves as the default's
       const fallback = page.getByRole("group", { name: "provider set default" });
       await expectInsideScreen(page, fallback);
       await expect(fallback.getByText("Runs on lmstudio", { exact: false }).first()).toBeVisible();
       // the fallback names the model it picks, never a word like "usual" (the owner: "Usual word make no sense")
-      await expect(fallback.getByRole("button", { name: "default: Frames processing: The frame model" })).toBeVisible();
+      await expect(fallback.getByRole("button", { name: "default: Frames processing: acme-vision-35b on lmstudio" })).toBeVisible();
       await expect(fallback.getByText(/usual/i)).toHaveCount(0);
       await expectInsideScreen(page, fallback.getByText("Used by runs that pick no set"));
       const spare = page.getByRole("group", { name: "provider set spare" });
@@ -252,10 +258,30 @@ for (const size of SCREEN_WIDTHS) {
     });
 }
 
+for (const size of SCREEN_WIDTHS) {
+  test(`every server card and provider set card starts closed, its title alone shown, at ${size.width} px defect`,
+    async ({ page, api }) => {
+      // Defect as shown: a section opened showed every server and every set open, a long page of fields.
+      // The fix: each card starts closed like every other group of settings, and opens by its title
+      api.answer("GET /settings", { json: PROVIDER_SET_ROWS });
+      await page.setViewportSize(size);
+      await openSettings(page);
+      await page.getByRole("heading", { name: "Model servers", exact: true, level: 3 }).click();
+      await page.getByRole("heading", { name: "Provider sets", level: 3 }).click();
+      for (const card of await page.locator("details.server-card, details.provider-set").all()) {
+        await expect(card).not.toHaveAttribute("open", "");
+        await expectInsideScreen(page, card.locator(":scope > summary"));
+      }      const spare = page.getByRole("group", { name: "provider set spare" });
+      await expect(spare.getByRole("button", { name: "remove provider set spare" })).toBeHidden();
+      await spare.locator(":scope > summary").click();
+      await expect(spare.getByRole("button", { name: "remove provider set spare" })).toBeVisible();
+    });
+}
+
 test("Copy on a provider set card creates a new set from it and asks for its name", async ({ page, api }) => {
   api.answer("GET /settings", { json: PROVIDER_SET_ROWS });
   await openSettings(page);
-  await page.getByRole("heading", { name: "Provider sets", level: 3 }).click();
+  await page.getByRole("heading", { name: "Provider sets", level: 3 }).click(); await openCards(page);
   const spare = page.getByRole("group", { name: "provider set spare" });
   await spare.getByRole("button", { name: "copy provider set spare" }).click();
   const create = spare.getByRole("button", { name: "Create copy" });
@@ -282,7 +308,7 @@ test("the page keeps two model sections, Model servers then Provider sets, and a
   // the old sections are gone
   expect(headings.some((heading) => heading.startsWith("Model providers") || heading.startsWith("Models"))).toBe(false);
 
-  await page.getByRole("heading", { name: "Model servers", exact: true, level: 3 }).click();
+  await page.getByRole("heading", { name: "Model servers", exact: true, level: 3 }).click(); await openCards(page);
   const gpuModel = page.getByRole("group", { name: "model frame-gpu" });
   await gpuModel.locator("summary").first().click();
   await gpuModel.getByRole("button", { name: "remove model frame-gpu" }).click();
@@ -298,7 +324,7 @@ test("the page keeps two model sections, Model servers then Provider sets, and a
 test("a server is added and removed as a card, never as JSON text, at every width", async ({ page, api }) => {
   api.answer("GET /settings", { json: PROVIDER_SET_ROWS });
   await openSettings(page);
-  await page.getByRole("heading", { name: "Model servers", exact: true, level: 3 }).click();
+  await page.getByRole("heading", { name: "Model servers", exact: true, level: 3 }).click(); await openCards(page);
   const remove = page.getByRole("button", { name: "remove server gpu-box" });
   for (const size of SCREEN_WIDTHS) {
     await page.setViewportSize(size);
@@ -338,7 +364,7 @@ for (const size of SCREEN_WIDTHS) {
       api.answer("GET /settings", { json: PROVIDER_ROWS });
       await page.setViewportSize(size);
       await openSettings(page);
-      await page.getByRole("heading", { name: "Model servers", exact: true, level: 3 }).click();
+      await page.getByRole("heading", { name: "Model servers", exact: true, level: 3 }).click(); await openCards(page);
       const card = page.getByRole("group", { name: "model whisper-gpu" });
       await card.locator("summary").first().click();
       const name = card.getByRole("textbox", { name: "Model name of whisper-gpu" });
@@ -350,7 +376,7 @@ for (const size of SCREEN_WIDTHS) {
       const title = await card.locator("summary strong").boundingBox();
       expect(box && title && title.x - box.x).toBeGreaterThanOrEqual(8);
 
-      await page.getByRole("heading", { name: "Provider sets", level: 3 }).click();
+      await page.getByRole("heading", { name: "Provider sets", level: 3 }).click(); await openCards(page);
       const spare = page.getByRole("group", { name: "provider set spare" });
       const overrideButton = spare.getByRole("button", { name: "Override a job" });
       await scrollIntoViewSettled(page, overrideButton);
@@ -400,6 +426,7 @@ for (const size of SCREEN_WIDTHS) {
       const headings = await page.getByRole("heading", { level: 3 }).allInnerTexts();
       expect(headings.slice(0, 2).map((heading) => heading.replace(/\s+\d.*$/s, "").trim())).toEqual(["Model servers", "Provider sets"]);
       for (const title of ["Model servers", "Provider sets"]) await page.getByRole("heading", { name: title, exact: true, level: 3 }).click();
+      await openCards(page);
 
       // a server card holds its jobs as tick boxes, and the models that run on it
       const gpu = page.getByRole("group", { name: "server gpu-box" });
@@ -478,7 +505,7 @@ test.describe("in a German browser", () => {
 test("a set's value set back to the default leaves the set changing nothing", async ({ page, api }) => {
   api.answer("GET /settings", { json: PROVIDER_SET_ROWS });
   await openSettings(page);
-  await page.getByRole("heading", { name: "Provider sets", level: 3 }).click();
+  await page.getByRole("heading", { name: "Provider sets", level: 3 }).click(); await openCards(page);
   const spare = page.getByRole("group", { name: "provider set spare" });
   await spare.getByRole("button", { name: "stop changing Frames per call in spare" }).click();
   await expect(spare).toContainText("It changes nothing yet");
@@ -503,7 +530,7 @@ for (const size of SCREEN_WIDTHS) {
       await expect(row.getByText("default", { exact: true })).toHaveCount(0);
       await page.getByRole("searchbox").fill("");
 
-      await page.getByRole("heading", { name: "Model servers", exact: true, level: 3 }).click();
+      await page.getByRole("heading", { name: "Model servers", exact: true, level: 3 }).click(); await openCards(page);
       const frame = page.getByRole("group", { name: "model frame", exact: true });
       await frame.locator("summary").first().click();
       // a library model names the provider sets and jobs that use it, never a job of its own, and carries no "changed" badge
@@ -545,7 +572,7 @@ for (const size of SCREEN_WIDTHS) {
       expect(await editMenu.locator("button[role='menuitemradio'] > svg").count()).toBeGreaterThan(0);
       await page.keyboard.press("Escape");
 
-      await page.getByRole("heading", { name: "Model servers", exact: true, level: 3 }).click();
+      await page.getByRole("heading", { name: "Model servers", exact: true, level: 3 }).click(); await openCards(page);
       const spare = page.getByRole("group", { name: "server spare-box" });
       await expect(spare.getByText("No models yet.")).toBeVisible();
       await expectInsideScreen(page, spare.getByText("No models yet."));

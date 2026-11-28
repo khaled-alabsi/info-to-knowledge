@@ -99,9 +99,12 @@ export default function ServerCards({ rows, context, newRows, onAdd, onDiscard, 
         const kinds = Array.isArray(entry.kinds) ? entry.kinds.map(String) : ["chat"];
         const isEdited = Boolean(context.drafts[HOSTS_KEY]);
         return (
-          <div key={server} className={`server-card${isEdited ? " edited" : ""}`} role="group" aria-label={`server ${server}`}>
-            <div className="server-card-head">
-              <h4>{describeHost(server)}</h4>
+          // every card starts closed, its title alone showing, like every other group of settings
+          <details key={server} className={`server-card${isEdited ? " edited" : ""}`} role="group" aria-label={`server ${server}`}>
+            <summary className="server-card-head">
+              <span className="caret"><Icon name="chevron" size={13} /></span><h4>{describeHost(server)}</h4>
+            </summary>
+            <div className="server-card-actions">
               <button type="button" className="btn danger" aria-label={`remove server ${server}`}
                 onClick={() => writeHosts(Object.fromEntries(Object.entries(hosts).filter(([name]) => name !== server)))}>
                 <Icon name="trash" size={14} /> Remove</button>
@@ -134,15 +137,17 @@ export default function ServerCards({ rows, context, newRows, onAdd, onDiscard, 
             </div>
             <h5 className="server-models-head">Models on {describeHost(server)}</h5>
             {renderModels(server)}
-          </div>
+          </details>
         );
       })}
       {unplaced > 0 && (
-        <div className="server-card" role="group" aria-label="models on no listed server">
-          <div className="server-card-head"><h4>No listed server</h4></div>
+        <details className="server-card" role="group" aria-label="models on no listed server">
+          <summary className="server-card-head">
+            <span className="caret"><Icon name="chevron" size={13} /></span><h4>No listed server</h4>
+          </summary>
           <p className="muted">These models run on a service the list above does not hold, such as OpenAI's own. Pick a server in a model's card to move it.</p>
           {renderModels("")}
-        </div>
+        </details>
       )}
       {!hostsRow ? null : newServer === null ? (
         <div className="setting-row add-model">
