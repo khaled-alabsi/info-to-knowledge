@@ -1041,6 +1041,18 @@ def test_a_frame_left_out_as_written_in_the_text_is_no_claim_of_a_placed_frame()
                   str(dispositions))
 
 
+def test_a_frame_left_out_again_for_another_reason_is_no_claim_of_a_placed_frame_defect():
+    # Defect: a frame first left out as "shown by the placed cut", then left out for personal data, stayed "shown by a placed frame".
+    # Fix: the latest leave_out reason of a frame decides, so the second reason makes it a plain leave-out.
+    from validators import document_validator
+    store = {"leftOut": [{"frame": "frame-057", "chapter": "chapter-04-text-7", "reason": "already shown by the placed cut"},
+                         {"frame": "frame-057", "chapter": "chapter-04-text-7",
+                          "reason": "it shows a table of client accounts with personal data"}]}
+    dispositions = document_validator._read_frame_dispositions(store, "chapter-04-text-7")
+    harness.check("the latest reason decides", dispositions.shown_elsewhere == set()
+                  and dispositions.left_out == {"frame-057"}, str(dispositions))
+
+
 def test_one_page_scrolled_to_other_lines_is_no_twin():
     """An editor page scrolled from its first lines to lines far below differs in few pixels, since the editor is a
     small part of the page; it was named a twin, and the worker spent a long reasoning on which to leave out

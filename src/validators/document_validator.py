@@ -700,10 +700,11 @@ def _read_frame_dispositions(store: dict,
     replaced by a diagram. What the worker is told and what the judge accepts are read here, once."""
 
     records = [record for record in store.get("leftOut") or [] if record.get("chapter") == chapter_slug]
-    left_out = {str(record.get("frame") or "") for record in records}
-    shown_elsewhere = {str(record.get("frame") or "") for record in records
-                       if _SHOWN_ELSEWHERE.search(str(record.get("reason") or ""))
-                       and not _WRITTEN_IN_TEXT.search(str(record.get("reason") or ""))}
+    # the latest reason given for a frame decides: an earlier "shown by" was kept after the worker gave another reason
+    latest_reasons = {str(record.get("frame") or ""): str(record.get("reason") or "") for record in records}
+    left_out = set(latest_reasons)
+    shown_elsewhere = {frame for frame, reason in latest_reasons.items()
+                       if _SHOWN_ELSEWHERE.search(reason) and not _WRITTEN_IN_TEXT.search(reason)}
     replaced = {str(record.get("frame") or "") for record in store.get("diagramReplacements") or []
                 if record.get("chapter") == chapter_slug}
 
