@@ -214,7 +214,9 @@ for (const size of SCREEN_WIDTHS) {
       const fallback = page.getByRole("group", { name: "provider set default" });
       await expectInsideScreen(page, fallback);
       await expect(fallback.getByText("Runs on lmstudio", { exact: false }).first()).toBeVisible();
-      await expect(fallback.getByRole("button", { name: "default: Frames processing: The usual model" })).toBeVisible();
+      // the fallback names the model it picks, never a word like "usual" (the owner: "Usual word make no sense")
+      await expect(fallback.getByRole("button", { name: "default: Frames processing: The frame model" })).toBeVisible();
+      await expect(fallback.getByText(/usual/i)).toHaveCount(0);
       await expectInsideScreen(page, fallback.getByText("Used by runs that pick no set"));
       const spare = page.getByRole("group", { name: "provider set spare" });
       await expectInsideScreen(page, spare);

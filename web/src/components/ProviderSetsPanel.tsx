@@ -238,7 +238,8 @@ export default function ProviderSetsPanel({ rows, drafts, onEdit }: {
                 const isProviderJob = job.key.startsWith("providers.");
                 const firstOption: SettingOption | null = isDefault
                   ? (job.key.startsWith("phaseModels.")
-                    ? { value: "", label: "The usual model", hint: usual || "chosen by the program", group: "" }
+                    ? { value: "", label: usual ? `The ${usual} model` : "The program's choice of model",
+                      hint: "used when this job is given no model of its own", group: "" }
                     : isProviderJob ? { value: "", label: "The program's own way", hint: "runs on this computer, no model server", group: "" }
                       : null)
                   : { value: "", label: "Same as the default set",
