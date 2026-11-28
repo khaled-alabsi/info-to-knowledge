@@ -122,6 +122,16 @@ _FRAME_OF_THE_SUBJECT = re.compile(r"\b(?:stack|global|call|data|key|time)\s+fra
 # "iframe" are the subject's.
 _BANNED = [(phrase, re.compile(rf"\b{re.escape(phrase)}s?\b", re.IGNORECASE))
            for phrase in output_contract.DOCUMENT_BANNED_PHRASES]
+# A link's target, `](#capacity-time-frame)`, and a heading's anchor, `{#capacity-time-frame}`, are no text a reader
+# reads: a heading's slug holds its words joined by hyphens, so "time frame" passed in the heading and was refused in
+# the table of contents' link to it, three attempts running, and the recording stopped (a hard fix)
+_LINK_TARGET = re.compile(r"\]\([^)\n]*\)|\{#[^}\n]*\}")
+
+
+def _drop_link_targets(text: str) -> str:
+    """`text` with every link's target and heading anchor dropped, the link's own words kept."""
+
+    return _LINK_TARGET.sub(lambda match: "]" if match.group(0).startswith("]") else "", text)
 
 
 # A frame's note `F154.2`, a transcript line `S0415`, a prepared note of an audio recording `P2.3.1`
@@ -642,7 +652,7 @@ def list_restating_entries(entries: list[dict]) -> dict[str, str]:
 def find_banned_phrases(text: str) -> list[str]:
     """The banned phrases that occur in `text`, whatever their case, in the contract's own order."""
 
-    kept = _FRAME_OF_THE_SUBJECT.sub(" ", _SEGMENT_OF_THE_SUBJECT.sub(" ", text))
+    kept = _FRAME_OF_THE_SUBJECT.sub(" ", _SEGMENT_OF_THE_SUBJECT.sub(" ", _drop_link_targets(text)))
 
     return [phrase for phrase, pattern in _BANNED if pattern.search(kept)]
 
@@ -653,7 +663,7 @@ def find_banned_snippets(text: str,
     only the word left a worker reading its whole chapter for "frame" in a frame's id it had written (DEFECTS 238)."""
 
     snippets = []
-    for sentence in _list_raw_sentences(text):
+    for sentence in _list_raw_sentences(_drop_link_targets(text)):
         kept = _FRAME_OF_THE_SUBJECT.sub(lambda match: " " * len(match.group(0)),
                                          _SEGMENT_OF_THE_SUBJECT.sub(lambda match: " " * len(match.group(0)), sentence))
         found = next((match for _, pattern in _BANNED for match in [pattern.search(kept)] if match), None)

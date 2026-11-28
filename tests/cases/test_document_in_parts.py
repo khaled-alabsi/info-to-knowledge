@@ -1180,6 +1180,20 @@ def test_a_banned_word_s_finding_quotes_the_words_round_it_defect():
                   document_text_utils.find_banned_snippets("Each call gets its own stack frame.") == [])
 
 
+def test_a_banned_word_inside_a_link_target_or_a_heading_anchor_is_not_refused_defect():
+    # A table of contents linked to a heading whose slug held "frame" ("#capacity-time-frame"), and the chapter was
+    # refused three times and the run stopped; a link's target and a heading's anchor are no text a reader reads
+    linked = "- [Capacity and time](#capacity-time-frame)\n\n### Capacity and time {#capacity-time-frame}\n"
+    harness.check("the link target and the anchor pass", document_text_utils.find_banned_phrases(linked) == [],
+                  str(document_text_utils.find_banned_phrases(linked)))
+    harness.check("their snippets pass too", document_text_utils.find_banned_snippets(linked) == [],
+                  str(document_text_utils.find_banned_snippets(linked)))
+    harness.check("the word in a link's own words is still refused",
+                  document_text_utils.find_banned_phrases("See [the frame shows it](#capacity).") != [])
+    harness.check("the word in prose is still refused",
+                  document_text_utils.find_banned_phrases("The frame shows the capacity plan.") != [])
+
+
 def test_a_time_read_off_a_chart_in_its_description_is_no_recording_position_defect():
     # A chart's description named the wood stove's spike "at approximately 20:00", read off the axis, and was refused as
     # a position in the recording; a figure's description line is the figure's, and a time in prose still is refused
