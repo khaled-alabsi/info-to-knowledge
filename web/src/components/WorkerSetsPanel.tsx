@@ -224,7 +224,7 @@ export default function WorkerSetsPanel({ rows, drafts, onEdit }: {
                 const usual = typeof job.row.resolved === "string" ? job.row.resolved : "";
                 const isProviderJob = job.key.startsWith("providers.");
                 const firstOption: SettingOption | null = isDefault
-                  ? (job.key.startsWith("phaseModels.") ? { value: "", label: `usual: ${usual}`, hint: "", group: "" }
+                  ? (job.key.startsWith("phaseModels.") ? { value: "", label: `the ${usual} model`, hint: "", group: "" }
                     : isProviderJob ? { value: "", label: "none: the program's own way", hint: "", group: "" } : null)
                   : { value: "", label: `same as default set: ${defaultChoice || "none"}`, hint: "", group: "" };
                 const effective = current || defaultChoice;

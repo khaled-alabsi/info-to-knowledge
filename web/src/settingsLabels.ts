@@ -84,7 +84,7 @@ function buildPhaseEntries(): Record<string, SettingLabel> {
   for (const [phase, title] of Object.entries(PHASE_LABELS)) {
     entries[`phaseModels.${phase}`] = {
       label: title,
-      help: "Which model this phase uses; empty uses the phase's usual model.",
+      help: "Which model this phase uses; empty uses the phase's own model: the document model or the frame model.",
     };
   }
   return entries;

@@ -214,7 +214,7 @@ for (const size of SCREEN_WIDTHS) {
       const fallback = page.getByRole("group", { name: "worker set default" });
       await expectInsideScreen(page, fallback);
       await expect(fallback.getByText("Runs on lmstudio · acme-vision-35b")).toBeVisible();
-      await expect(fallback.getByRole("button", { name: "default: Frames processing: usual: frame" })).toBeVisible();
+      await expect(fallback.getByRole("button", { name: "default: Frames processing: the frame model" })).toBeVisible();
       const chosen = page.getByRole("button", { name: "Used when a job names no set: default" });
       await expectInsideScreen(page, chosen);
       const spare = page.getByRole("group", { name: "worker set spare" });

@@ -33,7 +33,7 @@ describe("WorkerSetsPanel", () => {
     // The card of a set was a table of overrides to type; each job now shows the library model it calls and where it runs
     renderPanel();
     const fallback = screen.getByRole("group", { name: "worker set default" });
-    expect(within(fallback).getByRole("button", { name: "default: Frames processing: usual: frame" })).toBeInTheDocument();
+    expect(within(fallback).getByRole("button", { name: "default: Frames processing: the frame model" })).toBeInTheDocument();
     expect(within(fallback).getAllByText(/^Runs on lmstudio · big-model$/)).toHaveLength(1);
     expect(within(fallback).getAllByText(/^Runs on lmstudio · doc-model$/)).toHaveLength(1);
     const office = screen.getByRole("group", { name: "worker set Office" });
@@ -66,7 +66,7 @@ describe("WorkerSetsPanel", () => {
   it("changes a job of the default set through the job's own setting", async () => {
     const onEdit = renderPanel();
     const fallback = screen.getByRole("group", { name: "worker set default" });
-    await userEvent.click(within(fallback).getByRole("button", { name: "default: Review: usual: document" }));
+    await userEvent.click(within(fallback).getByRole("button", { name: "default: Review: the document model" }));
     await userEvent.click(screen.getByRole("menuitemradio", { name: /^gpu-box: frame-gpu/ }));
     expect(onEdit).toHaveBeenCalledWith(expect.objectContaining({ key: "phaseModels.review" }), "frame-gpu");
   });
