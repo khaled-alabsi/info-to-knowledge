@@ -1448,3 +1448,18 @@ def test_a_markdown_note_of_several_paragraphs_is_shown_fenced_and_cited_once_de
     one = {"id": "F23.5", "kind": "markdown", "text": "- a\n- b"}
     harness.check("a note of one paragraph is shown as before",
                   document_messages._render_entry_line(one, one["text"]) == "F23.5 [markdown] - a\n- b", "")
+
+
+def test_a_placed_cut_whose_rectangle_lies_outside_a_smaller_frame_is_no_match_and_stops_nothing_defect():
+    # Defect: a run's phase 4 stopped on a division by zero: a placed cut's rectangle lay below a smaller needed frame
+    # Fix: an image with no pixels is not compared, so the frame is simply not a copy of that cut
+    import numpy
+    frame = numpy.full((100, 160, 3), 255, dtype=numpy.uint8)
+    shown = numpy.full((80, 120, 3), 255, dtype=numpy.uint8)
+    shown[20:60, 20:100] = 0
+    cut = {"frame": "frame-001", "lookRect": [10, 300, 130, 380]}
+    try:
+        matched = figure_match_service._is_same_view(frame, "frame-002", cut, shown)
+    except ZeroDivisionError as error:
+        matched = error
+    harness.check("the frame is no copy of the cut, and nothing raises", matched is False, repr(matched))

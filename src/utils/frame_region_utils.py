@@ -899,8 +899,12 @@ REPEATED_SAME_WORDS_SHARE = 0.3
 def compute_content_difference(first: numpy.ndarray,
                                second: numpy.ndarray) -> float | None:
     """The share of the content pixels (those apart from the shared background) that differ between two images, compared
-    at 256 pixels wide; None when their shapes differ by more than a tenth, which no repeat does."""
+    at 256 pixels wide; None when their shapes differ by more than a tenth, which no repeat does, or when either image
+    has no pixels (a placed cut's rectangle lying outside a smaller frame crops nothing, and a run's phase 4 stopped on
+    the division by its height)."""
 
+    if min(first.shape[:2]) == 0 or min(second.shape[:2]) == 0:
+        return None
     first_ratio, second_ratio = first.shape[1] / first.shape[0], second.shape[1] / second.shape[0]
     if abs(first_ratio - second_ratio) / max(first_ratio, second_ratio) > _SHAPE_TOLERANCE:
         return None
