@@ -177,6 +177,29 @@ def test_the_settings_list_names_each_value_its_file_and_its_comment():
                   str(rows["review.isOn"]))
 
 
+def test_a_model_answer_format_and_the_profile_list_offer_only_real_choices_defect():
+    """Defect as shown: a model's answer format was an empty typing box, and the Edit menu offered the example of a person's
+    own file as a profile. The fix: a type that is a list of words or nothing offers them with an empty first choice, and the
+    example file is no profile."""
+
+    folder = Path(tempfile.mkdtemp())
+    (folder / "playbook.default.json").write_text(json.dumps({"models": {"frame": {"spec": "lmstudio:small"}}}), encoding="utf-8")
+    (folder / "playbook.local.json").write_text("{}", encoding="utf-8")
+    (folder / "playbook.local.example.json").write_text("{}", encoding="utf-8")
+    (folder / "playbook.strict.json").write_text("{}", encoding="utf-8")
+    previous = _swap_settings_files(folder)
+    settings_service.set_host_lister(_answer_no_host)
+    try:
+        rows = {row["key"]: row for row in settings_service.list_settings()}
+        profiles = config.list_profile_names()
+    finally:
+        config.DEFAULT_CONFIG_FILE, config.LOCAL_CONFIG_FILE, config.PLAYBOOK_ROOT = previous
+        settings_service.set_host_lister(host_model_service.list_host_models)
+    method = rows["models.frame.structuredMethod"]["choices"]
+    harness.check("the answer format is a choice, empty first", method == ["", "function_calling", "json_schema", "json_mode"], str(method))
+    harness.check("the example of a person's own file is no profile", profiles == ["strict"], str(profiles))
+
+
 def test_a_setting_is_saved_in_the_owners_file_alone_and_a_value_set_back_to_the_default_leaves_it_defect():
     # Every save wrote both the shipped default file and the owner's own, so the owner's file became a second full copy
     # (141 of 189 values the same) and settings "made no sense". A save now writes the owner's file alone, and only what differs
@@ -438,15 +461,15 @@ def test_every_model_selection_is_offered_as_a_list_with_its_connections():
     harness.check("a spec lists each host's models by their id under the host's heading, one model under each host "
                   "that serves it, and allows typing",
                   [(option["group"], option["label"], option["value"]) for option in spec["choice_options"]]
-                  == [("lmstudio at http://localhost:1234/v1", "big-model", "lmstudio:big-model"),
-                      ("lmstudio at http://localhost:1234/v1", "small-model", "lmstudio:small-model"),
-                      ("other-mac at http://other-mac:1234/v1", "big-model", "openai-compatible:big-model")]
+                  == [("lmstudio", "big-model", "lmstudio:big-model"),
+                      ("lmstudio", "small-model", "lmstudio:small-model"),
+                      ("other-mac", "big-model", "openai-compatible:big-model")]
                   and spec["is_open_choice"], str(spec))
     host = other["models.frame.host"]
-    harness.check("a model's host lists the empty value and every entry of `hosts`, each with its address",
+    harness.check("a model's host lists the empty value and every entry of `hosts` by name, never its address (defect: "
+                  "a menu showed a network address; the address stays on the server's card)",
                   [(option["value"], option["hint"]) for option in host["choice_options"]]
-                  == [("", "its default"), ("lmstudio", "http://localhost:1234/v1"),
-                      ("ollama", "http://localhost:11434"), ("other-mac", "http://other-mac:1234/v1")]
+                  == [("", "its default"), ("lmstudio", ""), ("ollama", ""), ("other-mac", "")]
                   and host["value"] == "other-mac", str(host))
     harness.check("no model row holds an address of its own: the address is its host's",
                   not [key for key in rows if key.startswith("models.") and key.endswith(".baseUrl")])

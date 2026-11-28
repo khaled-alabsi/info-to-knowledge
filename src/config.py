@@ -1202,8 +1202,9 @@ def build_profile_path(name: str) -> Path:
     return PLAYBOOK_ROOT / f"{_PROFILE_PREFIX}{name}{_PROFILE_SUFFIX}"
 
 
-# `playbook.spec.json` is the generator's description of the playbook, not a set of settings
-_NOT_PROFILES = (DEFAULT_SETTINGS_NAME, LOCAL_SETTINGS_NAME, "spec")
+# `playbook.spec.json` is the generator's description of the playbook, not a set of settings; `playbook.local.example.json` is
+# the shipped example of a person's own file, to copy, not a profile to choose
+_NOT_PROFILES = (DEFAULT_SETTINGS_NAME, LOCAL_SETTINGS_NAME, "spec", f"{LOCAL_SETTINGS_NAME}.example")
 
 
 def list_profile_names() -> list[str]:

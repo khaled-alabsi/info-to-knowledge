@@ -10,6 +10,7 @@ from __future__ import annotations
 import ast
 import inspect
 import json
+import types
 import typing
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
@@ -114,10 +115,16 @@ def _is_long_text(field: Any) -> bool:
 
 def _list_choices(annotation: Any) -> list[str]:
     """The values a setting may take when its type names them (a `Literal`), which the page offers as a list; empty
-    for every other setting."""
+    for every other setting. A `Literal` that may also be empty (`Literal[...] | None`) offers the empty value first, which
+    the page says as "automatic"."""
 
     if typing.get_origin(annotation) is typing.Literal:
         return [str(value) for value in typing.get_args(annotation)]
+    if typing.get_origin(annotation) in (typing.Union, types.UnionType):
+        arms = typing.get_args(annotation)
+        literals = [arm for arm in arms if typing.get_origin(arm) is typing.Literal]
+        if len(literals) == 1 and type(None) in arms and len(arms) == 2:
+            return ["", *[str(value) for value in typing.get_args(literals[0])]]
 
     return []
 
@@ -139,9 +146,9 @@ def _list_profile_files() -> list[tuple[str, dict]]:
 
 
 def _list_host_name_options(settings: config.Settings) -> list[dict]:
-    """Each entry of `hosts`, named by its name with its address under it."""
+    """Each entry of `hosts`, named by its name; its address is shown on the server's own card and nowhere else."""
 
-    return [{"value": name, "label": name, "hint": host.url, "group": ""} for name, host in sorted(settings.hosts.items())]
+    return [{"value": name, "label": name, "hint": "", "group": ""} for name, host in sorted(settings.hosts.items())]
 
 
 def _list_host_model_options(settings: config.Settings) -> list[dict]:
@@ -155,7 +162,7 @@ def _list_host_model_options(settings: config.Settings) -> list[dict]:
         host_models = list(pool.map(lambda pair: HOST_LISTER(pair[0], pair[1][1].url), zip(providers, ordered_hosts)))
 
     return [{"value": f"{provider}:{model_id}", "label": model_id, "hint": "",
-             "group": f"{name} at {host.url}", "host": name}
+             "group": name, "host": name}
             for provider, (name, host), model_ids in zip(providers, ordered_hosts, host_models)
             for model_id in sorted(model_ids or [])]
 
