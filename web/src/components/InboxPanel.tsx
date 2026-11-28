@@ -53,16 +53,21 @@ export function rankPill(pillClass: string): number {
 }
 
 // A started run's pill names the phase it stopped in ("phase 3 ›"), and its title the phase's name; any other state
-// names the state; a running run's pill names its provider set when one is given ("running · Mac ›")
-function labelStatePill(state: InboxItem["state"], stoppedPhase: number, isBlocked = false, providerSet = ""): string {
+// names the state; a running run's pill names its provider set when one is given ("running · Mac ›"), and a running run
+// held at its pause says "paused" ("pausing" while its model call still ends) in place of "running" (the owner paused a
+// run and its pill went on saying running)
+function labelStatePill(state: InboxItem["state"], stoppedPhase: number, isBlocked = false, providerSet = "",
+  pause: RunSummary["pause"] = ""): string {
   if (state === "started" && stoppedPhase > 0) return `${isBlocked ? "blocked in phase" : "phase"} ${stoppedPhase} ›`;
-  if (state === "running" && providerSet) return `${formatRunState(state)} · ${providerSet} ›`;
+  const word = state === "running" && pause ? pause : formatRunState(state);
+  if (state === "running" && providerSet) return `${word} · ${providerSet} ›`;
 
-  return `${formatRunState(state)} ›`;
+  return `${word} ›`;
 }
 
 // A blocked run's pill is red, so the runs to unblock stand out from the ones that only stopped
-function classifyStatePill(state: InboxItem["state"], isBlocked = false): string {
+function classifyStatePill(state: InboxItem["state"], isBlocked = false, pause: RunSummary["pause"] = ""): string {
+  if (state === "running" && pause) return "held";
   return state === "started" && isBlocked ? "failed" : STATE_PILL_CLASSES[state];
 }
 
@@ -986,7 +991,7 @@ export default function InboxPanel({
     const pendingJob = findPendingJob(item);
     if (lead && !pendingJob) {
       return describeChangePill(lastJobsOfVideos.get(item.video), lead.has_document, lead.status)?.pillClass
-        ?? classifyStatePill(item.state, lead.is_blocked);
+        ?? classifyStatePill(item.state, lead.is_blocked, lead.pause);
     }
     if (!pendingJob) return "new";
     return pendingJob.is_output_missing ? "failed" : pendingJob.status;
@@ -1000,7 +1005,7 @@ export default function InboxPanel({
   const classifyRunPill = (run: RunSummary) =>
     findWaitingJobOfRun(run)?.status
       ?? describeChangePill(lastJobsOfFolders.get(run.folder), run.has_document, run.status)?.pillClass
-      ?? classifyStatePill(describeRunState(run), run.is_blocked);
+      ?? classifyStatePill(describeRunState(run), run.is_blocked, run.pause);
   // what the ⚙ arrow is set to, shown on the Process button when it is not the default
   const runSettings = describeSelection(selection, phaseModels);
   const newItems = items.filter((item) => item.state === "new" && !findPendingJob(item));
@@ -1156,7 +1161,7 @@ export default function InboxPanel({
                     title={describeRunState(run) === "started" ? titleStoppedPhase(run.stopped_phase, phases, run.phase_titles) : undefined}>
                     {(findWaitingJobOfRun(run) && `${labelWaitingJob(findWaitingJobOfRun(run)!)} ›`)
                       || describeChangePill(lastJobsOfFolders.get(run.folder), run.has_document, run.status)?.label.concat(" ›")
-                      || labelStatePill(describeRunState(run), run.stopped_phase, run.is_blocked, nameRunningSet(run))}
+                      || labelStatePill(describeRunState(run), run.stopped_phase, run.is_blocked, nameRunningSet(run), run.pause)}
                   </span>
                 </button>
               </li>
@@ -1221,7 +1226,7 @@ export default function InboxPanel({
                   {lead && !findPendingJob(item) ? (
                     <button className={`pill link ${classifyItemPill(item)}`}
                       aria-label={`${describeChangePill(lastJobsOfVideos.get(item.video), lead.has_document, lead.status)?.label.concat(" ›")
-                        ?? labelStatePill(item.state, lead.stopped_phase, lead.is_blocked, nameRunningSet(lead))} open the run of ${item.display_name || item.name}`}
+                        ?? labelStatePill(item.state, lead.stopped_phase, lead.is_blocked, nameRunningSet(lead), lead.pause)} open the run of ${item.display_name || item.name}`}
                       aria-description={item.state === "started" ? titleStoppedPhase(lead.stopped_phase, phases, lead.phase_titles) || undefined : undefined}
                       title={[item.state === "started" ? titleStoppedPhase(lead.stopped_phase, phases, lead.phase_titles) : "",
                         `open its run: ${item.runs.map((run) => `${buildRunPath(run)} (${run.status})`).join(", ")}`]
@@ -1231,7 +1236,7 @@ export default function InboxPanel({
                         onOpenRun(lead.root, lead.name);
                       }}>
                       {describeChangePill(lastJobsOfVideos.get(item.video), lead.has_document, lead.status)?.label.concat(" ›")
-                        ?? labelStatePill(item.state, lead.stopped_phase, lead.is_blocked, nameRunningSet(lead))}
+                        ?? labelStatePill(item.state, lead.stopped_phase, lead.is_blocked, nameRunningSet(lead), lead.pause)}
                     </button>
                   ) : (
                     <NewItemPill job={findPendingJob(item)} name={item.display_name || item.name} onOpenJob={onOpenJob}

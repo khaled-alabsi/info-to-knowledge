@@ -948,6 +948,37 @@ def test_a_started_run_names_the_phase_its_own_page_would_resume_from():
                   run["stopped_phase"] == first_open == 4, f"stopped_phase {run['stopped_phase']}, first open {first_open}")
 
 
+def test_a_listed_run_held_at_its_pause_says_paused_and_one_still_ending_its_call_says_pausing_defect():
+    # Defect: the owner paused a run on a second machine, it held, and its pill in the runs list went on saying running,
+    # since the list's rows carried no pause. Fix: each live row says "paused" or "pausing", the Inbox's rows too.
+    root = Path(tempfile.mkdtemp())
+    folder = _make_run_folder(root / "knowledge", "AcmeSync-paused")
+    log = run_status_service.find_newest_log(folder)
+    run_dir = run_status_service.find_newest_run_dir(folder)
+    stand_in = Path(tempfile.mkdtemp()) / "main.py"
+    stand_in.write_text("import sys\nsys.stdin.read()\n", encoding="utf-8")
+    live = subprocess.Popen([sys.executable, str(stand_in), "run", "--output", str(folder)], stdin=subprocess.PIPE)
+    own_main = run_reset_service.set_own_main(stand_in)
+    previous = _swap_run_roots({"knowledge": root / "knowledge"})
+    try:
+        before = next(run for run in run_status_service.list_run_folders() if run["name"] == "AcmeSync-paused")
+        control_signal_service.request(run_dir, control_signal_service.PAUSE)
+        log.write_text("phase 3: batch 4 sent to the model\n", encoding="utf-8")
+        pausing = next(run for run in run_status_service.list_run_folders() if run["name"] == "AcmeSync-paused")
+        log.write_text(f"phase 3: paused {control_signal_service.HELD_LINE_END}\n", encoding="utf-8")
+        paused = next(run for run in run_status_service.list_run_folders() if run["name"] == "AcmeSync-paused")
+    finally:
+        _swap_run_roots(previous)
+        run_reset_service.set_own_main(own_main)
+        live.stdin.close()
+        live.wait()
+    harness.check("a live run with no pause asked says nothing of one", before["is_live"] and before["pause"] == "",
+                  str(before.get("pause")))
+    harness.check("a pause asked while a model call still ends reads pausing", pausing["pause"] == "pausing",
+                  str(pausing.get("pause")))
+    harness.check("a run holding at its pause reads paused", paused["pause"] == "paused", str(paused.get("pause")))
+
+
 def test_a_listed_run_names_its_provider_set_so_the_running_menu_can_show_it_defect():
     # Defect: the running count opened whichever running run came first, and the run list carried no provider set to
     # tell three running runs apart. Fix: each listed run names its provider set and, while it runs, its phase.

@@ -331,6 +331,26 @@ test("a list's run started again from the recording it keeps stays in its list, 
 });
 
 for (const size of SCREEN_WIDTHS) {
+  test(`a run paused on a second machine says paused with its set on its pill, at ${size.width} px defect`,
+    async ({ page, api }) => {
+      // Defect: the owner paused a run on a second machine, it held, and its pill still said running. Fix: the run
+      // list says which live run holds at its pause, and its pill reads "paused · gpu-box"
+      await page.setViewportSize(size);
+      api.answer("GET /inbox", { json: data.INBOX.filter((item) => item.video !== "inbox/Gateway review.mp4") });
+      api.answer("GET /runs", { json: data.RUNS.map((run) => run.name === "gateway-review"
+        ? { ...run, is_live: true, status: "running", provider_set: "gpu-box", pause: "paused" }
+        : run.name === "jonas-onboarding" ? { ...run, is_live: true, status: "running", provider_set: "Office", pause: "" } : run) });
+      await page.goto("/");
+      const paused = page.locator(".pill", { hasText: "paused · gpu-box" });
+      await expect(paused).toBeVisible();
+      await expect(page.locator(".pill", { hasText: "running · gpu-box" })).toHaveCount(0);
+      await expect(paused).toHaveClass(/held/);
+      await expectInsideScreen(page, paused);
+      await page.screenshot({ path: `../temp/paused-pill/paused-${size.width}.png`, fullPage: true });
+    });
+}
+
+for (const size of SCREEN_WIDTHS) {
   test(`a list's rows stand by their status, a queued change first and done at the bottom, at ${size.width} px`, async ({ page, api }) => {
     await page.setViewportSize(size);
     api.answer("GET /lists", { json: { lists: [{ id: "a", name: "Review later",

@@ -376,6 +376,21 @@ describe("InboxPanel list", () => {
     expect(screen.getByRole("button", { name: /^running › open the run of Gateway/ })).toBeInTheDocument();
   });
 
+  it("says paused on a running video's pill once its run holds at a pause, and pausing while its call ends defect", () => {
+    // Defect: the owner paused a run on a second machine, it held, and its pill still said "running · <set> ›". Fix:
+    // the pill says "paused · <set> ›" once the run holds, "pausing · <set> ›" while its model call still ends.
+    const runningOn = (name: string, providerSet: string, pause: "" | "paused" | "pausing") => makeInboxItem(`${name}.mp4`,
+      "running", { runs: [{ root: "output", name, status: "running", is_live: true, has_document: false, topic: "",
+        display_name: "", stopped_phase: 0, provider_set: providerSet, pause }] });
+    const runs = [makeRun({ root: "output", name: "Gateway", is_live: true, status: "running", provider_set: "gpu-box", pause: "paused" }),
+      makeRun({ root: "output", name: "Weekly", is_live: true, status: "running", provider_set: "Office", pause: "pausing" }),
+      makeRun({ root: "output", name: "Refunds", is_live: true, status: "running", provider_set: "Mac", pause: "" })];
+    renderInbox([runningOn("Gateway", "gpu-box", "paused"), runningOn("Weekly", "Office", "pausing"), runningOn("Refunds", "Mac", "")], runs);
+    expect(screen.getByRole("button", { name: /^paused · gpu-box › open the run of Gateway/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^pausing · Office › open the run of Weekly/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^running · Mac › open the run of Refunds/ })).toBeInTheDocument();
+  });
+
   it("a blocked run queued again says queued in its row, as its own page does defect", () => {
     // Defect: a run blocked in phase 3 and queued again showed "blocked in phase 3" in the Inbox while its page said
     // "Queued as job ...": the row looked at a waiting job only for a run with a document. Fix: a waiting job wins.

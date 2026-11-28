@@ -566,6 +566,18 @@ def _count_stored_recording_bytes(folder: Path) -> int:
     return sum(part.stat().st_size for part in recording_parts_service.list_recording_parts(recording))
 
 
+def _describe_pause(folder: Path,
+                    is_live: bool) -> str:
+    """A live run's pause, as its list pill says it: "paused" once it holds, "pausing" while its model call still ends;
+    "" for a run not paused or not going."""
+
+    run_dir = find_newest_run_dir(folder) if is_live else None
+    if run_dir is None or control_signal_service.read_signal(run_dir) != control_signal_service.PAUSE:
+        return ""
+
+    return "paused" if control_signal_service.is_run_holding(run_dir, find_newest_log(folder)) else "pausing"
+
+
 def _summarise_folder(root_name: str,
                       folder: Path,
                       processes: list[str] | None = None) -> dict:
@@ -617,6 +629,9 @@ def _summarise_folder(root_name: str,
             # the phase a live run is in (its first phase not complete), so the running count's menu names it; 0 for a
             # run not going
             "live_phase": _find_stopped_phase(folder, record) if is_live else 0,
+            # a live run held at its pause, so its list pill says "paused" instead of "running" (the owner paused a run
+            # and the pill went on saying running)
+            "pause": _describe_pause(folder, is_live),
             # the provider set the run chose, so the running count's menu names it; empty for the default set
             "provider_set": run_provider_set_service.read_chosen_provider_set(folder) or "",
             # a phase recorded blocked or failed: a resume asks the blocked step again
@@ -643,7 +658,7 @@ def _list_video_runs(folders: list[dict],
     # a folder made from another run by Branch or Convert is listed apart, never folded into its video's row
     return [{key: folder[key] for key in ("root", "name", "status", "is_live", "has_document", "topic", "display_name", "state_at",
                                     "stopped_phase", "has_phase_output", "is_blocked", "provider_set",
-                                    "phase_titles")}
+                                    "phase_titles", "pause")}
             for folder in folders
             if folder["video"] and not folder["is_derived"] and str(Path(folder["video"]).resolve()) == resolved_video]
 
