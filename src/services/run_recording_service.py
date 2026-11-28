@@ -14,6 +14,7 @@ import shutil
 from pathlib import Path
 from typing import BinaryIO
 
+import config
 from models import output_contract
 from models.ui_errors import UploadRefusedError
 from services import inbox_move_service
@@ -114,7 +115,7 @@ def find_run_recording(run_folder: Path,
 def read_origin_video(run_folder: Path) -> str:
     """The inbox path the recording the run keeps came from; empty when it keeps none."""
 
-    return str(_read_origin(run_folder).get("video") or "")
+    return config.read_current_path(str(_read_origin(run_folder).get("video") or ""))
 
 
 def find_recording_by_origin(video: str,
@@ -126,7 +127,7 @@ def find_recording_by_origin(video: str,
         for origin_file in sorted(root.glob(f"*/{RECORDING_DIR}/{_ORIGIN_FILE}")):
             run_folder = origin_file.parent.parent
             # An origin left by a move cut short names a recording its folder no longer keeps: look on
-            stored = find_stored_recording(run_folder) if _read_origin(run_folder).get("video") == resolved else None
+            stored = find_stored_recording(run_folder) if read_origin_video(run_folder) == resolved else None
             if stored is not None:
                 return stored
 

@@ -163,7 +163,7 @@ def _describe_record_video(record: dict) -> str:
     if not record.get("repository") or not record.get("module"):
         return ""
 
-    return str(Path(record["repository"]) / record["module"])
+    return config.read_current_path(str(Path(record["repository"]) / record["module"]))
 
 
 def _find_running_phase(log: Path | None) -> int | None:

@@ -100,6 +100,24 @@ def test_a_kept_recording_names_the_inbox_path_it_came_from_for_the_lists_defect
                   == str(video.resolve()), run_recording_service.read_origin_video(run_folder))
 
 
+def test_a_run_made_before_the_folder_rename_stays_in_its_list_defect():
+    # The defect: after the repository's folder was renamed, every done run named its recording under the old folder
+    # name, the lists held the new one, and the runs left Review later for Not finished and Done. The fix: a path under
+    # the old folder name is read as the same path under the folder it is now.
+    old_workspace = config.PLAYBOOK_ROOT.parent / "video-to-knowledge"
+    _inbox, run_folder, _video = _build_place()
+    (run_folder / run_recording_service.RECORDING_DIR).mkdir()
+    (run_folder / run_recording_service.RECORDING_DIR / ".origin.json").write_text(
+        json.dumps({"video": str(old_workspace / "inbox" / "AcmeSync-review.mp4")}), encoding="utf-8")
+    harness.check("the origin names the inbox under the folder it is now", run_recording_service.read_origin_video(
+        run_folder) == str(config.WORKSPACE_ROOT / "inbox" / "AcmeSync-review.mp4"),
+                  run_recording_service.read_origin_video(run_folder))
+    harness.check("the old program folder inside it reads as the program's folder now", config.read_current_path(
+        str(old_workspace / "video-to-knowledge" / "main.py")) == str(config.PLAYBOOK_ROOT / "main.py"))
+    harness.check("a path elsewhere stays as it is", config.read_current_path("/srv/media/video-to-knowledge-2/a.mp4")
+                  == "/srv/media/video-to-knowledge-2/a.mp4")
+
+
 def test_a_run_not_done_or_a_video_outside_the_inbox_moves_nothing():
     inbox, run_folder, video = _build_place()
     kept = run_recording_service.keep_recording_if_done({"status": "complete",

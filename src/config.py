@@ -122,6 +122,22 @@ INBOX_DIR = WORKSPACE_ROOT / "inbox"
 DOCUMENT_ROOT = WORKSPACE_ROOT / "output"
 # The job queue and its consoles, the inbox tags, the recording hash cache and the model download state
 UI_DIR = WORKSPACE_ROOT / "ui"
+# The folders this repository was before it was info-to-knowledge, each with the folder it is now: the program's own
+# folder sat inside the workspace's. A run folder made then names its recording under them and is never rewritten, so
+# its paths are read as the same paths here (the owner's lists lost every done run when the folder was renamed).
+_RETIRED_ROOTS = ((PLAYBOOK_ROOT.parent / "video-to-knowledge" / "video-to-knowledge", PLAYBOOK_ROOT),
+                  (PLAYBOOK_ROOT.parent / "video-to-knowledge", WORKSPACE_ROOT))
+
+
+def read_current_path(path: str) -> str:
+    """`path` as it reads now: one under a folder this repository had before its rename is the same path under the
+    folder it is now; any other path, and an empty one, comes back as it is."""
+
+    for retired, current in _RETIRED_ROOTS:
+        if path == str(retired) or path.startswith(f"{retired}/"):
+            return str(current) + path[len(str(retired)):]
+
+    return path
 # Read by `services/ignore_list_service.load_ignore_list`. A missing file means no rules, never a
 # crash: an unreadable ignore list must not stop a run, and an empty one analyses everything rather
 # than silently skipping everything.
