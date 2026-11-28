@@ -450,13 +450,18 @@ def _describe_pdf_mode(folder: Path,
 def describe_phase(number: int,
                     is_audio: bool,
                     pdf_mode: str = "",
-                    document_pass: str = "") -> dict:
+                    document_pass: str = "",
+                    workflow: str = "") -> dict:
     """The phase card's title and help for this run's medium: an audio recording's phases 2 and 3 are other work than a
     video's, and its other phases read no frame; a PDF's phases 2 and 3 are named by its pages or its figures. Phase 7
-    is named by the pass the run asked for."""
+    is named by the pass the run asked for. A direct-draft video's (`workflow`) phase 3 processes and writes the draft
+    and its phase 4 reshapes the draft into the document."""
 
     title = phase_guide.PHASE_TITLES.get(number, output_contract.PHASE_FILES[number]["phase"].replace("_", " "))
     guide = phase_guide.PHASE_GUIDES.get(number, {})
+    if workflow == video_workflow_vocabulary.DIRECT_DRAFT and not is_audio and not pdf_mode:
+        title = phase_guide.DIRECT_DRAFT_PHASE_TITLES.get(number, title)
+        guide = {**guide, **phase_guide.DIRECT_DRAFT_PHASE_GUIDES.get(number, {})}
     if is_audio:
         title = phase_guide.AUDIO_PHASE_TITLES.get(number, title)
         guide = {**guide, **phase_guide.AUDIO_PHASE_GUIDES.get(number, {})}
@@ -474,6 +479,19 @@ def describe_phase(number: int,
             guide = {**guide, "summary": phase_guide.KNOWLEDGE_PASS_SUMMARY}
 
     return {"title": title, **guide}
+
+
+def _list_phase_titles(folder: Path,
+                       is_audio: bool,
+                       pdf_mode: str,
+                       document_pass: str) -> dict[str, str]:
+    """Every phase's title for this run, by its number as text, so a list of runs names a run's phase as its own page
+    does (a direct-draft run's phases 3 and 4 differ from a quality run's)."""
+
+    workflow = "" if is_audio else video_workflow_service.resolve_workflow(folder)
+
+    return {str(number): describe_phase(number, is_audio, pdf_mode, document_pass, workflow)["title"]
+            for number in sorted(output_contract.PHASE_FILES)}
 
 
 def _has_phase_worker(folder: Path,
@@ -579,6 +597,9 @@ def _summarise_folder(root_name: str,
             # the LLM pass phase 7 was asked to give the document (`cleanup`, `rewrite`, `knowledge`), so the Document
             # pill names what the document is; empty when none was asked
             "document_pass": (document_pass_service.read_document_pass(folder) or {}).get("pass", ""),
+            # each phase's title for this run, so a list names the phase a run stopped in as its own page does
+            "phase_titles": _list_phase_titles(folder, _is_audio_record(folder, record), _describe_pdf_mode(folder, video),
+                                               (document_pass_service.read_document_pass(folder) or {}).get("pass", "")),
             "ingesting_profile": ingesting_profile_service.resolve_profile(folder),
             # the part of the input the run processes ("12:30 to 1:05:00", "pages 12 to 40"); empty for the whole input
             "input_range": _describe_input_range(folder),
@@ -620,7 +641,8 @@ def _list_video_runs(folders: list[dict],
                      resolved_video: str) -> list[dict]:
     # a folder made from another run by Branch or Convert is listed apart, never folded into its video's row
     return [{key: folder[key] for key in ("root", "name", "status", "is_live", "has_document", "topic", "display_name", "state_at",
-                                    "stopped_phase", "has_phase_output", "is_blocked", "provider_set")}
+                                    "stopped_phase", "has_phase_output", "is_blocked", "provider_set",
+                                    "phase_titles")}
             for folder in folders
             if folder["video"] and not folder["is_derived"] and str(Path(folder["video"]).resolve()) == resolved_video]
 
@@ -880,7 +902,8 @@ def describe_run_folder(root_name: str,
     document_pass = (document_pass_service.read_document_pass(folder) or {}).get("pass", "")
     phases = [{"number": number, "name": output_contract.PHASE_FILES[number]["phase"],
                "status": "running" if number == running_number else statuses[number],
-               **describe_phase(number, is_audio, pdf_mode, document_pass)} for number in sorted(statuses) if number not in off_phases]
+               **describe_phase(number, is_audio, pdf_mode, document_pass, workflow)}
+              for number in sorted(statuses) if number not in off_phases]
     # An audio run's phase 3 is complete with nothing written when its profile prepares nothing for this many
     # paragraphs: the card says so, since "complete" alone left a reader looking for a file that never was
     for phase in phases:

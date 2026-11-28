@@ -6,9 +6,10 @@ The phase a step belongs to and the sentence saying who gets it are
 from __future__ import annotations
 
 from models import output_contract
+from models import phase_guide
 from models import video_workflow_vocabulary
 
-__all__ = ["VIDEO", "AUDIO", "PDF", "WORKFLOW_TITLES", "WORKFLOW_VARIANTS", "PHASE_TITLES", "STEP_TITLES",
+__all__ = ["VIDEO", "AUDIO", "PDF", "WORKFLOW_TITLES", "WORKFLOW_VARIANTS", "PHASE_TITLES", "VARIANT_PHASE_TITLES", "STEP_TITLES",
            "STEP_SENDERS", "COMPACTION_WORKER_STEPS", "COMPACTION_WORKER_TITLES", "CUT_THINKING_SHARED_FILES",
            "CONVERSATION_SHARED_FILES"]
 
@@ -33,6 +34,10 @@ PHASE_TITLES = {
     AUDIO: {2: "speech preparing", 3: "notes preparing", 4: "document writing", 7: "clean up or rewrite"},
     PDF: {3: "pages or figures reading", 4: "document writing", 5: "review", 6: "critique collection",
           7: "clean up, rewrite or knowledge"},
+}
+# The titles a workflow's variant gives a phase in place of the workflow's own (a direct-draft run's phases 3 and 4)
+VARIANT_PHASE_TITLES = {
+    VIDEO: {video_workflow_vocabulary.DIRECT_DRAFT: dict(phase_guide.DIRECT_DRAFT_PHASE_TITLES)},
 }
 # Each step of `agent-context/context_map.json`, as the page names it
 STEP_TITLES = {

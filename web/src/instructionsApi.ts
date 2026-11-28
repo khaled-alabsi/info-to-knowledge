@@ -14,6 +14,8 @@ export interface InstructionStep {
 export interface InstructionPhase {
   number: number;
   title: string;
+  // the title a variant of the workflow gives this phase in place of `title`, by the variant's key
+  variant_titles?: Record<string, string>;
   steps: InstructionStep[];
 }
 

@@ -486,8 +486,9 @@ def list_phases(flow: Annotated[PhaseFlowRequest, Query()]) -> list[dict]:
         off_phases.add(output_contract.PHASE_NUMBERS[output_contract.DOCUMENT_RESHAPING_PHASE])
 
     return [{"number": number, "name": row["phase"], **phase_guide.PHASE_GUIDES.get(number, {}),
-             **(run_status_service.describe_phase(number, is_audio, pdf_mode, document_pass)
-                if medium or ingesting_profile or document_pass else {}),
+             **(run_status_service.describe_phase(number, is_audio, pdf_mode, document_pass, workflow)
+                if medium or ingesting_profile or document_pass
+                or workflow == video_workflow_vocabulary.DIRECT_DRAFT else {}),
              "is_on": switches.get(row["phase"], True) and number not in off_phases}
             for number, row in sorted(output_contract.PHASE_FILES.items())]
 

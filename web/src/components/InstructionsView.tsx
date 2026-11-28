@@ -424,7 +424,7 @@ export default function InstructionsView({ onMessage }: { onMessage: (text: stri
               if (shown.length === 0) return null;
               return (
                 <section key={phase.number} className="instruction-phase">
-                  <h3>Phase {phase.number} · {phase.title}</h3>
+                  <h3>Phase {phase.number} · {(variant && phase.variant_titles?.[variant]) || phase.title}</h3>
                   {shown.map((step) => (
                     <StepFiles key={step.key} step={step} workflow={workflow.key} files={files} drafts={drafts}
                       openFile={openFile} onOpen={(open) => { setOpenFile(open); }} />

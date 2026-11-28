@@ -540,6 +540,17 @@ describe("InboxPanel list", () => {
     expect(screen.getByText("phase 2 ›")).toHaveAttribute("title", "stopped in phase 2, frames preparing");
   });
 
+  it("names a Fast run's stopped phase 3 by the title the run gives it, and an ordinary run's by the general one defect", () => {
+    const fast = makeInboxItem("Jonas-call.mp4", "started", { runs: [{ root: "knowledge", name: "Jonas-call", status: "incomplete",
+      is_live: false, has_document: false, topic: "", display_name: "", stopped_phase: 3,
+      phase_titles: { "3": "processing and draft writing", "4": "document reshaping" } }] });
+    const ordinary = makeRun({ root: "output", name: "Acme-half", video: "", status: "incomplete", stopped_phase: 3 });
+    renderInbox([fast], [ordinary]);
+    const pills = screen.getAllByText("phase 3 ›");
+    expect(pills.map((pill) => pill.getAttribute("title")?.split("\n")[0])).toEqual([
+      "stopped in phase 3, processing and draft writing", "stopped in phase 3, frames processing"]);
+  });
+
   it("says blocked on a blocked run's pill, and lists a branch of a video apart from the video's own run", async () => {
     const blocked = makeInboxItem("Jonas-call.mp4", "started", { runs: [{ root: "knowledge", name: "Jonas-call", status: "blocked",
       is_live: false, has_document: false, topic: "", display_name: "", stopped_phase: 3, is_blocked: true }] });
@@ -1377,6 +1388,24 @@ const ARCHIVED = {
 };
 
 describe("InboxPanel reset", () => {
+  it("names phases 3 and 4 in the reset list as the ticked Fast run names them, and as the general list when the ticked runs differ defect", async () => {
+    installServer({ "GET /api/inbox/trash": [], "GET /api/inbox/archive": [] });
+    const titles = { "3": "processing and draft writing", "4": "document reshaping" };
+    const fast = makeRun({ root: "output", name: "Acme-fast", video: "", status: "incomplete", phase_titles: titles });
+    const other = makeRun({ root: "output", name: "Acme-quality", video: "", status: "incomplete" });
+    renderInbox([], [fast, other]);
+    await userEvent.click(screen.getByRole("checkbox", { name: "tick Acme-fast" }));
+    await userEvent.click(screen.getByRole("button", { name: "reset to phase" }));
+    const names = () => [...within(screen.getByRole("dialog")).getByRole("combobox").querySelectorAll("option")].map((option) => option.textContent);
+    expect(names()).toContain("3 · processing and draft writing");
+    expect(names()).toContain("4 · document reshaping");
+    await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cancel" }));
+    await userEvent.click(screen.getByRole("checkbox", { name: "tick Acme-quality" }));
+    await userEvent.click(screen.getByRole("button", { name: "reset to phase" }));
+    expect(names()).toContain("3 · frames processing");
+    expect(names()).toContain("4 · document writing");
+  });
+
   it("resets every ticked video's run and ticked run folder to the chosen phase, and names a refused one", async () => {
     const calls = installServer({ "GET /api/inbox/trash": [], "GET /api/inbox/archive": [],
       "POST /api/runs/knowledge/Jonas-call/reset": { exit_code: 0, output: "reset-to 2 knowledge/Jonas-call\n  03_notes.md\n" },

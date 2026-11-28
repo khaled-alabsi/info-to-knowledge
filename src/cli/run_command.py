@@ -26,6 +26,7 @@ from graph import routing
 from models import run_job
 from models import ingesting_profile_vocabulary
 from models import output_contract
+from models import phase_guide
 from prompts import system_prompt_builder
 from models import video_workflow_vocabulary
 from models.input_range_spec import InputRangeSpec
@@ -261,6 +262,14 @@ def _has_no_critic_run(output_root: Path,
     return not is_audio and video_workflow_service.has_no_critic(output_root)
 
 
+def _is_direct_draft_run(output_root: Path,
+                         is_audio: bool) -> bool:
+    """Whether this run takes the direct-draft video workflow (the Fast speed's), whose phases 3 and 4 have names of
+    their own: an audio recording takes the audio workflow whatever the run's workflow says."""
+
+    return not is_audio and video_workflow_service.is_direct_draft(output_root)
+
+
 def _build_context(paths: RunPaths,
                    store: run_store_service.RunStore,
                    selection: PhaseRequest,
@@ -339,7 +348,7 @@ def describe_workflow(run_folder: Path) -> str:
         frames_per_batch = config.settings.resolve_frames_per_call()
 
         return (f"{title} (phase 3 writes {frames_per_batch} frames a call straight into the draft, no check; phase 4 "
-                f"one call titles and summarises it; phases 5 and 6 off)")
+                f"reshapes the draft into the document in one call; phases 5 and 6 off)")
     if workflow != video_workflow_vocabulary.FAST_PROCESSING:
         return title
     fast = config.settings.video.fast_processing
@@ -387,43 +396,51 @@ def describe_redundancy_model() -> str:
 
 
 def _render_header_line(label: str,
-                        text: str) -> str:
+                        text: str,
+                        width: int = _HEADER_LABEL_WIDTH) -> str:
     """One line of the header's model block: the label padded to the widest one, then its text."""
 
-    return f"  {label:{_HEADER_LABEL_WIDTH}} {text}"
+    return f"  {label:{width}} {text}"
 
 
 def render_model_lines(checks: RunStartChecksResult,
                        windows: dict[str, int],
                        is_audio: bool,
                        is_fast: bool = False,
-                       has_no_critic: bool = False) -> list[str]:
+                       has_no_critic: bool = False,
+                       is_direct_draft: bool = False) -> list[str]:
     """The header's lines of what each phase runs, in phase order: phase 1's transcription and diarization, then each
     phase's model with its context and the window its host loaded (`windows`), a video's phase 2 naming the model its
     redundancy filter calls, a fast-processing run's phases 3 and 4 naming the models that workflow calls
     (`video.fastProcessing`), a run with no critic (fast-processing, direct-draft) showing phases 5 and 6 off, then
-    the capability lines."""
+    the capability lines. A direct-draft run's phases 3 and 4 carry its own names, `processing_and_draft_writing` and
+    `document_reshaping`, so the label column widens to fit them."""
 
-    lines = [_render_header_line("transcribe", f"{checks.transcription} · {checks.diarization}")]
+    names = {phase: phase_guide.DIRECT_DRAFT_PHASE_TITLES[number].replace(" ", "_")
+             for phase, number in output_contract.PHASE_NUMBERS.items()
+             if is_direct_draft and number in phase_guide.DIRECT_DRAFT_PHASE_TITLES}
+    width = max([_HEADER_LABEL_WIDTH, *(len(name) for name in names.values())])
+    lines = [_render_header_line("transcribe", f"{checks.transcription} · {checks.diarization}", width)]
     for row in chat_model_service.describe_phase_models():
         phase = row["phase"]
+        label = names.get(phase, phase)
         # a video's phase 2 calls no phase model: its header line names the redundancy filter's
         if phase == config.FRAMES_PREPARING_PHASE and not is_audio:
-            lines.append(_render_header_line(phase, describe_redundancy_model()))
+            lines.append(_render_header_line(label, describe_redundancy_model(), width))
             continue
         if has_no_critic and output_contract.PHASE_NUMBERS[phase] in video_workflow_vocabulary.FAST_OFF_PHASES:
-            lines.append(_render_header_line(phase, f"off (a fast run has no {phase})"))
+            lines.append(_render_header_line(label, f"off (a fast run has no {phase})", width))
             continue
         if is_fast and phase in _FAST_MODEL_PHASES:
-            lines.append(_render_header_line(phase, _describe_fast_model(phase, windows)))
+            lines.append(_render_header_line(label, _describe_fast_model(phase, windows), width))
             continue
         window = windows.get(phase)
         loaded = f", window {window:,}" if window else ""
         # phase 3's frames a call, which its model may set for itself
         batch = (f", {config.settings.resolve_frames_per_call()} frames a call"
                  if phase == config.FRAMES_PROCESSING_PHASE else "")
-        lines.append(_render_header_line(phase, f"{row['name']}: {row['provider']}:{row['model']} "
-                                                f"(num_ctx={row['num_ctx']}{loaded}{batch})"))
+        lines.append(_render_header_line(label, f"{row['name']}: {row['provider']}:{row['model']} "
+                                                f"(num_ctx={row['num_ctx']}{loaded}{batch})", width))
 
     return lines + [f"  {line}" for line in checks.capabilities]
 
@@ -491,7 +508,8 @@ def _log_run_header(ctx: RunContext,
     # The video workflow from phase 3 on; an audio recording takes the audio workflow whatever it says
     if not is_audio:
         ctx.log.info(f"  workflow: {describe_workflow(ctx.paths.output_root)}")
-    for line in render_model_lines(checks, ctx.phase_windows, is_audio, is_fast, has_no_critic):
+    is_direct_draft = _is_direct_draft_run(ctx.paths.output_root, is_audio)
+    for line in render_model_lines(checks, ctx.phase_windows, is_audio, is_fast, has_no_critic, is_direct_draft):
         ctx.log.info(line)
     if ctx.is_dry_run:
         ctx.log.info("  DRY RUN: prompts are rendered, no model is called")
@@ -967,14 +985,16 @@ def _run_selected_phases(ctx: RunContext,
             # Ctrl-C is an operator's stop like the page's: no `Exception`, it would leave the record with no end
             ctx.log.warning(f"stopped: {str(exc) or 'Ctrl-C'}")
             store.set_status("interrupted")
-            performance_log_service.record_video(ctx, session, "interrupted", duration_s, is_audio)
+            performance_log_service.record_video(ctx, session, "interrupted", duration_s, is_audio,
+                                                 _is_direct_draft_run(ctx.paths.output_root, is_audio))
 
             return run_job.EXIT_INTERRUPTED
 
         # STEP 6: report what came out, the status the exit code reports, and what the session cost against the
         # recording's length
         code = _record_run_outcome(ctx, final, calls_before, is_audio)
-        performance_log_service.record_video(ctx, session, store.data.get("status", "unknown"), duration_s, is_audio)
+        performance_log_service.record_video(ctx, session, store.data.get("status", "unknown"), duration_s, is_audio,
+                                             _is_direct_draft_run(ctx.paths.output_root, is_audio))
         if not ctx.is_dry_run:
             _finish_done_run(ctx, video)
 

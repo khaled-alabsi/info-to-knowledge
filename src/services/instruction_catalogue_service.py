@@ -151,7 +151,11 @@ def build_catalogue() -> dict:
             phases.setdefault(worker_view_service.INSTRUCTION_PHASE_NUMBERS[step], []).append(
                 {"key": step, "title": vocabulary.STEP_TITLES[step], "who": worker_view_service.INSTRUCTION_USED_BY.get(step, ""),
                  "variants": list(senders[workflow]), "files": files})
-        phase_list = [{"number": number, "title": vocabulary.PHASE_TITLES[workflow][number], "steps": steps}
+        # a variant that names a phase otherwise (direct draft's phases 3 and 4) carries its own title
+        phase_list = [{"number": number, "title": vocabulary.PHASE_TITLES[workflow][number], "steps": steps,
+                       "variant_titles": {variant: titles[number]
+                                          for variant, titles in vocabulary.VARIANT_PHASE_TITLES.get(workflow, {}).items()
+                                          if number in titles}}
                       for number, steps in sorted(phases.items())]
         variant_list = [{"key": key, "title": name} for key, name in vocabulary.WORKFLOW_VARIANTS[workflow].items()]
         workflows.append({"key": workflow, "title": title, "variants": variant_list, "phases": phase_list})

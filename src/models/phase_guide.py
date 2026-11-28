@@ -9,7 +9,7 @@ from models import output_contract
 
 __all__ = ["PHASE_GUIDES", "PHASE_TITLES", "KNOWLEDGE_PASS_SUMMARY","AUDIO_PHASE_TITLES", "AUDIO_PHASE_GUIDES", "PDF_PHASE_TITLES",
            "PDF_TEXT_ONLY_PHASE_TITLES", "PDF_PHASE_GUIDES", "PDF_TEXT_ONLY_PHASE_GUIDES", "PDF_MARKDOWN_CONVERSION_PHASE_TITLES",
-           "PDF_MARKDOWN_CONVERSION_PHASE_GUIDES"]
+           "PDF_MARKDOWN_CONVERSION_PHASE_GUIDES", "DIRECT_DRAFT_PHASE_TITLES", "DIRECT_DRAFT_PHASE_GUIDES"]
 
 PHASE_GUIDES = {
     1: {"summary": "Turns the speech of the recording into a timed transcript, and tells the speakers apart by their "
@@ -77,6 +77,25 @@ AUDIO_PHASE_TITLES = {2: "speech preparing", 3: "notes preparing"}
 # phase 2 writes its paragraphs and cuts its figures and phase 3 reads the figures (the owner: "what is frames in pdf?")
 PDF_PHASE_TITLES = {1: "text reading", 2: "pages preparing", 3: "pages reading"}
 PDF_TEXT_ONLY_PHASE_TITLES = {1: "text reading", 2: "paragraphs and figures preparing", 3: "figures reading"}
+
+# A direct-draft run's (the Fast speed's) phases 3 and 4: no frame is processed on its own, phase 3 writes the draft and
+# phase 4 reshapes that draft into the document (the owner: "it doesn't have a document writing phase, it has a document
+# reshaping phase where it reshapes the draft to document")
+DIRECT_DRAFT_PHASE_TITLES = {3: "processing and draft writing", 4: "document reshaping"}
+DIRECT_DRAFT_PHASE_GUIDES = {
+    3: {"summary": "A vision model reads a few frames at a time with the words spoken over them and writes them straight "
+                   "into a draft that is already in chapters. No frame is checked or described on its own.",
+        "reads": f"{output_contract.LOOP_ITEMS_FILE}, the frames, {output_contract.TRANSCRIPT_FILE}",
+        "writes": output_contract.DRAFT_FILE,
+        "is_model_used": True},
+    4: {"summary": "One model conversation reshapes the draft into the document: it looks at the pictures the draft "
+                   "places and cuts them, then gives the title, the summary, the agenda and the heading changes. The "
+                   "program then publishes the folder a reader opens.",
+        "reads": f"{output_contract.DRAFT_FILE}, the frames and the video",
+        "writes": (f"{output_contract.SUMMARY_FILE}, {output_contract.WRITING_DIR_NAME}/ (what the model submitted), "
+                   "<meeting name>/<meeting name>.md with its figures"),
+        "is_model_used": True},
+}
 
 AUDIO_PHASE_GUIDES = {
     1: {"reads": "the audio recording"},

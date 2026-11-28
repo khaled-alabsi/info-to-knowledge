@@ -1127,7 +1127,7 @@ export default function RunDetail({
             )}
             {progress.title !== "Frames" && listedStages.length === 0 && barPhase?.number === 4 && (
               <DetailsToggle isOpen={isDetailsTableOpen} onToggle={toggleDetailsTable} noun="step"
-                title="every step of the document writing: its stage, status, calls, time, tokens and rejections">{progress.title}</DetailsToggle>
+                title={`every step of the ${barPhase ? formatPhaseTitle(barPhase) : "document writing"}: its stage, status, calls, time, tokens and rejections`}>{progress.title}</DetailsToggle>
             )}
             {progress.title !== "Frames" && listedStages.length === 0 && barPhase?.number === 7 && (
               <DetailsToggle isOpen={isDetailsTableOpen} onToggle={toggleDetailsTable} noun="part"

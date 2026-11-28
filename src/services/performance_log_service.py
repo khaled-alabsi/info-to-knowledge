@@ -413,19 +413,24 @@ def record_phase_end(ctx: RunContext,
 
 
 def _render_phase_name(row: dict[str, Any],
-                       is_audio: bool) -> str:
-    """A phase's name in the closing table: an audio recording's phases 2 and 3 by what they do there."""
+                       is_audio: bool,
+                       is_direct_draft: bool = False) -> str:
+    """A phase's name in the closing table: an audio recording's phases 2 and 3 by what they do there, a direct-draft
+    run's phases 3 and 4 by theirs."""
 
     title = phase_guide.AUDIO_PHASE_TITLES.get(row.get("number")) if is_audio else None
+    if title is None and is_direct_draft and not is_audio:
+        title = phase_guide.DIRECT_DRAFT_PHASE_TITLES.get(row.get("number"))
 
     return title.replace(" ", "_") if title else str(row["phase"])
 
 
 def render_performance_table(phases: list[dict[str, Any]],
                              video: dict[str, Any],
-                             is_audio: bool = False) -> str:
+                             is_audio: bool = False,
+                             is_direct_draft: bool = False) -> str:
     """The closing table: one row per phase this session ran, and the recording. An audio recording has no frame
-    column and names its phases 2 and 3 by what they do there."""
+    column and names its phases 2 and 3 by what they do there; a direct-draft run names its phases 3 and 4 by theirs."""
 
     medium = output_contract.AUDIO_MEDIUM if is_audio else output_contract.VIDEO_MEDIUM
     columns = [column for column in _COLUMNS if not (is_audio and column in _FRAME_COLUMNS)]
@@ -433,7 +438,7 @@ def render_performance_table(phases: list[dict[str, Any]],
     for row in [*phases, {**video, "phase": medium}]:
         per_frame = f"{row['secondsPerFrame']:.1f}" if row.get("secondsPerFrame") is not None else "-"
         speed = f"{row['outputTokPerS']:.1f}" if row.get("outputTokPerS") is not None else "-"
-        cells = dict(zip(_COLUMNS, (_render_phase_name(row, is_audio), str(row.get("status") or "-"),
+        cells = dict(zip(_COLUMNS, (_render_phase_name(row, is_audio, is_direct_draft), str(row.get("status") or "-"),
                                     f"{row['durationS']:.1f}", str(row.get("frames") or 0), per_frame,
                                     str(row.get("calls") or 0), str(row.get("promptTokens") or 0),
                                     str(row.get("outputTokens") or 0), speed)))
@@ -452,7 +457,8 @@ def record_video(ctx: RunContext,
                  handles: TimingHandles,
                  status: str,
                  video_s: float | None,
-                 is_audio: bool = False) -> dict[str, Any]:
+                 is_audio: bool = False,
+                 is_direct_draft: bool = False) -> dict[str, Any]:
     """The session has ended: the video line, summed from this session's phase lines, and the closing table. A phase
     the session left unfinished (a stop between two frames) has unit lines and no phase line of its own; it gets one
     first, marked with the session's status, or the video line would report none of its work."""
@@ -477,6 +483,6 @@ def record_video(ctx: RunContext,
            "secondsPerFrame": _compute_per_frame(duration_s, frame_count), **_compute_sums(phases)}
     _append_row(ctx.run_dir, row)
     ctx.log.info("")
-    ctx.log.info(render_performance_table(phases, row, is_audio))
+    ctx.log.info(render_performance_table(phases, row, is_audio, is_direct_draft))
 
     return row

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { mergeTags } from "./TagInput";
 import { DocumentPassPanel, isProfileGone, PdfChoices, usePhaseModels, useRunDefaults, useSettingsProfiles } from "./RunChoices";
-import WorkflowSpeedChoice, { describeSpeed, readSpeedOffPhases } from "./WorkflowSpeedChoice";
+import WorkflowSpeedChoice, { describeSpeed, readSpeedOffPhases, readSpeedWorkflow } from "./WorkflowSpeedChoice";
 import type { DragEvent, ReactNode } from "react";
 import { buildRunBase, buildRunPath, choosePdfMode, describeDocumentPass, describeError, describePdfFlow, downloadDocuments, fetchDocumentVersions, describePdfMode, fetchJson, PDF_PROCESSINGS, PDF_SCAN_ENGINES, describePdfShaping, readPdfProcessing, readPdfShaping, fetchRunLists, formatPhaseName, formatRunState, formatSize, isRunFound, isSameName, moveToList, NO_SELECTION, queueJobs, readResetOutput, renameInboxVideo, RUN_SETTINGS_CHOICE_KEY, saveRunLists, sendJson } from "../api";
 import type { ArchiveEntry, CommandOutput, DocumentPass, DocumentSource, DownloadVersion, InboxItem, RunDocumentVersions, Job, JobRequest, Phase, PhaseSelection, RunDefaults, RunList, RunSettingsChoice, RunSummary } from "../api";
@@ -66,9 +66,10 @@ function classifyStatePill(state: InboxItem["state"], isBlocked = false): string
   return state === "started" && isBlocked ? "failed" : STATE_PILL_CLASSES[state];
 }
 
-function titleStoppedPhase(stoppedPhase: number, phases: Phase[]): string {
+// the phase's name is the run's own when the server sent them (`phase_titles`: a Fast run's phases 3 and 4 differ)
+function titleStoppedPhase(stoppedPhase: number, phases: Phase[], phaseTitles?: Record<string, string>): string {
   const phase = phases.find((candidate) => candidate.number === stoppedPhase);
-  return phase ? `stopped in phase ${stoppedPhase}, ${formatPhaseName(phase.name)}` : "";
+  return phase ? `stopped in phase ${stoppedPhase}, ${phaseTitles?.[String(stoppedPhase)] ?? formatPhaseName(phase.name)}` : "";
 }
 
 // The Process button's words, always the action it takes: the ticked videos, else every new video, else why it takes
@@ -212,7 +213,8 @@ function buildRunRow(run: RunSummary): InboxItem {
   return { name: run.name, video: run.video, path: run.path, size_bytes: run.size_bytes ?? 0, run_folder: run.folder,
     output: run.folder, is_audio: run.is_audio, file_type: run.file_type, is_finished: state === "done",
     runs: [{ root: run.root, name: run.name, status: run.status, is_live: run.is_live, has_document: run.has_document,
-      topic: run.topic, display_name: run.display_name, stopped_phase: run.stopped_phase, is_blocked: run.is_blocked }],
+      topic: run.topic, display_name: run.display_name, stopped_phase: run.stopped_phase, is_blocked: run.is_blocked,
+      phase_titles: run.phase_titles }],
     parts: [], topic: run.topic, display_name: run.display_name, state, state_at: run.state_at };
 }
 
@@ -1036,14 +1038,17 @@ export default function InboxPanel({
   const tickedPass = tickedMedium.startsWith("pdf-") ? selection.document_pass ?? "" : "";
   // the phases the chosen speed switches off (Balanced has no review and no critique collection), a video's only
   const speedOffKey = JSON.stringify(readSpeedOffPhases(selection, runDefaults));
+  // the video workflow the chosen speed takes, which names phases 3 and 4 (a Fast run's differ from a Quality run's)
+  const speedWorkflow = readSpeedWorkflow(selection, runDefaults);
   useEffect(() => {
     setMediumPhases(null);
     if (!tickedMedium) return;
     const speedOff = tickedMedium === "video" ? JSON.parse(speedOffKey) : {};
     fetchJson<Phase[]>(`/phases?${new URLSearchParams({ medium: tickedMedium,
+      ...(tickedMedium === "video" && speedWorkflow ? { workflow: speedWorkflow } : {}),
       ...(tickedPass ? { document_pass: tickedPass } : {}), ...speedOff })}`)
       .then(setMediumPhases).catch(() => setMediumPhases(null));
-  }, [tickedMedium, tickedPass, speedOffKey]);
+  }, [tickedMedium, tickedPass, speedOffKey, speedWorkflow]);
   // Each workflow the recordings Process would queue take (the ticked ones, else every new one), with its phases: the
   // models tab shows a section each, so a model is chosen knowing which workflow's phase it is (the owner)
   const targetMedia = [...new Set((tickedRows.length ? tickedRows : newItems)
@@ -1056,10 +1061,11 @@ export default function InboxPanel({
     }
     Promise.all(targetMedia.split(",").map((medium) =>
       fetchJson<Phase[]>(`/phases?${new URLSearchParams({ medium,
+        ...(medium === "video" && speedWorkflow ? { workflow: speedWorkflow } : {}),
         ...(medium === "video" ? JSON.parse(speedOffKey) : {}) })}`)
         .then((flowPhases) => ({ name: describeWorkflowName(medium), phases: flowPhases }))))
       .then(setWorkflows).catch(() => setWorkflows([]));
-  }, [targetMedia, isRunSettingsOpen, speedOffKey]);
+  }, [targetMedia, isRunSettingsOpen, speedOffKey, speedWorkflow]);
   // The run folders a reset of the ticked rows takes back: each ticked video's run its name opens, and each ticked run
   // folder; a new video has none
   const resetTargets: { root: string; name: string }[] = [
@@ -1071,6 +1077,13 @@ export default function InboxPanel({
   ];
   // `reset-to` keeps phases up to any one before the last
   const resetMax = Math.max(0, ...phases.map((phase) => phase.number)) - 1;
+  // a phase's name in the reset's list: the one every ticked run gives it (a Fast run's phases 3 and 4), else the general one
+  const nameResetPhase = (phase: Phase): string => {
+    const titles = new Set([...tickedItems.map((item) => leadRun(item)?.phase_titles?.[String(phase.number)]),
+      ...tickedRuns.map((run) => run.phase_titles?.[String(phase.number)])]);
+    const shared = titles.size === 1 ? [...titles][0] : undefined;
+    return shared ?? formatPhaseName(phase.name);
+  };
 
   return (
     <div className="tab-body" ref={panelRef}>
@@ -1140,7 +1153,7 @@ export default function InboxPanel({
                     )}
                   </span>
                   <span className={`pill link ${classifyRunPill(run)}`}
-                    title={describeRunState(run) === "started" ? titleStoppedPhase(run.stopped_phase, phases) : undefined}>
+                    title={describeRunState(run) === "started" ? titleStoppedPhase(run.stopped_phase, phases, run.phase_titles) : undefined}>
                     {(findWaitingJobOfRun(run) && `${labelWaitingJob(findWaitingJobOfRun(run)!)} ›`)
                       || describeChangePill(lastJobsOfFolders.get(run.folder), run.has_document, run.status)?.label.concat(" ›")
                       || labelStatePill(describeRunState(run), run.stopped_phase, run.is_blocked, nameRunningSet(run))}
@@ -1209,8 +1222,8 @@ export default function InboxPanel({
                     <button className={`pill link ${classifyItemPill(item)}`}
                       aria-label={`${describeChangePill(lastJobsOfVideos.get(item.video), lead.has_document, lead.status)?.label.concat(" ›")
                         ?? labelStatePill(item.state, lead.stopped_phase, lead.is_blocked, nameRunningSet(lead))} open the run of ${item.display_name || item.name}`}
-                      aria-description={item.state === "started" ? titleStoppedPhase(lead.stopped_phase, phases) || undefined : undefined}
-                      title={[item.state === "started" ? titleStoppedPhase(lead.stopped_phase, phases) : "",
+                      aria-description={item.state === "started" ? titleStoppedPhase(lead.stopped_phase, phases, lead.phase_titles) || undefined : undefined}
+                      title={[item.state === "started" ? titleStoppedPhase(lead.stopped_phase, phases, lead.phase_titles) : "",
                         `open its run: ${item.runs.map((run) => `${buildRunPath(run)} (${run.status})`).join(", ")}`]
                         .filter(Boolean).join("\n")}
                       onClick={(event) => {
@@ -1391,7 +1404,7 @@ export default function InboxPanel({
                 onChange={(event) => setResetPhase(Number(event.target.value))}>
                 <option value={0}>0 · none, every phase removed</option>
                 {phases.filter((phase) => phase.number <= resetMax).map((phase) => (
-                  <option key={phase.number} value={phase.number}>{phase.number} · {formatPhaseName(phase.name)}</option>
+                  <option key={phase.number} value={phase.number}>{phase.number} · {nameResetPhase(phase)}</option>
                 ))}
               </select>
             </label>

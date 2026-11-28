@@ -19,7 +19,9 @@ export interface InboxItem {
   // each run's `stopped_phase`: the first phase of its flow a started run has not completed; 0 for a run going or done;
   // `is_blocked` when a phase is recorded blocked or failed
   runs: { root: string; name: string; status: string; is_live: boolean; has_document: boolean; topic: string; display_name: string;
-    stopped_phase: number; is_blocked?: boolean; provider_set?: string }[];
+    stopped_phase: number; is_blocked?: boolean; provider_set?: string;
+    // each phase's title for this run, by its number: a Fast run's phases 3 and 4 are named otherwise
+    phase_titles?: Record<string, string> }[];
   // a meeting recorded in several files: its parts in the order they are read; empty for a single video
   parts: { name: string; size_bytes: number; start_s?: number }[];
   topic: string;
@@ -82,6 +84,8 @@ export interface RunSummary {
   live_phase?: number;
   // the provider set the run chose; "" or absent for the default set
   provider_set?: string;
+  // each phase's title for this run, by its number as text: a Fast run's phases 3 and 4 are named otherwise
+  phase_titles?: Record<string, string>;
   // a phase recorded blocked or failed: a resume asks the blocked step again
   is_blocked?: boolean;
   // made by Branch or Convert from another run: a run of its own, never folded into its video's row

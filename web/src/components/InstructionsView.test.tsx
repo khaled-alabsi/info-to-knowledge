@@ -94,6 +94,26 @@ describe("Instructions", () => {
     expect(await screen.findByText("Phase 4 · document writing")).toBeInTheDocument();
   });
 
+  it("names phases 3 and 4 as the direct draft names them once its variant is chosen defect", async () => {
+    const direct: InstructionCatalogue = { ...CATALOGUE, workflows: [{ ...CATALOGUE.workflows[0],
+      variants: [{ key: "quality", title: "quality" }, { key: "direct-draft", title: "direct draft" }],
+      phases: [{ number: 3, title: "frames processing", variant_titles: { "direct-draft": "processing and draft writing" }, steps: [
+        { key: "critique", title: "Critique", who: "Phase 3 of a video, after each batch.", variants: ["quality"], files: [CRITIQUE, TERMS] },
+        { key: "direct_draft_batch", title: "Draft batch", who: "Phase 3 of a Fast run.", variants: ["direct-draft"], files: [TAKEAWAY] }] },
+        { number: 4, title: "document writing", variant_titles: { "direct-draft": "document reshaping" }, steps: [
+          { key: "direct_draft_outline", title: "Draft title, summary and pictures", who: "Phase 4 of a Fast run.",
+            variants: ["direct-draft"], files: [TAKEAWAY] }] }] }, CATALOGUE.workflows[1]] };
+    serve({ "GET /api/instructions": direct });
+    render(<InstructionsView onMessage={vi.fn()} />);
+    expect(await screen.findByText("Phase 3 · frames processing")).toBeInTheDocument();
+    expect(screen.getByText("Phase 4 · document writing")).toBeInTheDocument();
+    await userEvent.selectOptions(screen.getByRole("combobox"), "direct-draft");
+    expect(screen.getByText("Phase 3 · processing and draft writing")).toBeInTheDocument();
+    expect(screen.getByText("Phase 4 · document reshaping")).toBeInTheDocument();
+    await userEvent.selectOptions(screen.getByRole("combobox"), "quality");
+    expect(screen.getByText("Phase 3 · frames processing")).toBeInTheDocument();
+  });
+
   it("saves an edit with its note, and shows a refusal's reasons with the draft kept", async () => {
     let answer: unknown = { is_saved: false, problems: ["instructions/critique.md: keep {{INJECT:base}}, which the program fills"] };
     const calls = serve({ "PUT /api/instructions/file": () => answer });
