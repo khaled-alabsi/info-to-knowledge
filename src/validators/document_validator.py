@@ -780,6 +780,12 @@ def _shorten_to_first_words(text: str) -> str:
     return text if len(text) <= _QUOTED_TEXT_CHARS else text[:_QUOTED_TEXT_CHARS].rsplit(" ", 1)[0] + " …"
 
 
+def _is_hidden_value(text: str) -> bool:
+    """A mask covers a value worth hiding: a secret-shaped word, a screen's asterisks or an e-mail address."""
+
+    return bool(_MASKED_VALUE.search(text) or _ANY_EMAIL.search(text))
+
+
 def _check_secrets_masked(paths: RunPaths,
                           slug: str,
                           section: dict,
@@ -858,7 +864,8 @@ def _check_secrets_masked(paths: RunPaths,
         covered = [area["words"] for area in areas]
         # A credential line masked to the cut's edge covers its value, whatever the reader read of it (2026-09-30: an
         # authorization value whose read start had no digit was called "words that hold no value")
-        if any(_MASKED_VALUE.search(text) for text in covered) or any(area.get("reachesEdge") for area in areas):
+        # An e-mail address is a value too (worker report: a mask over an address was called "words that hold no value")
+        if any(_is_hidden_value(text=text) for text in covered) or any(area.get("reachesEdge") for area in areas):
             continue
         # Text the reader could not read is counted when the mask covered dark text and no word of it was read
         # (2026-09-30: the reader read no word of a secret plainly visible on a cut)
@@ -878,7 +885,7 @@ def _check_secrets_masked(paths: RunPaths,
             why = f"its masks cover only words that hold no value ({'; '.join(repr(_shorten_to_first_words(text)) for text in masked_texts)})"
         # A masked cut on which the reader finds no value left is cut again, said as the whole fix (2026-09-30: told it
         # as the last condition of a long fix, a worker opened such a cut four times and never cut the frame again)
-        if cut.get("masks") and not any(_MASKED_VALUE.search(text) for text in left):
+        if cut.get("masks") and not any(_is_hidden_value(text=text) for text in left):
             report.add("DOCUMENT_IMAGE_SECRET_UNMASKED",
                        f"{slug}: {image.get('cut')} is cut from {cut.get('frame')}, which shows a secret, and {why}",
                        fix=f"No value is left on {image.get('cut')} to mask: its earlier masks cover it. `cut` "

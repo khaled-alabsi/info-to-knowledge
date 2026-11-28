@@ -266,6 +266,35 @@ def test_a_masked_cut_with_no_value_left_is_told_to_be_cut_again():
                   and "`cut` frame-089 again" in fix and "instead of cut-047" in fix, fix)
 
 
+def test_a_mask_over_an_email_address_hides_a_value_defect():
+    # Defect: a mask over an e-mail address was refused as covering "only words that hold no value".
+    # Fix: an e-mail address under a mask counts as a value hidden, so the cut is cleared.
+
+    from support import fixtures as fx
+    from models import output_contract
+    from services import document_file_service, phase_file_service, text_detection_service
+    from validators import document_validator
+    paths = fx.make_paths()
+    item = {"slug": "frame-089", "index": 89, "timestamp": 1.0, "path": "frames/frame-089.jpg", "record": {
+        "screenshots": [{"part": "the add a secret form", "importance": "needed", "why": "it shows the client secret form"}]}}
+    phase_file_service.write_phase_file(paths, output_contract.PHASE_NUMBERS["frames_preparing"], {"items": [item]})
+    cut_file = paths.output_root / "04_writing" / "images" / "cuts" / "cut-047.png"
+    cut_file.parent.mkdir(parents=True, exist_ok=True)
+    cut_file.write_bytes(b"png")
+    document_file_service.write_image_store(paths, {"looks": {}, "cuts": {"cut-047": {
+        "frame": "frame-089", "file": "04_writing/images/cuts/cut-047.png", "masks": 1,
+        "maskedAreas": [{"rect": [0, 0, 10, 10], "words": "jonas@acmesync.example"}]}}})
+    document_file_service.write_section(paths, "heading-021-1", 'A form. [F89.1]\n\n![The form](cut-047 "The form")\n[F89.1]\n')
+    original = text_detection_service.find_words
+    text_detection_service.find_words = lambda path, **kwargs: [{"text": "Sign in", "box": [0, 0, 10, 10], "block": 1}]
+    try:
+        report = document_validator.validate_section_images(paths, "heading-021-1")
+    finally:
+        text_detection_service.find_words = original
+    codes = [finding.code for finding in report.findings]
+    harness.check("a mask over an e-mail address is no refusal", "DOCUMENT_IMAGE_SECRET_UNMASKED" not in codes, str(codes))
+
+
 def test_a_cut_with_a_secret_still_readable_beside_its_mask_is_refused():
     """A worker masked a request line holding a tenant id on a cut that also showed an authorization header, a code and
     a cookie, and the one mask over a value cleared the cut (2026-09-30). A cut is cleared only when the text reader
