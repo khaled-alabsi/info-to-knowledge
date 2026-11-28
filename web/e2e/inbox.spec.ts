@@ -8,6 +8,21 @@ import { expect, test } from "./fixtures/mockApi";
 const CHANGE_REQUEST = { ...JOBS[0].request, document_pass: "knowledge", from_phase: 7 };
 
 for (const size of SCREEN_WIDTHS) {
+  test.describe(`the upload box at ${size.width} px`, () => {
+    // a phone cannot drag files (the owner: "on phone you can't drag and drop files"): a touch screen is told to tap
+    const isTouch = size.width < 900;
+    test.use({ viewport: size, hasTouch: isTouch, isMobile: isTouch });
+    test(`says ${isTouch ? "tap to choose" : "drop or browse"} defect`, async ({ page }) => {
+      await page.goto("/");
+      const zone = page.getByRole("button", { name: /recordings/ }).first();
+      await expect(zone.getByText("Tap to choose recordings")).toBeVisible({ visible: isTouch });
+      await expect(zone.getByText("Drop recordings")).toBeVisible({ visible: !isTouch });
+      await expectInsideScreen(page, zone);
+    });
+  });
+}
+
+for (const size of SCREEN_WIDTHS) {
   test(`the run settings for new recordings pick a provider set first in their Settings tab, named on the tab, at ${size.width} px`,
     async ({ page, api }) => {
       // the owner: "add provider selection for batch run config"; it sat under the tab's other fields, its name cut off

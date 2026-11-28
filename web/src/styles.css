@@ -1216,6 +1216,9 @@ pre.code-block:hover .copy-code, .copy-code:focus-visible { opacity: 1; }
 .thumb-check { position: absolute; top: 6px; left: 6px; z-index: 1; width: 18px; height: 18px; opacity: 0; transition: opacity 0.12s; }
 .thumb-wrap:hover .thumb-check, .thumb-wrap.selected .thumb-check, .thumb-check:focus-visible { opacity: 1; }
 @media (hover: none) { .thumb-check { opacity: 1; } }
+/* the upload box: "Drop or browse" with a mouse, "Tap to choose" on a touch screen, which cannot drag files */
+.when-touch { display: none; }
+@media (hover: none) and (pointer: coarse) { .when-mouse { display: none; } .when-touch { display: inline; } }
 .thumb-wrap.selected .thumb { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
 .thumb-wrap.is-hidden .thumb img { opacity: 0.35; }
 .proposed-badge { position: absolute; bottom: 34px; left: 6px; z-index: 1; font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--bad); color: var(--on-strong); }

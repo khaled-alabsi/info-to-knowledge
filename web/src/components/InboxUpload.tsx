@@ -220,7 +220,9 @@ export default function InboxUpload({ onChanged, onMessage, onOpenRun, panel, is
       >
         <span className="drop-icon"><Icon name="upload" size={20} /></span>
         <span>
-          <strong>Drop recordings</strong> or <u>browse</u>
+          {/* a phone cannot drag files: it is told to tap, which opens the same picker (the owner) */}
+          <span className="when-mouse"><strong>Drop recordings</strong> or <u>browse</u></span>
+          <strong className="when-touch">Tap to choose recordings</strong>
           <small>They are uploaded into the inbox.</small>
         </span>
       </div>
