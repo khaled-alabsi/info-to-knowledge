@@ -26,12 +26,33 @@ describe("BatchHistory", () => {
     expect(within(rows[1]).getByText("critique")).toBeInTheDocument();
     expect(within(rows[1]).getByText("1 of 2 attempts")).toBeInTheDocument();
     expect(within(rows[1]).getByText("CRITIQUE_RULE_NOT_GENERIC")).toBeInTheDocument();
-    expect(within(rows[1]).getByText(/a rule quotes a screen/)).toBeInTheDocument();
+    expect(within(rows[1]).queryByText(/a rule quotes a screen/)).not.toBeInTheDocument();
     expect(within(rows[1]).getByText("3 mistakes found, in 2 of 2 frames (2 attempts)")).toBeInTheDocument();
     expect(rows[0]).toHaveClass("batch-start");
     expect(rows[1]).not.toHaveClass("batch-start");
     expect(within(rows[1]).queryByText("1–2")).not.toBeInTheDocument();
     expect(screen.getByText(/2 steps · .* in all · 1 rejected at least once/)).toBeInTheDocument();
+  });
+
+  it("a rejection shows each reason's name once with its count, never the error text, and no more rejected attempts than tried defect", async () => {
+    // Defect: one failed call was listed once per frame of its batch, its long error each time, filling a phone's screen, under "2 of 1 attempts"
+    // Fix: each reason's name once with "×5", the text kept in Copy; the attempts never fewer than the rejections
+    const failed = (frame: string) => ({ code: "MODEL_CALL_FAILED", detail: `${frame}: the model call raised: peer closed connection` });
+    installServer({
+      [`GET /api${RUN_BASE}/batches`]: [
+        { slug: "frames-019-022", frames: "19–22", step: "reading", started_at: "2026-01-01T10:00:00", duration_s: 60,
+          status: "frames 19 to 22 refused", attempts: 1, prompt_tokens: 100, output_tokens: 0,
+          rejections: [{ attempt: 1, findings: ["frames-019-022", "frame-019", "frame-020", "frame-021", "frame-022"].map(failed) },
+            { attempt: 2, findings: [{ code: "BATCH_SUMMARY_MISSING", detail: "no summary" }] }] },
+      ],
+    });
+    render(<BatchHistory runBase={RUN_BASE} refreshKey="" />);
+    const row = (await screen.findAllByRole("row"))[1];
+    expect(within(row).getByText("2 of 2 attempts")).toBeInTheDocument();
+    expect(within(row).getByText("MODEL_CALL_FAILED")).toBeInTheDocument();
+    expect(row).toHaveTextContent("MODEL_CALL_FAILED ×5");
+    expect(within(row).queryByText(/peer closed connection/)).not.toBeInTheDocument();
+    expect(within(row).getByText("BATCH_SUMMARY_MISSING")).toBeInTheDocument();
   });
 
   it("names how many rejections the table holds, and Copy copies it as a markdown table", async () => {

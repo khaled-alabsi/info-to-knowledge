@@ -46,6 +46,19 @@ function formatTableAsMarkdown(batches: BatchHistoryEntry[], rejectionCount: num
   return lines.join("\n");
 }
 
+// A rejection's findings as their codes, each once with how often it came ("MODEL_CALL_FAILED ×5"): one frame's failure
+// repeated for each frame of its batch filled a phone's screen (the owner: "too big and not needed"); Copy keeps them whole
+function countFindingCodes(findings: { code: string }[]) {
+  const counts = new Map<string, number>();
+  for (const finding of findings) counts.set(finding.code, (counts.get(finding.code) ?? 0) + 1);
+  return [...counts].map(([code, count]) => ({ code, count }));
+}
+
+// "2 of 3 attempts": a step stopped by a failed call records its rejections with no attempt counted, which read "2 of 1"
+function formatRejectedAttempts(batch: BatchHistoryEntry) {
+  return `${batch.rejections.length} of ${Math.max(batch.attempts, batch.rejections.length)} attempts`;
+}
+
 // A fast-processing run's session (`fast-notes-000-004`): its frames described with no check, so no rejection
 function isFastSession(batch: BatchHistoryEntry) {
   return batch.slug.startsWith("fast-notes-");
@@ -113,12 +126,13 @@ export default function BatchHistory({ runBase, refreshKey, unitTitle = "Frames"
                 <td data-label="Result">{batch.status}{batch.attempts > 1 ? ` (${batch.attempts} attempts)` : ""}</td>
                 {hasRejectionColumn && <td data-label={`Rejections (${rejectionCount})`}>
                   <span className={batch.rejections.length ? "refused-count" : "muted"}>
-                    {batch.rejections.length ? `${batch.rejections.length} of ${batch.attempts || batch.rejections.length + 1} attempts` : "0"}
+                    {batch.rejections.length ? formatRejectedAttempts(batch) : "0"}
                   </span>
                   {batch.rejections.map((rejection, index) => (
-                    <div key={index} className="rejection">
-                      attempt {rejection.attempt}: {rejection.findings.map((finding) => (
-                        <span key={finding.code + finding.detail}><code>{finding.code}</code> {finding.detail} </span>
+                    <div key={index} className="rejection"
+                      title={rejection.findings.map((finding) => `${finding.code} ${finding.detail}`).join("\n")}>
+                      attempt {rejection.attempt}: {countFindingCodes(rejection.findings).map(({ code, count }) => (
+                        <span key={code}><code>{code}</code>{count > 1 ? ` ×${count}` : ""} </span>
                       ))}
                     </div>
                   ))}
