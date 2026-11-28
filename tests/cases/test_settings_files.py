@@ -72,8 +72,8 @@ def test_the_strict_profile_turns_every_repair_off():
     """The shipped profile, in git, used only when asked for. Zero repair of a frame, and a refused frame tool stops
     the run, while the default settings hold the tolerated values."""
 
-    name = config.PROFILE_NAME
-    strict = config.Settings(**config.read_layers(profile_name="", worker_set_name="strict"))
+    name, settings_in_force = config.PROFILE_NAME, config.settings
+    strict = config.Settings(**config.read_layers(profile_name="strict", worker_set_name=config.DEFAULT_WORKER_SET_NAME))
     harness.check("strict blocks a refused frame at once and stops on a refused frame tool",
                   (strict.frames_processing.repair_calls == 0 and strict.frames_processing.single_frame_attempts == 0
                    and strict.budgets.fail_on_frame_cut_fail),
@@ -86,11 +86,15 @@ def test_the_strict_profile_turns_every_repair_off():
                   f"{config.settings.frames_processing.repair_calls}, "
                   f"{config.settings.frames_processing.single_frame_attempts}, "
                   f"{config.settings.budgets.fail_on_frame_cut_fail}")
-    harness.check("--profile strict reads the shipped strict set when no file of that name exists",
-                  config.load_profile("strict") == ["budgets", "framesProcessing"]
-                  and config.WORKER_SET_NAME == "strict" and config.settings.frames_processing.repair_calls == 0,
-                  f"{config.WORKER_SET_NAME}, {config.settings.frames_processing.repair_calls}")
-    config.apply_worker_set("")
+    sections = config.load_profile("strict")
+    loaded = config.settings.frames_processing.repair_calls
+    config.PROFILE_NAME, config.settings = name, settings_in_force
+    harness.check("--profile strict reads the profile file `playbook.strict.json`, and the worker set in force stays the default",
+                  sections == ["budgets", "framesProcessing"] and loaded == 0
+                  and config.WORKER_SET_NAME == config.DEFAULT_WORKER_SET_NAME,
+                  f"{sections}, {loaded}, {config.WORKER_SET_NAME}")
+    harness.check("the shipped default file holds no `strict` set: strict is a profile file, not a worker set",
+                  "strict" not in config.read_settings_file(config.DEFAULT_CONFIG_FILE).get("workerSets", {}))
     harness.check("a profile with no file is refused by name, never run on the settings it was to replace",
                   _refusal_for("no-such-profile").startswith("no profile 'no-such-profile'"),
                   _refusal_for("no-such-profile"))

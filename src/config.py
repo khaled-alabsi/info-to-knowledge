@@ -1278,12 +1278,6 @@ def load_profile(name: str) -> list[str]:
     global PROFILE_NAME, settings
     path = build_profile_path(name)
     if not path.is_file():
-        # `strict` is a shipped worker set now: `--profile strict` reads that set, as the file of that name once did
-        shipped_sets = read_settings_files(DEFAULT_CONFIG_FILE, LOCAL_CONFIG_FILE).get("workerSets") or {}
-        if name in shipped_sets and name != DEFAULT_WORKER_SET_NAME:
-            apply_worker_set(name)
-
-            return sorted(key for key in shipped_sets[name])
         raise FileNotFoundError(f"no profile {name!r}: {path} is not on disk")
     overrides = read_settings_file(path)
     if not overrides:

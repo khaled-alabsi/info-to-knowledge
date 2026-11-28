@@ -52,7 +52,7 @@ test("starts the run with every choice made on the form", async ({ page, api }) 
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "phases, settings and models" }).click();
   await page.getByText(/^Run with /).click();
-  // the form has no settings-file menu: strict is a worker set, chosen on the Settings page
+  // the form has no settings-file menu: the settings files, strict among them, are chosen on the Settings page
   await expect(page.getByRole("radiogroup", { name: "Settings", exact: true })).toHaveCount(0);
   await choice(page, "model of document writing", "acme-vision-4b").click();
   await expect(page.getByText("Run with default settings, models: 1 changed")).toBeVisible();

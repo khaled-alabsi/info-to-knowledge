@@ -117,8 +117,8 @@ async function pick(list: string, name: RegExp | string) {
 }
 
 describe("PhaseSelector settings", () => {
-  it("has no settings menu: strict is a worker set, and the settings files are chosen on the Settings page", async () => {
-    // Strict was a settings file the run form offered in a menu; it is the worker set "strict" now, so the form never lists a file
+  it("has no settings menu: the settings files, strict among them, are chosen on the Settings page", async () => {
+    // The run form never lists a settings file; strict is the file `playbook.strict.json` and shows where profiles are offered
     installServer({ "GET /api/profiles": { profiles: ["strict"], server_profile: "" } });
     renderChoosePhases();
     await screen.findByRole("radio", { name: "Every phase" });

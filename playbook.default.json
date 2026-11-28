@@ -294,24 +294,7 @@
     "onFailure": "continue"
   },
   "workerSets": {
-    "_note": "named worker sets: a set links each job (a phase of a run, the fast workflow's document model) to a model of the models library by its name, e.g. \"gpu-box\": {\"phaseModels\": {\"frames_processing\": \"gpu-box-frame\"}}, and the jobs it does not name keep the default models. Jobs on different sets run at the same time, jobs on one set one after another. The default set is these files as they are and has no entry. The shipped file holds the strict set and names no machine and no host: yours go in playbook.local.json (see playbook.local.example.json).",
-    "strict": {
-      "_comment": [
-        "Zero repair, asked for by `--profile strict` or chosen as the worker set: a refused frame is blocked as the answer wrote it and phase 3 stops there. It is never asked again, never handed to the second look and never accepted with a warning, so the cause is fixed in the instruction, the check or the settings rather than paid for again by another call. A refused frame tool blocks the chapter the same way.",
-        "The default settings hold the tolerated values instead: frames go back in a repair call, a frame still not finished is sent by itself, and a refused frame tool only costs that tool's turn."
-      ],
-      "framesProcessing": {
-        "framesPerCall": 8,
-        "repairCalls": 0,
-        "singleFrameAttempts": 0
-      },
-      "budgets": {
-        "cutsPerFrame": 3,
-        "failOnFrameCutFail": true,
-        "maxAttempts": 1,
-        "writeChapterAttempts": 1
-      }
-    }
+    "_note": "named worker sets: a set links each job (a phase of a run, the fast workflow's document model) to a model of the models library by its name, e.g. \"gpu-box\": {\"phaseModels\": {\"frames_processing\": \"gpu-box-frame\"}}, and the jobs it does not name keep the default models. Jobs on different sets run at the same time, jobs on one set one after another. The default set is these files as they are and has no entry. The shipped file holds no set and names no machine and no host: yours go in playbook.local.json (see playbook.local.example.json)."
   },
   "defaultWorkerSet": "default",
   "machine": "this machine"
