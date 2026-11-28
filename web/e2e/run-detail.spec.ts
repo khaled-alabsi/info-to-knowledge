@@ -521,6 +521,26 @@ test("shows the critique card and the run's log", async ({ page }) => {
 });
 
 for (const size of SCREEN_WIDTHS) {
+  test(`the transcribing stages' headings break only between words, on a ${size.width} px screen defect`, async ({ page, api }) => {
+    // Defect: the last column's "Time per frame" stood one letter a line on a phone: the frames table's rule letting
+    // its last column break anywhere reached this table too. Fix: words break only at spaces here.
+    await page.setViewportSize(size);
+    const stage = { unit: "frames", done: 0, total: null, frames: null, seconds: 0 };
+    const detail = { ...RUN_DETAILS["gateway-review"], transcribing: [
+      { ...stage, name: "transcription", status: "running", seconds: 593 }, { ...stage, name: "speakers", status: "waiting" }] };
+    api.answer("GET /runs/output/gateway-review/update", { json: { offset: 0, text: "", run: detail } });
+    await openDoneRun(page);
+    await page.locator("li.step").first().locator(".step-choose").click();
+    await page.getByRole("button", { name: "show stage details" }).click();
+    const heading = page.getByRole("columnheader", { name: "Time per frame" });
+    const lineHeight = await heading.evaluate((cell) => parseFloat(getComputedStyle(cell).lineHeight) || 16);
+    const box = await heading.boundingBox();
+    // three words make at most three lines, never fourteen
+    expect(box!.height).toBeLessThan(lineHeight * 3 + 16);
+  });
+}
+
+for (const size of SCREEN_WIDTHS) {
   test(`phase 4's steps table names each value and shows each rejection's reason by name, on a ${size.width} px screen defect`,
     async ({ page, api }) => {
       // Defect: on a phone phase 4's steps took the frames table's cards without their column names, and a rejection's

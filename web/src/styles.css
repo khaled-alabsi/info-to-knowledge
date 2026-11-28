@@ -1615,7 +1615,9 @@ summary.provider-set-head::-webkit-details-marker, summary.server-card-head::-we
 .batch-history .stage-table .nowrap { white-space: nowrap; }
 /* a cell's second, smaller line: a part's sections and figures under its tokens, its compactions and prunes under its calls */
 .batch-history .stage-table .cell-detail { display: block; color: var(--muted); font-size: 12px; }
-.batch-history .stage-table th:last-child, .batch-history .stage-table td:last-child { width: auto; min-width: 0; }
+/* words break only at spaces: breaking anywhere set "Time per frame" one letter a line on a phone (the owner) */
+.batch-history .stage-table th:last-child, .batch-history .stage-table td:last-child { width: auto; min-width: 0;
+  overflow-wrap: normal; }
 .batch-history .stage-table .label-short { display: none; }
 @media (max-width: 520px) {
   .batch-history .stage-table th, .batch-history .stage-table td, .batch-history .stage-table .nowrap {
